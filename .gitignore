@@ -1,0 +1,11 @@
+node_modules
+.next
+out
+
+# Secrets. .env.example is the only env file that belongs in the repo.
+.env
+.env.*
+!.env.example
+
+*.tsbuildinfo
+next-env.d.ts

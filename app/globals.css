@@ -1,0 +1,174 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+   MattySpins design tokens — UI Spec §1
+   One theme, dark, deliberately. No light mode.
+   1. Blue is the only loud colour.
+   2. Amber means money.
+   3. Never both on one element.
+   4. Borders are `line`. `line-2` only on something pressed or typed into.
+--------------------------------------------------------------------------- */
+@theme {
+  --color-bg: #070B14;
+  --color-surface: #0D1422;
+  --color-surface-2: #111A2B;
+  --color-line: #1B2740;
+  --color-line-2: #29354D;
+
+  --color-ink: #E8EDF5;
+  --color-ink-2: #A9B6C9;
+  --color-muted: #8C99AD;
+  --color-faint: #6B7891;
+
+  --color-brand: #2B8FFF;
+  --color-brand-dim: #6BB0FF;
+  --color-brand-ink: #04121F;
+  --color-brand-bg: #0C1B33;
+  --color-brand-line: #1E3A63;
+
+  --color-gold: #FFB93B;
+  --color-gold-bg: #1A1608;
+  --color-gold-line: #33290F;
+
+  --color-silver: #C6CFDD;
+  --color-bronze: #B07A4E;
+
+  /* Green means "Matty is live" and nothing else. It is the one exception to
+     "blue is the only loud colour", earned because live/offline is the single
+     most-checked fact on the site and the convention is universal. */
+  --color-online: #2ED47A;
+  --color-online-bg: #07201A;
+  --color-online-line: #14452F;
+
+  --color-danger: #FF8A6B;
+  --color-danger-bg: #1C0F0B;
+  --color-danger-line: #3B1D14;
+  --color-live: #E5352B;
+
+  /* Discord blurple — the one place another brand's colour is allowed (§21) */
+  --color-discord: #5865F2;
+
+  --font-display: var(--font-anton), "Arial Narrow", sans-serif;
+  --font-sans: var(--font-barlow), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, "SF Mono", monospace;
+
+  /* Radii are tight (§1) */
+  --radius-card: 3px;
+  --radius-chip: 2px;
+
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
+
+  --animate-pulse-dot: pulse-dot 2s ease-in-out infinite;
+  --animate-pulse-online: pulse-online 2s ease-in-out infinite;
+  --animate-rise: rise 220ms ease-out;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgb(43 143 255 / 0.55); }
+  50%      { opacity: 0.72; box-shadow: 0 0 0 6px rgb(43 143 255 / 0); }
+}
+@keyframes pulse-online {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgb(46 212 122 / 0.55); }
+  50%      { opacity: 0.72; box-shadow: 0 0 0 6px rgb(46 212 122 / 0); }
+}
+@keyframes rise {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@layer base {
+  * { border-color: var(--color-line); }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--color-bg);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Every number in a column is mono with tabular figures (§2) */
+  .tnum { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+  /* Focus ring defined once globally and removed nowhere (§30) */
+  :focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  ::selection { background: var(--color-brand); color: var(--color-brand-ink); }
+
+  /* Scrollbars, dark */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: var(--color-bg); }
+  ::-webkit-scrollbar-thumb { background: var(--color-line-2); border-radius: 0; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--color-muted); }
+}
+
+@layer utilities {
+  /* The dice target slider — a glowing thumb over a transparent track, so the
+     win/loss zones painted behind it stay visible. */
+  .dice-range { -webkit-appearance: none; appearance: none; }
+  .dice-range::-webkit-slider-runnable-track { height: 100%; background: transparent; }
+  .dice-range::-moz-range-track { height: 100%; background: transparent; }
+  .dice-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 24px;
+    height: 24px;
+    border-radius: 9999px;
+    background: var(--color-ink);
+    border: 3px solid var(--color-brand);
+    box-shadow: 0 0 14px rgb(43 143 255 / 0.75);
+    cursor: pointer;
+  }
+  .dice-range::-moz-range-thumb {
+    width: 24px;
+    height: 24px;
+    border-radius: 9999px;
+    background: var(--color-ink);
+    border: 3px solid var(--color-brand);
+    box-shadow: 0 0 14px rgb(43 143 255 / 0.75);
+    cursor: pointer;
+  }
+
+  /* Carousels: native scrolling, no library (§24) */
+  .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+
+  /* Hairline dividers via a 1px-gap grid over a line-coloured ground (§3) */
+  .hairline-grid { background: var(--color-line); gap: 1px; }
+
+  .container-page {
+    width: 100%;
+    max-width: 1440px;
+    margin-inline: auto;
+    padding-inline: 18px;
+  }
+  @media (min-width: 1024px) {
+    .container-page { padding-inline: 56px; }
+  }
+
+  .display { font-family: var(--font-display); text-transform: uppercase; letter-spacing: 0.005em; }
+
+  .hero-glow {
+    background:
+      radial-gradient(680px 380px at 78% 12%, rgb(43 143 255 / 0.13), transparent 70%),
+      radial-gradient(420px 320px at 96% 4%, rgb(43 143 255 / 0.07), transparent 70%);
+  }
+}
+
+/* Four things move, and nothing moves under reduced-motion (§29) */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

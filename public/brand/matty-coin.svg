@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="256" height="256" role="img" aria-label="Matty Coin">
+  <defs>
+    <linearGradient id="mcFace" x1="18" y1="10" x2="82" y2="92" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFE3A3"/>
+      <stop offset="0.42" stop-color="#FFB93B"/>
+      <stop offset="1" stop-color="#C77F12"/>
+    </linearGradient>
+    <linearGradient id="mcRim" x1="20" y1="88" x2="80" y2="12" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#B36F0C"/>
+      <stop offset="0.5" stop-color="#F5B23A"/>
+      <stop offset="1" stop-color="#FFDD9B"/>
+    </linearGradient>
+    <linearGradient id="mcInner" x1="26" y1="18" x2="76" y2="84" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFCF72"/>
+      <stop offset="1" stop-color="#E09A1F"/>
+    </linearGradient>
+    <linearGradient id="mcM" x1="34" y1="34" x2="66" y2="70" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#5A3F06"/>
+      <stop offset="1" stop-color="#33240A"/>
+    </linearGradient>
+  </defs>
+
+  <!-- edge -->
+  <circle cx="50" cy="50" r="47" fill="url(#mcRim)"/>
+
+  <!-- milled edge ticks -->
+  <g stroke="#9C5F08" stroke-width="1.6" opacity="0.55" stroke-linecap="round">
+    <path d="M50 4v5M50 91v5M4 50h5M91 50h5"/>
+    <path d="M17.5 17.5l3.6 3.6M78.9 78.9l3.6 3.6M82.5 17.5l-3.6 3.6M21.1 78.9l-3.6 3.6"/>
+    <path d="M27 6.9l2.5 4.3M70.5 88.8l2.5 4.3M6.9 73l4.3-2.5M88.8 29.5l4.3-2.5M6.9 27l4.3 2.5M88.8 70.5l4.3 2.5M27 93.1l2.5-4.3M70.5 11.2l2.5-4.3"/>
+  </g>
+
+  <!-- face -->
+  <circle cx="50" cy="50" r="42" fill="url(#mcFace)"/>
+  <circle cx="50" cy="50" r="42" fill="none" stroke="#8F5A08" stroke-width="0.9" opacity="0.5"/>
+
+  <!-- recessed field -->
+  <circle cx="50" cy="50" r="34" fill="url(#mcInner)"/>
+  <circle cx="50" cy="50" r="34" fill="none" stroke="#A5670A" stroke-width="1.4" opacity="0.65"/>
+  <circle cx="50" cy="50" r="30.5" fill="none" stroke="#FFE7B4" stroke-width="0.9" opacity="0.45"/>
+
+  <!-- M -->
+  <path d="M34.5 65.5V37.5L50 54L65.5 37.5V65.5" fill="none" stroke="#FFE7B4" stroke-width="8.4"
+        stroke-linecap="round" stroke-linejoin="round" opacity="0.55" transform="translate(0,1.8)"/>
+  <path d="M34.5 65.5V37.5L50 54L65.5 37.5V65.5" fill="none" stroke="url(#mcM)" stroke-width="8.4"
+        stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- highlight -->
+  <path d="M22 32a33 33 0 0 1 30-19" fill="none" stroke="#FFF3D6" stroke-width="3" stroke-linecap="round" opacity="0.55"/>
+</svg>
