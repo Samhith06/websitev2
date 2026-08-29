@@ -33,7 +33,7 @@ const DRAWN = paytables.board.drawn;
 
 /** Every keno table, all forty, solved to 99%. */
 console.log('\n--- Keno paytables, all 40 tables ---');
-const LO = 0.9875, HI = 0.9925;
+const LO = 0.9890, HI = 0.9910;
 const kenoRtp = (risk, picks) => {
   const table = paytables.paytables[risk][String(picks)];
   let rtp = 0;
@@ -53,7 +53,7 @@ for (const risk of Object.keys(paytables.paytables)) {
   }
 }
 check(`all 40 keno tables inside ${(LO*100).toFixed(2)}-${(HI*100).toFixed(2)}%`, outOfBand, 0, 0);
-console.log('  10-pick tables (as supplied):');
+console.log('  10-pick tables (supplied, Low nudged to 99%):');
 for (const risk of Object.keys(paytables.paytables)) {
   console.log(`    ${risk.padEnd(8)}${(kenoRtp(risk, 10) * 100).toFixed(2)}%   top ${Math.max(...paytables.paytables[risk]['10'])}x`);
 }
