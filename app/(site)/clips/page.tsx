@@ -55,10 +55,17 @@ export default async function ClipsPage({
       </div>
 
       {visible.length === 0 ? (
-        <EmptyState className="mt-10" title="No clips from this source yet.">
-          Kick clips are added by hand because Kick has no public clips endpoint. YouTube and
-          Instagram sync automatically, but nothing reaches this page until a moderator publishes
-          it — which is why it never fills up with filler.
+        <EmptyState
+          className="mt-10"
+          title={
+            published.length === 0
+              ? 'No clips published yet.'
+              : 'Nothing from this source yet.'
+          }
+        >
+          {published.length === 0
+            ? 'Clips appear here once Matty publishes them. YouTube and Instagram sync on their own but land as drafts first, and Kick clips are pasted in by hand — Kick has no public clips endpoint.'
+            : 'Try another source. Everything published is under All.'}
         </EmptyState>
       ) : (
         <div className="mt-10 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">

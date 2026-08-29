@@ -121,23 +121,25 @@ export default function HomePage() {
       {/* ----------------------------------------------------------------- */}
       {/* Clips                                                             */}
       {/* ----------------------------------------------------------------- */}
-      <Section>
-        <SectionHeading
-          title="Clips"
-          right={
-            <ChipRow label="Clip source">
-              <Chip active as="link" href="/clips">All</Chip>
-              <Chip as="link" href="/clips?source=kick">Kick</Chip>
-              <Chip as="link" href="/clips?source=youtube">YouTube</Chip>
-              <Chip as="link" href="/clips?source=instagram">Instagram</Chip>
-              <Chip as="link" href="/clips?source=x">X</Chip>
-            </ChipRow>
-          }
-        />
-        <div className="mt-8">
-          <ClipCarousel clips={clips} label="Recent clips" />
-        </div>
-      </Section>
+      {clips.length > 0 ? (
+        <Section>
+          <SectionHeading
+            title="Clips"
+            right={
+              <ChipRow label="Clip source">
+                <Chip active as="link" href="/clips">All</Chip>
+                <Chip as="link" href="/clips?source=kick">Kick</Chip>
+                <Chip as="link" href="/clips?source=youtube">YouTube</Chip>
+                <Chip as="link" href="/clips?source=instagram">Instagram</Chip>
+                <Chip as="link" href="/clips?source=x">X</Chip>
+              </ChipRow>
+            }
+          />
+          <div className="mt-8">
+            <ClipCarousel clips={clips} label="Recent clips" />
+          </div>
+        </Section>
+      ) : null}
 
       {/* ----------------------------------------------------------------- */}
       {/* Biggest wins — a full-bleed band                                  */}

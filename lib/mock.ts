@@ -195,15 +195,35 @@ export const razedReturnedCount = 25;
 /* Clips and big wins                                                         */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Empty until Matty's real clips are added. Kick has no public clips endpoint,
+ * so those are pasted in from admin; YouTube and Instagram sync automatically
+ * but land as drafts until a moderator publishes them (Master Plan §10).
+ */
 export const clips: Clip[] = [
-  { id: 'c1', kind: 'clip', source: 'kick', url: 'https://kick.com/mattyspinss', embedUrl: '', thumbUrl: '/brand/clip-1.svg', title: 'Retrigger on the last spin of the hunt', aspect: '16:9', durationSeconds: 74, views: 41_200, occurredAt: days(-2), status: 'published' },
-  { id: 'c2', kind: 'clip', source: 'youtube', url: 'https://youtube.com/@MattySpinss', embedUrl: '', thumbUrl: '/brand/clip-2.svg', title: 'He called the max win before it landed', aspect: '16:9', durationSeconds: 112, views: 128_400, occurredAt: days(-5), status: 'published' },
-  { id: 'c3', kind: 'clip', source: 'instagram', url: 'https://instagram.com/mattyspinss', embedUrl: '', thumbUrl: '/brand/clip-3.svg', title: 'Chat picked the slot. Chat was right.', aspect: '9:16', durationSeconds: 38, views: 92_100, occurredAt: days(-6), status: 'published' },
-  { id: 'c4', kind: 'clip', source: 'kick', url: 'https://kick.com/mattyspinss', embedUrl: '', thumbUrl: '/brand/clip-4.svg', title: 'Four scatters, three times in a row', aspect: '16:9', durationSeconds: 96, views: 33_800, occurredAt: days(-8), status: 'published' },
-  { id: 'c5', kind: 'clip', source: 'x', url: 'https://x.com/mattyspinsslots', embedUrl: '', thumbUrl: '/brand/clip-5.svg', title: 'The reaction that ended up on every timeline', aspect: '16:9', durationSeconds: 22, views: 210_000, occurredAt: days(-11), status: 'published' },
-  { id: 'c6', kind: 'clip', source: 'youtube', url: 'https://youtube.com/@MattySpinss', embedUrl: '', thumbUrl: '/brand/clip-6.svg', title: 'Bonus hunt opening, start to finish', aspect: '16:9', durationSeconds: 148, views: 76_500, occurredAt: days(-13), status: 'published' },
-  { id: 'c7', kind: 'clip', source: 'instagram', url: 'https://instagram.com/mattyspinss', embedUrl: '', thumbUrl: '/brand/clip-7.svg', title: 'Sixty seconds, one very good decision', aspect: '9:16', durationSeconds: 59, views: 51_300, occurredAt: days(-16), status: 'published' },
-  { id: 'c8', kind: 'clip', source: 'kick', url: 'https://kick.com/mattyspinss', embedUrl: '', thumbUrl: '/brand/clip-8.svg', title: 'Nobody in chat believed the multiplier', aspect: '16:9', durationSeconds: 67, views: 28_900, occurredAt: days(-19), status: 'published' },
+  /**
+   * A real clip from kick.com/mattyspinss/clips. Kick has no public clips
+   * endpoint (Master Plan §10), so these are added by hand: the clip URL gives
+   * the id, and the id gives both the player embed and the thumbnail.
+   *
+   *   page   kick.com/<channel>/clips/<id>
+   *   embed  player.kick.com/<channel>?clip=<id>
+   *   thumb  clips.kick.com/clips/60/<id>/thumbnail.webp
+   */
+  {
+    id: 'clip_01M0NBWS4MYE20NF4Z6QQW79J6',
+    kind: 'clip',
+    source: 'kick',
+    url: 'https://kick.com/mattyspinss/clips/clip_01M0NBWS4MYE20NF4Z6QQW79J6',
+    embedUrl: 'https://player.kick.com/mattyspinss?clip=clip_01M0NBWS4MYE20NF4Z6QQW79J6',
+    thumbUrl: 'https://clips.kick.com/clips/60/clip_01M0NBWS4MYE20NF4Z6QQW79J6/thumbnail.webp',
+    title: '3000 Bonus Bingo! 1200 leaderboard',
+    aspect: '16:9',
+    durationSeconds: 90,
+    views: 6,
+    occurredAt: days(-7),
+    status: 'published',
+  },
 ];
 
 export const bigWins: Clip[] = [
