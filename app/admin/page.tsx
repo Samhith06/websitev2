@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { coins, maybe, money, relativeTime } from '@/lib/format';
-import { siteStats, stream, weeklyPeriod } from '@/lib/mock';
+import { siteStats} from '@/lib/mock';
+import { currentStream } from '@/lib/store/stream';
+import { currentPeriod } from '@/lib/store/periods';
 import { fetchRazedLeaderboard, healthFrom } from '@/lib/razed';
 import { databaseHealth, hasDatabase, rows } from '@/lib/db';
 import { coinFlow } from '@/lib/store/coins';
@@ -33,11 +35,16 @@ export default async function AdminOverview() {
   weekStart.setUTCHours(0, 0, 0, 0);
   weekStart.setUTCDate(weekStart.getUTCDate() - 7);
 
+  const weekly = hasDatabase() ? await currentPeriod('weekly') : null;
+  const stream = await currentStream();
+
   const [feed, db, flow, rounds, earning, members, tickedAt, auditLog] = await Promise.all([
-    fetchRazedLeaderboard({
-      from: weeklyPeriod.startsAt.slice(0, 10),
-      to: weeklyPeriod.endsAt.slice(0, 10),
-    }),
+    weekly
+      ? fetchRazedLeaderboard({
+          from: weekly.startsAt.slice(0, 10),
+          to: weekly.endsAt.slice(0, 10),
+        })
+      : Promise.resolve(null),
     databaseHealth(),
     hasDatabase() ? coinFlow(weekStart) : Promise.resolve(null),
     hasDatabase() ? roundsToday() : Promise.resolve(null),
@@ -52,7 +59,13 @@ export default async function AdminOverview() {
       : Promise.resolve([] as AuditRow[]),
   ]);
 
-  const feedHealth = healthFrom(feed);
+  const feedHealth = feed
+    ? healthFrom(feed)
+    : {
+        lastSyncAt: new Date().toISOString(),
+        status: 'stale' as const,
+        code: 'No weekly board is open, so nothing is being asked of Razed.',
+      };
   const minted = flow?.minted ?? null;
   const destroyed = flow?.destroyed ?? null;
   // A tick inside the last ten minutes means the job is running.

@@ -1,5 +1,6 @@
 import { money, relativeTime } from '@/lib/format';
-import { razed, weeklyPeriod } from '@/lib/mock';
+import { razed } from '@/lib/mock';
+import { currentPeriod } from '@/lib/store/periods';
 import { fetchRazedLeaderboard, healthFrom } from '@/lib/razed';
 import { AdminHeader } from '@/components/admin/AdminShell';
 import { AdminRow, AdminTable, Cell, FilterBar, StatusPill } from '@/components/admin/Table';
@@ -12,14 +13,21 @@ export const metadata = { title: 'Razed players' };
 const COLS = 'lg:grid-cols-[56px_1fr_180px_130px_100px_140px_90px]';
 
 export default async function RazedPlayersPage() {
-  const from = weeklyPeriod.startsAt.slice(0, 10);
-  const to = weeklyPeriod.endsAt.slice(0, 10);
+  const weekly = await currentPeriod('weekly');
+  const from = weekly ? weekly.startsAt.slice(0, 10) : '';
+  const to = weekly ? weekly.endsAt.slice(0, 10) : '';
 
   // The live call, unmasked: a moderator on this screen is verifying a claim
   // against the real usernames Razed returned.
-  const feed = await fetchRazedLeaderboard({ from, to, top: 25 });
-  const feedHealth = healthFrom(feed);
-  const players = feed.ok ? feed.rows : [];
+  const feed = weekly ? await fetchRazedLeaderboard({ from, to }) : null;
+  const feedHealth = feed
+    ? healthFrom(feed)
+    : {
+        lastSyncAt: new Date().toISOString(),
+        status: 'stale' as const,
+        code: 'No weekly board is open — set one under Prizes and periods.',
+      };
+  const players = feed?.ok ? feed.rows : [];
 
   const health =
     feedHealth.status === 'healthy'
@@ -121,7 +129,7 @@ export default async function RazedPlayersPage() {
       {/* State the ceiling plainly. Razed returns a top-N list and a moderator
           needs to know they are not looking at everybody. */}
       <p className="mt-3 font-mono text-[11.5px] tabular-nums text-faint">
-        {feed.ok
+        {feed?.ok
           ? feed.truncated
             ? `Showing ${feed.returned} of ${feed.total} — Razed paged the rest, so this is not everybody`
             : `Showing all ${feed.total} qualifying players Razed has for this period`

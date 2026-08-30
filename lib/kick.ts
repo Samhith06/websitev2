@@ -154,12 +154,15 @@ export function parseChatMessage(payload: unknown): ChatMessage | null {
   };
 }
 
-export function parseLivestreamStatus(payload: unknown): { live: boolean } | null {
+export function parseLivestreamStatus(
+  payload: unknown,
+): { live: boolean; title: string | null } | null {
   const body = payload as Record<string, unknown> | null;
   if (!body) return null;
   const live = body.is_live ?? body.isLive ?? body.live;
   if (typeof live !== 'boolean') return null;
-  return { live };
+  const title = body.title ?? body.stream_title;
+  return { live, title: typeof title === 'string' && title.trim() ? title.trim() : null };
 }
 
 export type SubscriptionEvent = {

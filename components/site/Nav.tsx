@@ -25,11 +25,21 @@ const MORE_LINKS = [
 ];
 
 /**
- * Games does not appear until the viewer has opted in behind the 18+ gate, and
- * disappears again the moment they self-exclude (§32, §39).
+ * Games is visible to everyone, and disappears the moment someone
+ * self-excludes (§32, §39).
+ *
+ * It used to require being signed in, which made the link and the page
+ * disagree: /games was public and rendered the full lobby, so the games were
+ * reachable but undiscoverable. Sign-in is not what protects this — the age
+ * gate runs before anything renders, and every play endpoint refuses an
+ * unauthenticated request server-side. Hiding the link only hid it from the
+ * people it was built for.
+ *
+ * The self-exclusion half is the part that must not be relaxed: once someone
+ * has switched games off, the link goes for them and stays gone.
  */
 function linksFor(viewer: Viewer) {
-  const gamesVisible = viewer.signedIn && viewer.games.enabled && !viewer.games.excludedUntil;
+  const gamesVisible = viewer.games.enabled && !viewer.games.excludedUntil;
   return gamesVisible ? [...BASE_LINKS, { href: '/games', label: 'Games' }] : BASE_LINKS;
 }
 

@@ -160,7 +160,7 @@ async function onStreamStatus(payload: unknown): Promise<void> {
     console.warn('[kick] livestream.status.updated did not match a shape we recognise');
     return;
   }
-  if (status.live) await streamWentLive();
+  if (status.live) await streamWentLive(status.title);
   else await streamWentOffline();
 }
 

@@ -27,20 +27,27 @@ const days = (n: number) => hours(n * 24);
 /* The two clocks                                                             */
 /* -------------------------------------------------------------------------- */
 
-/** Flip to false to see every offline state the spec calls for. */
-export const IS_LIVE = true;
+export const channel = 'mattyspinss';
 
-export const stream: StreamState = {
-  live: IS_LIVE,
-  title: 'BONUS HUNT OPENING — 20 BONUSES, $12K START',
-  viewers: 1_284,
-  startedAt: IS_LIVE ? mins(-97) : null,
+/**
+ * The offline shape, and the only stream state this file still holds.
+ *
+ * Whether Matty is live is a fact, not a constant — it comes from
+ * `lib/store/stream.ts`, which reads the session the Kick webhook opens. What
+ * stays here is the material that genuinely is static: the channel, the
+ * fallback artwork and the last VOD.
+ */
+export const offlineStream: StreamState = {
+  live: false,
+  title: null,
+  viewers: null,
+  startedAt: null,
   thumbUrl: '/brand/stream-thumb.svg',
-  channel: 'mattyspinss',
+  channel,
   nextStreamAt: days(1),
-  lastVodUrl: 'https://kick.com/mattyspinss',
+  lastVodUrl: `https://kick.com/${channel}`,
   lastVodThumb: '/brand/stream-thumb.svg',
-  lastVodTitle: 'Tuesday bonus hunt — the $48,000 Gates finish',
+  lastVodTitle: 'Latest stream on Kick',
 };
 
 export const schedule = [

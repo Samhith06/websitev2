@@ -2,8 +2,10 @@
 
 export type StreamState = {
   live: boolean;
-  title: string;
-  viewers: number;
+  /** Null when we have not been told one — never a placeholder. */
+  title: string | null;
+  /** Kick does not give us a viewer count on the webhook, so this is usually null. */
+  viewers: number | null;
   startedAt: string | null;
   thumbUrl: string;
   channel: string;

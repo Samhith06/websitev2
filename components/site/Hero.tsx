@@ -38,11 +38,18 @@ export function Hero({
                   <span className="size-1.5 animate-pulse-online rounded-full bg-online" aria-hidden />
                   Live on Kick
                 </span>
-                <span className="text-line" aria-hidden>|</span>
-                <span className="flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-2">
-                  <Users size={13} className="text-muted" aria-hidden />
-                  <Num tone="ink" className="text-[11px]">{coins(stream.viewers)}</Num> viewers
-                </span>
+                {/* Kick's webhook carries no viewer count, so when we do not
+                    have one the whole element goes rather than showing a
+                    number nobody measured. */}
+                {stream.viewers !== null ? (
+                  <>
+                    <span className="text-line" aria-hidden>|</span>
+                    <span className="flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-2">
+                      <Users size={13} className="text-muted" aria-hidden />
+                      <Num tone="ink" className="text-[11px]">{coins(stream.viewers)}</Num> viewers
+                    </span>
+                  </>
+                ) : null}
               </>
             ) : (
               <span className="inline-flex items-center gap-2 rounded-[5px] border border-line bg-surface-2 px-2.5 py-1.5 font-mono text-[10.5px] uppercase tracking-[0.16em] text-ink-2">
@@ -123,15 +130,15 @@ export function Hero({
           <PlayerFrame
             thumbUrl={live ? stream.thumbUrl : stream.lastVodThumb}
             embedUrl={live ? `https://player.kick.com/${stream.channel}` : stream.lastVodUrl}
-            title={live ? stream.title : stream.lastVodTitle}
+            title={(live ? stream.title : stream.lastVodTitle) ?? 'MattySpins on Kick'}
             liveTag={live}
             playSize={58}
-            watching={live ? stream.viewers : undefined}
+            watching={live ? stream.viewers ?? undefined : undefined}
             cornerLabel={live ? undefined : 'Watch last stream'}
           />
           <div className="mt-2.5 flex items-baseline justify-between gap-4">
             <p className="min-w-0 truncate font-mono text-[11.5px] uppercase tracking-[0.12em] text-ink-2">
-              {live ? stream.title : stream.lastVodTitle}
+              {(live ? stream.title : stream.lastVodTitle) ?? 'MattySpins on Kick'}
             </p>
             {live && stream.startedAt ? (
               <span className="shrink-0 font-mono text-[11.5px] tabular-nums text-muted">

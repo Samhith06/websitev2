@@ -2,9 +2,10 @@ import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import { coins, maybe, money, relativeTime } from '@/lib/format';
 import {
-  prizeTiers, razed, schedule, siteStats, stream, weeklyPeriod, socials, aboutCopy,
-  portraitUrl,
+  razed, schedule, siteStats, socials, aboutCopy, portraitUrl,
 } from '@/lib/mock';
+import { currentStream } from '@/lib/store/stream';
+import { currentPeriod, prizeForRank } from '@/lib/store/periods';
 import { publishedBigWins, publishedClips } from '@/lib/store/clips';
 import { viewerOrSignedOut } from '@/lib/viewer';
 import { fetchRazedLeaderboard, healthFrom, toBoardRows } from '@/lib/razed';
@@ -22,24 +23,27 @@ import { BigWinCard } from '@/components/site/BigWinCard';
 export const dynamic = 'force-dynamic';
 
 export default async function HomePage() {
-  const [viewer, clips, bigWins] = await Promise.all([
+  const [viewer, clips, bigWins, stream] = await Promise.all([
     viewerOrSignedOut(),
     publishedClips(12),
     publishedBigWins(3),
+    currentStream(),
   ]);
   const featured = bigWins[0];
   const compactWins = bigWins.slice(1, 3);
 
-  // The same server-side call the full board makes, so the preview and the
-  // board can never disagree, and the timestamp below is a real one.
-  const feed = await fetchRazedLeaderboard({
-    from: weeklyPeriod.startsAt.slice(0, 10),
-    to: weeklyPeriod.endsAt.slice(0, 10),
-  });
-  const feedHealth = healthFrom(feed);
-  const boardRows = feed.ok
-    ? toBoardRows(feed.rows, (rank) =>
-        prizeTiers.find((t) => rank >= t.rankFrom && rank <= t.rankTo)?.amount ?? 0)
+  // The same server-side call the full board makes, over the same stored
+  // period, so the preview and the board can never disagree.
+  const weeklyPeriod = await currentPeriod('weekly');
+  const feed = weeklyPeriod
+    ? await fetchRazedLeaderboard({
+        from: weeklyPeriod.startsAt.slice(0, 10),
+        to: weeklyPeriod.endsAt.slice(0, 10),
+      })
+    : null;
+  const feedHealth = feed ? healthFrom(feed) : null;
+  const boardRows = feed?.ok
+    ? toBoardRows(feed.rows, (rank) => prizeForRank(weeklyPeriod!.tiers, rank))
     : [];
 
   return (
@@ -53,7 +57,11 @@ export default async function HomePage() {
         <Hairlines cols="grid-cols-2 lg:grid-cols-4">
           <Stat label="Weekly prize pool" value={maybe(siteStats.weeklyPrizePool, money)} tone="gold" />
           <Stat label="Board resets in">
-            <Countdown to={weeklyPeriod.endsAt} className="block text-[26px] leading-none lg:text-[30px]" />
+            {weeklyPeriod ? (
+              <Countdown to={weeklyPeriod.endsAt} className="block text-[26px] leading-none lg:text-[30px]" />
+            ) : (
+              <span className="block font-mono text-[26px] leading-none text-muted lg:text-[30px]">—</span>
+            )}
           </Stat>
           <Stat label="Members earning" value={maybe(siteStats.membersEarning)} />
           <Stat label="Paid out to date" value={maybe(siteStats.paidOutToDate, money)} tone="gold" />
@@ -98,7 +106,7 @@ export default async function HomePage() {
 
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
           <span className="font-mono text-[11.5px] tabular-nums text-faint">
-            Updated {relativeTime(feedHealth.lastSyncAt)} · all times UTC
+            {feedHealth ? `Updated ${relativeTime(feedHealth.lastSyncAt)} · all times UTC` : 'No board is open'}
           </span>
           <Link
             href="/leaderboard"

@@ -18,6 +18,7 @@ import * as coins from '../lib/store/coins';
 import * as play from '../lib/store/play';
 import * as presence from '../lib/store/presence';
 import * as clips from '../lib/store/clips';
+import * as periods from '../lib/store/periods';
 
 let failures = 0;
 function check(name: string, condition: unknown, detail = '') {
@@ -366,6 +367,79 @@ try {
   pinRefused = (error as Error).message;
 }
 check('a fourth pin is refused with a message', pinRefused !== null, pinRefused ?? '');
+
+/* -------------------------------------------------------------------------- */
+section('periods and prize tiers');
+
+const week = await periods.createPeriod({
+  type: 'weekly', startsAt: '2026-08-24T00:00:00Z', endsAt: '2026-08-30T23:59:59Z',
+});
+check('a period is created open', week.status === 'open');
+check('a new period starts with no tiers', week.tiers.length === 0);
+check('an empty period has a zero pot', week.pot === 0);
+
+let secondOpen: string | null = null;
+try {
+  await periods.createPeriod({ type: 'weekly', startsAt: '2026-09-01T00:00:00Z', endsAt: '2026-09-07T00:00:00Z' });
+} catch (error) { secondOpen = (error as Error).message; }
+check('a second open weekly board is refused', secondOpen !== null, secondOpen ?? '');
+
+let backwards: string | null = null;
+try {
+  await periods.createPeriod({ type: 'monthly', startsAt: '2026-09-07T00:00:00Z', endsAt: '2026-09-01T00:00:00Z' });
+} catch (error) { backwards = (error as Error).message; }
+check('a period ending before it starts is refused', backwards !== null);
+
+await periods.upsertTier({ periodId: week.id, rankFrom: 1, rankTo: 1, amount: 2000 });
+await periods.upsertTier({ periodId: week.id, rankFrom: 2, rankTo: 2, amount: 1000 });
+await periods.upsertTier({ periodId: week.id, rankFrom: 4, rankTo: 10, amount: 400 });
+
+const withTiers = (await periods.periodById(week.id))!;
+check('tiers are stored', withTiers.tiers.length === 3);
+// 2000 + 1000 + (7 x 400)
+check('the pot counts every rank a range covers', withTiers.pot === 5800, String(withTiers.pot));
+check('a rank inside a range gets that amount', periods.prizeForRank(withTiers.tiers, 7) === 400);
+check('a rank outside every tier gets nothing', periods.prizeForRank(withTiers.tiers, 11) === 0);
+check('rank 3 is unpaid because no tier covers it', periods.prizeForRank(withTiers.tiers, 3) === 0);
+
+let overlap: string | null = null;
+try {
+  await periods.upsertTier({ periodId: week.id, rankFrom: 5, rankTo: 12, amount: 250 });
+} catch (error) { overlap = (error as Error).message; }
+check('an overlapping tier is refused by the database', overlap !== null, overlap ?? '');
+
+let badRange: string | null = null;
+try {
+  await periods.upsertTier({ periodId: week.id, rankFrom: 20, rankTo: 15, amount: 100 });
+} catch (error) { badRange = (error as Error).message; }
+check('a backwards rank range is refused', badRange !== null);
+
+check('the open weekly board is the current one',
+  (await periods.currentPeriod('weekly'))?.id === week.id);
+
+await periods.setPeriodStatus(week.id, 'frozen');
+const frozen = (await periods.periodById(week.id))!;
+check('freezing records when it happened', frozen.status === 'frozen' && frozen.lockedAt !== null);
+check('a frozen board is findable for claims', (await periods.frozenPeriod())?.id === week.id);
+
+let lockedDates: string | null = null;
+try {
+  await periods.updatePeriodDates(week.id, '2026-08-01T00:00:00Z', '2026-08-05T00:00:00Z');
+} catch (error) { lockedDates = (error as Error).message; }
+check('a frozen board cannot have its dates moved', lockedDates !== null, lockedDates ?? '');
+
+// Freezing frees the slot, and the next board can inherit the tiers.
+const next = await periods.createPeriod({
+  type: 'weekly', startsAt: '2026-08-31T00:00:00Z', endsAt: '2026-09-06T23:59:59Z',
+  copyTiersFromLast: true,
+});
+check('the next board opens once the last is frozen', next.status === 'open');
+check('tiers are copied forward', next.tiers.length === 3);
+check('the copy carries the same pot', next.pot === 5800, String(next.pot));
+
+await periods.setPeriodStatus(week.id, 'paid');
+check('a paid board appears in the archive',
+  (await periods.archivedPeriods()).some((p) => p.id === week.id));
 
 /* -------------------------------------------------------------------------- */
 section('admin figures');

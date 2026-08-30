@@ -3,7 +3,8 @@ import type { Metadata } from 'next';
 import { Coins, Dices, Gift, Sparkles, TrendingUp } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { coins, dateShort, money, relativeTime } from '@/lib/format';
-import { activeClaim, discordInvite, stream } from '@/lib/mock';
+import { activeClaim, discordInvite} from '@/lib/mock';
+import { currentStream } from '@/lib/store/stream';
 import { currentUser } from '@/lib/player';
 import { currentViewer } from '@/lib/viewer';
 import { verificationStateFor } from '@/lib/store/accounts';
@@ -42,9 +43,10 @@ export default async function ProfilePage() {
   const viewer = user ? await currentViewer() : null;
   if (!user || !viewer) return <SignedOut />;
 
-  const [verification, ledger] = await Promise.all([
+  const [verification, ledger, stream] = await Promise.all([
     verificationStateFor(user.id),
     ledgerFor(user.id, 60),
+    currentStream(),
   ]);
 
   const linked = verification.status === 'linked';

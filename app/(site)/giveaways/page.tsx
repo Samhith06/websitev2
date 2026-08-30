@@ -2,7 +2,8 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import { ShieldCheck } from 'lucide-react';
 import { coins, dateShort } from '@/lib/format';
-import { giveaways, pastGiveaways, stream } from '@/lib/mock';
+import { giveaways, pastGiveaways} from '@/lib/mock';
+import { currentStream } from '@/lib/store/stream';
 import { viewerOrSignedOut } from '@/lib/viewer';
 import { Display, Label, Num } from '@/components/ui/typography';
 import { Button } from '@/components/ui/controls';
@@ -22,7 +23,7 @@ export const metadata: Metadata = {
 export const dynamic = 'force-dynamic';
 
 export default async function GiveawaysPage() {
-  const viewer = await viewerOrSignedOut();
+  const [viewer, stream] = await Promise.all([viewerOrSignedOut(), currentStream()]);
   return (
     <div className="container-page py-10 lg:py-14">
       <div className="max-w-2xl">

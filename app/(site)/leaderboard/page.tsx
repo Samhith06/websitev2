@@ -2,9 +2,10 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import { ArrowRight, TriangleAlert } from 'lucide-react';
 import { dateRange, money, relativeTime } from '@/lib/format';
+import { razed } from '@/lib/mock';
 import {
-  archivedPeriods, frozenPeriod, monthlyPeriod, prizeTiers, razed, weeklyPeriod,
-} from '@/lib/mock';
+  archivedPeriods, currentPeriod, frozenPeriod, prizeForRank, toUiPeriod,
+} from '@/lib/store/periods';
 import { fetchRazedLeaderboard, healthFrom, toBoardRows } from '@/lib/razed';
 import { Display, Label, SectionHeading } from '@/components/ui/typography';
 import { ButtonLink, Chip, ChipRow } from '@/components/ui/controls';
@@ -29,26 +30,38 @@ export default async function LeaderboardPage({
 }) {
   const { period } = await searchParams;
 
-  /**
-   * Straight from Razed, server-side, every time the page is built. The key
-   * never reaches the browser and the browser never talks to Razed.
-   */
-  const base = period === 'monthly' ? monthlyPeriod : period === 'frozen' ? frozenPeriod : weeklyPeriod;
-  const feed = await fetchRazedLeaderboard({
-    from: base.startsAt.slice(0, 10),
-    to: base.endsAt.slice(0, 10),
-  });
-  const feedHealth = healthFrom(feed);
-  const prizeFor = (rank: number) =>
-    prizeTiers.find((t) => rank >= t.rankFrom && rank <= t.rankTo)?.amount ?? 0;
-  const liveRows = feed.ok ? toBoardRows(feed.rows, prizeFor) : [];
   const tab: Tab =
     period === 'monthly' ? 'monthly'
     : period === 'archive' ? 'archive'
     : period === 'frozen' ? 'frozen'
     : 'weekly';
 
-  const active: Period = { ...base, rows: liveRows };
+  /**
+   * The period is a stored decision, not a clock. Its dates are what get sent
+   * to Razed as from/to, so a board with no period configured asks Razed
+   * nothing rather than inventing a window.
+   */
+  const [base, archive] = await Promise.all([
+    tab === 'frozen' ? frozenPeriod() : currentPeriod(tab === 'monthly' ? 'monthly' : 'weekly'),
+    tab === 'archive' ? archivedPeriods() : Promise.resolve([]),
+  ]);
+
+  /**
+   * Straight from Razed, server-side, on every request. The key never reaches
+   * the browser and the browser never talks to Razed.
+   */
+  const feed = base
+    ? await fetchRazedLeaderboard({
+        from: base.startsAt.slice(0, 10),
+        to: base.endsAt.slice(0, 10),
+      })
+    : null;
+  const feedHealth = feed
+    ? healthFrom(feed)
+    : { lastSyncAt: new Date().toISOString(), status: 'stale' as const, code: 'No period is open, so there is no window to ask Razed about.' };
+
+  const liveRows = feed?.ok ? toBoardRows(feed.rows, (rank) => prizeForRank(base!.tiers, rank)) : [];
+  const active: Period | null = base ? toUiPeriod(base, liveRows) : null;
   const stale = feedHealth.status !== 'healthy';
 
   return (
@@ -86,7 +99,7 @@ export default async function LeaderboardPage({
       {stale ? (
         <Banner tone="gold" className="mt-6" icon={<TriangleAlert size={16} />}>
           <span className="text-ink">
-            {feed.ok
+            {feed?.ok
               ? 'This board may be behind.'
               : 'The board cannot be shown right now.'}
           </span>{' '}
@@ -95,7 +108,11 @@ export default async function LeaderboardPage({
         </Banner>
       ) : null}
 
-      {tab === 'archive' ? <Archive /> : <BoardView period={active} />}
+      {tab === 'archive'
+        ? <Archive periods={archive.map((p) => toUiPeriod(p, []))} />
+        : active
+          ? <BoardView period={active} />
+          : <NoPeriod />}
 
       {/* ------------------------------------------------------------- */}
       {/* Two cards below                                               */}
@@ -235,13 +252,27 @@ function BoardView({ period }: { period: Period }) {
 }
 
 /**
+ * No period has been opened yet, which is different from a period with nobody
+ * on it: there is no window to ask Razed about at all. Admin is where that gets
+ * fixed, so the copy says so rather than looking like a failed feed.
+ */
+function NoPeriod() {
+  return (
+    <EmptyState className="mt-8" title="No board is open.">
+      A leaderboard needs a period — a start date, an end date and its prize tiers. Once one is
+      opened in admin, the positions here come straight from Razed for that window.
+    </EmptyState>
+  );
+}
+
+/**
  * The archive is the proof that the prizes were real, and it is most of what
  * convinces a new viewer to sign up. Never delete a row from it.
  */
-function Archive() {
+function Archive({ periods }: { periods: Period[] }) {
   // Empty until a period actually freezes. An archive is evidence, so it shows
   // nothing rather than an example of what evidence would look like.
-  if (archivedPeriods.length === 0) {
+  if (periods.length === 0) {
     return (
       <div className="mt-8">
         <SectionHeading title="Closed periods" size="s" />
@@ -265,7 +296,7 @@ function Archive() {
           ))}
         </div>
         <div className="bg-surface">
-          {archivedPeriods.map((p) => (
+          {periods.map((p) => (
             <div
               key={p.id}
               className="grid gap-1 border-t border-line px-4 py-3.5 lg:grid-cols-[1.4fr_1fr_140px_120px_100px] lg:items-center lg:gap-0 lg:px-0 lg:py-0"

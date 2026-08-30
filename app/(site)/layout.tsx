@@ -4,7 +4,7 @@ import { Nav } from '@/components/site/Nav';
 import { Footer } from '@/components/site/Footer';
 import { MobileTabBar } from '@/components/site/MobileTabBar';
 import { AgeGate } from '@/components/site/AgeGate';
-import { stream } from '@/lib/mock';
+import { currentStream } from '@/lib/store/stream';
 import { viewerOrSignedOut } from '@/lib/viewer';
 
 /** The public site's chrome. Admin runs its own shell (UI Spec §15). */
@@ -13,7 +13,7 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
 
   // Identity and balance both come from the database now, so the coin bar shows
   // what the ledger says rather than a figure nobody earned.
-  const viewer = await viewerOrSignedOut();
+  const [viewer, stream] = await Promise.all([viewerOrSignedOut(), currentStream()]);
 
   const account = session?.user
     ? {

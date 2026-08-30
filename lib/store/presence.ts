@@ -65,11 +65,16 @@ export async function openWindowCount(): Promise<number> {
 /* Stream sessions                                                            */
 /* -------------------------------------------------------------------------- */
 
-export async function streamWentLive(): Promise<void> {
+export async function streamWentLive(title: string | null = null): Promise<void> {
   await write(
-    `INSERT INTO stream_sessions (started_at) SELECT now()
+    `INSERT INTO stream_sessions (started_at, title) SELECT now(), $1
       WHERE NOT EXISTS (SELECT 1 FROM stream_sessions WHERE ended_at IS NULL)`,
+    [title],
   );
+  // A title can change mid-stream, so keep the open session current.
+  if (title) {
+    await write(`UPDATE stream_sessions SET title = $1 WHERE ended_at IS NULL`, [title]);
+  }
 }
 
 /** Offline closes every window, so no tick can pay after the stream stops. */

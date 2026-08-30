@@ -114,6 +114,7 @@ export function Keno() {
     });
   }
 
+  /** The Pick button: a fresh set of numbers, discarding whatever was there. */
   function autoPick(count = pickCount) {
     if (locked) return;
     const pool = Array.from({ length: KENO_BOARD }, (_, i) => i + 1);
@@ -123,6 +124,30 @@ export function Keno() {
     }
     setPicks(chosen.sort((a, b) => a - b));
     if (soundOn) sounds.quickPick(count);
+  }
+
+  /**
+   * The slider: keeps the numbers already chosen and only adds or drops the
+   * difference, following the design. Re-rolling the whole board on every step
+   * meant dragging from 3 to 6 threw away three numbers the player had picked
+   * deliberately.
+   */
+  function resizePicks(count: number) {
+    if (locked) return;
+    setPickCount(count);
+    setPicks((prev) => {
+      if (count === prev.length) return prev;
+      if (count < prev.length) return prev.slice(0, count);
+
+      const pool = Array.from({ length: KENO_BOARD }, (_, i) => i + 1)
+        .filter((n) => !prev.includes(n));
+      const next = [...prev];
+      while (next.length < count && pool.length) {
+        next.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+      }
+      return next.sort((a, b) => a - b);
+    });
+    if (soundOn) sounds.pick();
   }
 
   const balance = state?.balance ?? 0;
@@ -272,11 +297,7 @@ export function Keno() {
                 value={pickCount}
                 disabled={locked}
                 aria-label="How many numbers to pick"
-                onChange={(e) => {
-                  const v = Number(e.target.value);
-                  setPickCount(v);
-                  autoPick(v);
-                }}
+                onChange={(e) => resizePicks(Number(e.target.value))}
                 className="h-1 min-w-0 flex-1 accent-[#2B8FFF]"
               />
               <button
@@ -368,13 +389,19 @@ export function Keno() {
                       'grid aspect-square select-none place-items-center rounded-[12px] border',
                       'font-mono text-[19px] font-medium tabular-nums',
                       'transition-[background-color,border-color,box-shadow] duration-150',
+                      /* Four states that have to be told apart at a glance.
+                         The drawn-miss used to carry the same classes as an
+                         untouched tile, which made the ten numbers the server
+                         actually drew invisible — the one thing the round is
+                         about. A miss is now sunken with a lighter rim: plainly
+                         revealed, plainly not yours. */
                       hit
                         ? 'animate-keno-pop border-brand bg-brand text-brand-ink shadow-[0_0_0_1px_rgba(43,143,255,0.33),0_6px_22px_-6px_rgba(43,143,255,0.67)]'
                         : drawn
-                          ? 'animate-keno-miss border-line-2 bg-bg text-muted'
+                          ? 'animate-keno-miss border-line-2 bg-bg text-ink-2 shadow-[inset_0_2px_10px_rgba(0,0,0,0.55)]'
                           : picked
-                            ? 'border-line-2 bg-surface-2 text-ink'
-                            : 'border-line-2 bg-bg text-muted hover:border-line-2 hover:text-ink-2',
+                            ? 'border-brand/55 bg-brand-bg text-ink'
+                            : 'border-line bg-surface-2 text-muted hover:border-line-2 hover:text-ink-2',
                       locked ? 'cursor-default' : 'cursor-pointer',
                     )}
                   >

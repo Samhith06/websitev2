@@ -2,7 +2,8 @@ import type { Metadata } from 'next';
 import { Gift, MessageSquare, Shirt, Tv } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { coins } from '@/lib/format';
-import { shopItems, stream } from '@/lib/mock';
+import { shopItems} from '@/lib/mock';
+import { currentStream } from '@/lib/store/stream';
 import { viewerOrSignedOut } from '@/lib/viewer';
 import { Display, Label, Num } from '@/components/ui/typography';
 import { Button, Chip, ChipRow } from '@/components/ui/controls';
@@ -43,7 +44,7 @@ export default async function ShopPage({
   const active = (CATEGORIES.find((c) => c.value === category)?.value ?? 'all') as ShopCategory | 'all';
 
   const items = shopItems.filter((i) => i.active && (active === 'all' || i.category === active));
-  const viewer = await viewerOrSignedOut();
+  const [viewer, stream] = await Promise.all([viewerOrSignedOut(), currentStream()]);
   const zeroCoins = viewer.signedIn && viewer.balance === 0;
 
   return (
