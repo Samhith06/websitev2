@@ -122,7 +122,9 @@ export default async function RazedPlayersPage() {
           needs to know they are not looking at everybody. */}
       <p className="mt-3 font-mono text-[11.5px] tabular-nums text-faint">
         {feed.ok
-          ? `Showing all ${feed.returned} rows Razed returned for this period`
+          ? feed.truncated
+            ? `Showing ${feed.returned} of ${feed.total} — Razed paged the rest, so this is not everybody`
+            : `Showing all ${feed.total} qualifying players Razed has for this period`
           : `Razed returned nothing — ${feedHealth.code}`}
       </p>
 

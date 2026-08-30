@@ -18,19 +18,45 @@ import type { FeedHealth, LeaderboardRow } from './types';
  *     show the last figures we had, because a leaderboard that quietly renders
  *     an empty board during a close finish is how you get accused of rigging.
  *
- * NOT YET VERIFIED against a real response. §6 lists three things to confirm
- * with one real call, and until that happens `normalise` below is a tolerant
- * guess at the field names rather than a mapping anyone has checked:
- *   1. the exact field names on each row;
- *   2. whether `to` is inclusive, and what timezone the boundaries use;
- *   3. whether `top` accepts more than 25.
+ * VERIFIED against a real response. The three things §6 asked us to confirm:
+ *
+ *   1. **Row shape** is `{ username, referred_by_code, wagered }` and nothing
+ *      else. There is no rank field — rows arrive sorted by wagered descending
+ *      and rank is that position. `wagered` is a *string* carrying 18 decimal
+ *      places, so it is parsed rather than used directly.
+ *   2. **`to` is inclusive.** A single-day window (`from` = `to`) returns that
+ *      day's wagering, and two halves of a month sum to the whole.
+ *   3. **`top` does exceed 25** — it maps to `per_page`, and `top=100` returned
+ *      all 33 rows on one page.
+ *
+ * The response is paginated (`current_page`, `last_page`, `per_page`, `total`).
+ * We ask for one large page rather than walking pages, and if `last_page` is
+ * ever greater than 1 the result says so, because a board silently missing its
+ * tail is worse than one that admits it is truncated.
  */
 
 const ENDPOINT = 'https://api.razed.com/player/api/v1/referrals/leaderboard';
 const REFERRAL_CODE = 'Mattyspins';
 
+/**
+ * Deliberately well above the 25 the plan mentions. 25 is what the *page*
+ * shows; this is what we read, so admin can see everyone who qualified and the
+ * board is never truncated without us knowing.
+ */
+const DEFAULT_TOP = 100;
+
 export type RazedResult =
-  | { ok: true; rows: RazedRow[]; fetchedAt: string; returned: number }
+  | {
+      ok: true;
+      rows: RazedRow[];
+      fetchedAt: string;
+      /** How many rows we are showing. */
+      returned: number;
+      /** How many Razed says exist for the window — larger means truncated. */
+      total: number;
+      /** True when a further page exists that we did not read. */
+      truncated: boolean;
+    }
   | { ok: false; reason: 'no-key' | 'http' | 'network' | 'shape'; detail: string; fetchedAt: string };
 
 export type RazedRow = {
@@ -47,51 +73,46 @@ export function mask(username: string): string {
 }
 
 /**
- * Pulls whatever shape Razed actually returns into our own. Deliberately
- * forgiving about names, and deliberately loud when it finds nothing it
- * recognises — a silent empty board is the failure mode worth avoiding.
+ * Turns Razed's payload into our own rows.
+ *
+ * The field names are now known, so this reads them directly and treats a
+ * missing one as a shape failure rather than papering over it. Being loud here
+ * is the point: if Razed changes the response, the board must say it cannot be
+ * read, not quietly render as empty.
+ *
+ * Rank is derived from the sort rather than trusted from the payload — there is
+ * no rank field, and re-sorting locally means the numbering can never disagree
+ * with the wagered column printed beside it.
  */
-function normalise(payload: unknown): RazedRow[] | null {
-  const container = payload as Record<string, unknown> | unknown[] | null;
-  if (!container) return null;
+function normalise(payload: unknown): { rows: RazedRow[]; total: number; pages: number } | null {
+  const body = payload as Record<string, unknown> | null;
+  if (!body || !Array.isArray(body.data)) return null;
 
-  const list: unknown[] | null = Array.isArray(container)
-    ? container
-    : (['data', 'results', 'leaderboard', 'referrals', 'players'] as const)
-        .map((k) => (container as Record<string, unknown>)[k])
-        .find((v): v is unknown[] => Array.isArray(v)) ?? null;
-
-  if (!list) return null;
-
-  const rows: RazedRow[] = [];
-  list.forEach((entry, index) => {
+  const parsed: Array<{ username: string; wagered: number }> = [];
+  for (const entry of body.data) {
     const row = entry as Record<string, unknown>;
-    const username =
-      (row.username ?? row.user_name ?? row.name ?? row.player ?? row.displayName) as string | undefined;
-    const wageredRaw =
-      (row.wagered ?? row.wager ?? row.total_wagered ?? row.amount ?? row.volume) as
-        | string
-        | number
-        | undefined;
+    if (typeof row.username !== 'string') return null;
 
-    if (typeof username !== 'string') return;
-    const wagered = typeof wageredRaw === 'string' ? Number(wageredRaw) : wageredRaw;
-    if (!Number.isFinite(wagered)) return;
+    // `wagered` arrives as a string with eighteen decimal places.
+    const wagered = Number(row.wagered);
+    if (!Number.isFinite(wagered)) return null;
 
-    rows.push({
-      rank: Number(row.rank ?? row.position ?? index + 1),
-      username,
-      wagered: wagered as number,
-    });
-  });
+    parsed.push({ username: row.username, wagered });
+  }
 
-  return rows.length ? rows.sort((a, b) => a.rank - b.rank) : null;
+  parsed.sort((a, b) => b.wagered - a.wagered);
+
+  return {
+    rows: parsed.map((row, index) => ({ rank: index + 1, username: row.username, wagered: row.wagered })),
+    total: Number(body.total ?? parsed.length),
+    pages: Number(body.last_page ?? 1),
+  };
 }
 
 export async function fetchRazedLeaderboard({
   from,
   to,
-  top = 25,
+  top = DEFAULT_TOP,
 }: {
   from: string;
   to: string;
@@ -131,17 +152,24 @@ export async function fetchRazedLeaderboard({
       };
     }
 
-    const rows = normalise(await response.json());
-    if (!rows) {
+    const parsed = normalise(await response.json());
+    if (!parsed) {
       return {
         ok: false,
         reason: 'shape',
-        detail: 'Razed responded, but no row in it matched a shape we recognise.',
+        detail: 'Razed responded, but the payload did not match the shape we read.',
         fetchedAt,
       };
     }
 
-    return { ok: true, rows, fetchedAt, returned: rows.length };
+    return {
+      ok: true,
+      rows: parsed.rows,
+      fetchedAt,
+      returned: parsed.rows.length,
+      total: parsed.total,
+      truncated: parsed.pages > 1,
+    };
   } catch (error) {
     return {
       ok: false,
