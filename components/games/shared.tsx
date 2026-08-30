@@ -335,8 +335,8 @@ export function FairnessDrawer({
     <Card className="mt-6">
       <div className="grid gap-px bg-line md:grid-cols-3 [&>div]:bg-surface">
         <SeedCell label="Server seed hash" value={state.serverSeedHash} truncate />
-        <SeedCell label="Client seed" value={state.clientSeed} />
-        <div className="px-5 py-4">
+        <SeedCell label="Client seed" value={state.clientSeed} truncate />
+        <div className="min-w-0 px-5 py-4">
           <Label className="mb-1.5">Nonce</Label>
           <Num className="text-[15px]">{state.nonce}</Num>
         </div>
@@ -410,7 +410,10 @@ export function FairnessDrawer({
 
 function SeedCell({ label, value, truncate }: { label: string; value: string; truncate?: boolean }) {
   return (
-    <div className="px-5 py-4">
+    /* `min-w-0` is load-bearing: a grid item defaults to min-width:auto, so
+       without it the cell refuses to shrink below the 64-character seed hash
+       and pushes the whole page into a horizontal scroll on a phone. */
+    <div className="min-w-0 px-5 py-4">
       <Label className="mb-1.5">{label}</Label>
       <div className="flex items-center gap-2">
         <code className={cn('min-w-0 flex-1 font-mono text-[12px] text-ink-2', truncate && 'truncate')}>
