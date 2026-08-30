@@ -1,17 +1,21 @@
 /**
- * The single mock-data file (UI Spec §0).
+ * What is left of the mock-data file (UI Spec §0).
  *
- * Every screen through step 8 of the build order reads from here. When the
- * backend lands you change this module's exports to real queries — you do not
- * change forty components.
+ * Accounts, coins, the ledger, game rounds, clips and the audit log used to be
+ * here. They are database rows now — `lib/store/*` — and the leaderboard comes
+ * from Razed at request time.
  *
- * Dates are generated relative to load, so countdowns, "4 minutes ago" and the
- * period clock all behave like the real thing while clicking through.
+ * What remains is the material with no table behind it yet: the stream state
+ * and schedule, Razed's period definitions and prize tiers, the shop catalogue,
+ * and the game configs. Each of those is the next piece of work in its own
+ * area, and each is honest about it rather than pretending to be live.
+ *
+ * Dates are generated relative to load, so countdowns and the period clock
+ * behave like the real thing while clicking through.
  */
 import type {
-  AuditEntry, LeaderboardRow, Casino, Clip, GameConfig, GameRound, Giveaway, LedgerEntry,
-  Period, PrizeClaim, PrizeTier, RazedPlayer, Redemption, SeedPair, ShopItem,
-  StreamState, VerificationState, Viewer,
+  LeaderboardRow, Casino, GameConfig, Giveaway,
+  Period, PrizeClaim, PrizeTier, Redemption, ShopItem, StreamState,
 } from './types';
 
 const now = Date.now();
@@ -45,40 +49,13 @@ export const schedule = [
   { day: 'Sat', time: '7:00 PM', note: 'Big bet Saturday', platform: 'Kick' },
 ];
 
-/* -------------------------------------------------------------------------- */
-/* The viewer                                                                 */
-/* -------------------------------------------------------------------------- */
-
-export const viewer: Viewer = {
-  signedIn: true,
-  discordId: '204812771230842881',
-  discordUsername: 'reelchaser',
-  avatarUrl: '/brand/avatar.svg',
-  memberSince: days(-124),
-  kick: { kickUserId: 8814422, kickUsername: 'reelchaser', verifiedAt: days(-118) },
-  balance: 1_486,
-  lifetimeEarned: 4_920,
-  earnedThisWeek: 560,
-  pendingRedemptions: 1,
-  multiplier: { label: 'Sub bonus active', value: 2 },
-  frozen: { frozen: false },
-  role: 'member',
-  games: {
-    enabled: true,
-    wageredToday: 120,
-    netToday: -35,
-    excludedUntil: null,
-    sessionReminderMinutes: 60,
-  },
-};
-
-/** Signed-out is a first-class state on the shop, giveaways and account (§28). */
-export const signedOutViewer: Viewer = { ...viewer, signedIn: false };
-
-export const verification: VerificationState = { status: 'linked', link: viewer.kick! };
-
-/** The coin ledger, once coins are actually being earned. */
-export const ledger: LedgerEntry[] = [];
+/*
+ * The viewer, the ledger, clips, big wins, rounds, the audit log and every
+ * admin counter used to live here as mock data. They are rows now — see
+ * `lib/store/*` — and this file keeps only what genuinely has no table yet:
+ * the stream state, the schedule, Razed's periods and prize tiers, the shop
+ * catalogue, and the game configs.
+ */
 
 /* -------------------------------------------------------------------------- */
 /* Razed — leaderboards                                                       */
@@ -151,51 +128,6 @@ export const prizeTiers: PrizeTier[] = [
 /** A claim appears once a period freezes and someone claims a position. */
 export const activeClaim: PrizeClaim | null = null;
 
-/** Supplied by the Razed feed in admin, not stored here. */
-export const razedPlayers: RazedPlayer[] = [];
-
-
-/* -------------------------------------------------------------------------- */
-/* Clips and big wins                                                         */
-/* -------------------------------------------------------------------------- */
-
-/**
- * Empty until Matty's real clips are added. Kick has no public clips endpoint,
- * so those are pasted in from admin; YouTube and Instagram sync automatically
- * but land as drafts until a moderator publishes them (Master Plan §10).
- */
-export const clips: Clip[] = [
-  /**
-   * A real clip from kick.com/mattyspinss/clips. Kick has no public clips
-   * endpoint (Master Plan §10), so these are added by hand: the clip URL gives
-   * the id, and the id gives both the player embed and the thumbnail.
-   *
-   *   page   kick.com/<channel>/clips/<id>
-   *   embed  player.kick.com/<channel>?clip=<id>
-   *   thumb  clips.kick.com/clips/60/<id>/thumbnail.webp
-   */
-  {
-    id: 'clip_01M0NBWS4MYE20NF4Z6QQW79J6',
-    kind: 'clip',
-    source: 'kick',
-    url: 'https://kick.com/mattyspinss/clips/clip_01M0NBWS4MYE20NF4Z6QQW79J6',
-    embedUrl: 'https://player.kick.com/mattyspinss?clip=clip_01M0NBWS4MYE20NF4Z6QQW79J6',
-    thumbUrl: 'https://clips.kick.com/clips/60/clip_01M0NBWS4MYE20NF4Z6QQW79J6/thumbnail.webp',
-    title: '3000 Bonus Bingo! 1200 leaderboard',
-    aspect: '16:9',
-    durationSeconds: 90,
-    views: 6,
-    occurredAt: days(-7),
-    status: 'published',
-  },
-];
-
-/**
- * Empty until Matty's real big wins are added. Every figure on a big-win card
- * is a claim about money — bet, payout and the multiplier derived from them —
- * so an invented one is worse here than anywhere else on the site.
- */
-export const bigWins: Clip[] = [];
 
 /* -------------------------------------------------------------------------- */
 /* Shop and giveaways                                                         */
@@ -236,36 +168,9 @@ export const gameConfigs: GameConfig[] = [
 /** Owner-only kill switch (§38). Flip to see the lobby's replacement message. */
 export const gamesKilled = false;
 
-export const seedPair: SeedPair = {
-  serverSeedHash: '9c1f7a3e5b8d2f6a0c4e8b2d6f0a4c8e2b6d0f4a8c2e6b0d4f8a2c6e0b4d8f2a',
-  clientSeed: 'reelchaser-2026',
-  nonce: 47,
-  previousServerSeed: '4a7c0e3b6d9f2a5c8e1b4d7f0a3c6e9b2d5f8a1c4e7b0d3f6a9c2e5b8d1f4a7c',
-  previousServerSeedHash: '1f4a7c0e3b6d9f2a5c8e1b4d7f0a3c6e9b2d5f8a1c4e7b0d3f6a9c2e5b8d1f4a',
-};
-
-/** Real rounds, once real rounds have been played. */
-export const biggestHitsToday: GameRound[] = [];
-
 /* -------------------------------------------------------------------------- */
 /* Admin                                                                      */
 /* -------------------------------------------------------------------------- */
-
-/** Written by real admin actions. */
-export const auditLog: AuditEntry[] = [];
-
-/** Real counts arrive with the ledger. Null until then, never a placeholder. */
-export const adminStats: Record<
-  'coinsMintedThisWeek' | 'coinsDestroyedThisWeek' | 'activeEarners' | 'redemptionQueue' | 'roundsToday' | 'wageredToday',
-  number | null
-> = {
-  coinsMintedThisWeek: null,
-  coinsDestroyedThisWeek: null,
-  activeEarners: null,
-  redemptionQueue: null,
-  roundsToday: null,
-  wageredToday: null,
-};
 
 /**
  * `null` means "we do not have this figure yet" and the interface says so.

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { auth, signIn } from '@/auth';
-import { noAdminsConfigured, roleFor } from '@/lib/admin';
+import { devBypass, noAdminsConfigured, roleFor } from '@/lib/admin';
 import { AdminShell } from '@/components/admin/AdminShell';
 import { AdminGate } from '@/components/admin/AdminGate';
 
@@ -20,18 +20,6 @@ export const dynamic = 'force-dynamic';
  * MOD_DISCORD_IDS. There is no password, and no role travels in the session
  * token — see `lib/admin.ts`.
  */
-/**
- * A local-only door into the dashboard, for reviewing the admin screens before
- * Discord credentials exist.
- *
- * The `NODE_ENV` check is the important half and is evaluated at build time, so
- * a production bundle cannot open it however the environment is set. It is not
- * a feature flag — it is scaffolding, and it comes out once sign-in works.
- */
-function devBypass(): boolean {
-  return process.env.NODE_ENV !== 'production' && process.env.DEV_ADMIN_BYPASS === 'true';
-}
-
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   if (devBypass()) {
     return (

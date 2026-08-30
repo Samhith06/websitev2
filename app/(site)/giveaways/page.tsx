@@ -2,7 +2,8 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import { ShieldCheck } from 'lucide-react';
 import { coins, dateShort } from '@/lib/format';
-import { giveaways, pastGiveaways, stream, viewer } from '@/lib/mock';
+import { giveaways, pastGiveaways, stream } from '@/lib/mock';
+import { viewerOrSignedOut } from '@/lib/viewer';
 import { Display, Label, Num } from '@/components/ui/typography';
 import { Button } from '@/components/ui/controls';
 import { Card } from '@/components/ui/surfaces';
@@ -18,7 +19,10 @@ export const metadata: Metadata = {
     'Spend Matty Coins on entries to the weekly and monthly draws. Every draw is provably fair — the seed is published before entries open.',
 };
 
-export default function GiveawaysPage() {
+export const dynamic = 'force-dynamic';
+
+export default async function GiveawaysPage() {
+  const viewer = await viewerOrSignedOut();
   return (
     <div className="container-page py-10 lg:py-14">
       <div className="max-w-2xl">

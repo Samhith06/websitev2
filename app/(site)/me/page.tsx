@@ -3,9 +3,11 @@ import type { Metadata } from 'next';
 import { Coins, Dices, Gift, Sparkles, TrendingUp } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { coins, dateShort, money, relativeTime } from '@/lib/format';
-import {
-  activeClaim, discordInvite, ledger, redemptions, stream, verification, viewer,
-} from '@/lib/mock';
+import { activeClaim, discordInvite, stream } from '@/lib/mock';
+import { currentUser } from '@/lib/player';
+import { currentViewer } from '@/lib/viewer';
+import { verificationStateFor } from '@/lib/store/accounts';
+import { ledgerFor } from '@/lib/store/coins';
 import { Display, Label, Num } from '@/components/ui/typography';
 import { Button, ButtonLink, StatusDot } from '@/components/ui/controls';
 import { Card } from '@/components/ui/surfaces';
@@ -15,7 +17,6 @@ import { Ledger } from '@/components/site/Ledger';
 import { LimitsBlock } from '@/components/site/LimitsBlock';
 import { ProfileSidebar } from '@/components/site/ProfileSidebar';
 import { ProfileMobile } from '@/components/site/ProfileMobile';
-import type { Redemption } from '@/lib/types';
 
 export const metadata: Metadata = {
   title: 'My profile',
@@ -32,8 +33,19 @@ export const metadata: Metadata = {
  * the single decision keeping this site promotional rather than a licensed
  * operator (Master Plan §12). A deposit button here would undo it.
  */
-export default function ProfilePage() {
-  if (!viewer.signedIn) return <SignedOut />;
+// Everything on this page is the signed-in person's own data, so none of it can
+// be prerendered.
+export const dynamic = 'force-dynamic';
+
+export default async function ProfilePage() {
+  const user = await currentUser();
+  const viewer = user ? await currentViewer() : null;
+  if (!user || !viewer) return <SignedOut />;
+
+  const [verification, ledger] = await Promise.all([
+    verificationStateFor(user.id),
+    ledgerFor(user.id, 60),
+  ]);
 
   const linked = verification.status === 'linked';
   const spent = viewer.lifetimeEarned - viewer.balance;
@@ -243,13 +255,15 @@ export default function ProfilePage() {
           {/* ========================================================= */}
           <section id="redemptions" className="scroll-mt-24">
             <Label className="mb-3">Redemptions</Label>
-            <div className="space-y-2">
-              {redemptions
-                .filter((r) => r.member === viewer.discordUsername)
-                .map((redemption) => (
-                  <RedemptionRow key={redemption.id} redemption={redemption} />
-                ))}
-            </div>
+            <Card className="px-5 py-6">
+              <p className="text-[14px] text-muted">
+                Nothing redeemed yet. Anything you buy in the{' '}
+                <Link href="/shop" className="text-brand underline underline-offset-2">
+                  shop
+                </Link>{' '}
+                appears here with its status while a moderator works through it.
+              </p>
+            </Card>
           </section>
 
           {/* ========================================================= */}
@@ -374,32 +388,6 @@ function Tag({ children, tone = 'default' }: { children: React.ReactNode; tone?:
     >
       {children}
     </span>
-  );
-}
-
-function RedemptionRow({ redemption }: { redemption: Redemption }) {
-  const tone =
-    redemption.status === 'rejected' ? 'danger'
-    : redemption.status === 'fulfilled' ? 'brand'
-    : 'gold';
-
-  return (
-    <Card tone={redemption.status === 'rejected' ? 'danger' : 'default'}>
-      <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
-        <div className="min-w-0">
-          <p className="text-[14.5px] text-ink">{redemption.itemName}</p>
-          <p className="mt-1 flex items-center gap-2 font-mono text-[11.5px] tabular-nums text-faint">
-            <CoinMark size={12} />
-            {coins(redemption.cost)} · {relativeTime(redemption.createdAt)}
-            {redemption.handledBy ? ` · handled by ${redemption.handledBy}` : ''}
-          </p>
-          {redemption.reason ? (
-            <p className="mt-1.5 text-[13px] text-danger">{redemption.reason}</p>
-          ) : null}
-        </div>
-        <StatusDot tone={tone}>{redemption.status}</StatusDot>
-      </div>
-    </Card>
   );
 }
 

@@ -2,6 +2,8 @@
 const nextConfig = {
   // Two lockfiles exist above this folder; pin the root so tracing is correct.
   outputFileTracingRoot: import.meta.dirname,
+  // `pg` loads native and optional modules by name; bundling it breaks that.
+  serverExternalPackages: ['pg'],
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: '**.kick.com' },

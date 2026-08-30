@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useTransition } from 'react';
 import { cn } from '@/lib/cn';
 import { coins, dateShort, formatMultiplier, relativeTime } from '@/lib/format';
 import { Button, Chip, ChipRow, Input } from '@/components/ui/controls';
@@ -8,26 +8,79 @@ import { Card } from '@/components/ui/surfaces';
 import { Label, Num } from '@/components/ui/typography';
 import { SOURCE_LABELS } from '@/components/ui/marks';
 import { StatusPill } from './Table';
+import {
+  inspectUrl, publishClip, removeClip, saveClip, togglePin, unpublishClip,
+  type ActionResult,
+} from '@/app/admin/clips/actions';
 import type { Clip } from '@/lib/types';
 
 /**
  * A two-column card (UI Spec §19). The multiplier is an inset panel labelled
  * "calculated" — never an editable field, so it can never disagree with the bet
  * and payout beside it.
+ *
+ * The buttons write to the database through server actions. Every one of those
+ * actions re-checks the caller: a server action is a public endpoint, and being
+ * rendered inside /admin protects nothing on its own.
  */
-export function ClipEditor({ clips }: { clips: Clip[] }) {
+export function ClipEditor({ clips, pinnedCount }: { clips: Clip[]; pinnedCount: number }) {
   const [mode, setMode] = useState<'big_win' | 'clip'>('big_win');
   const [url, setUrl] = useState('');
+  const [title, setTitle] = useState('');
   const [slot, setSlot] = useState('');
   const [date, setDate] = useState('');
   const [bet, setBet] = useState('');
   const [payout, setPayout] = useState('');
   const [pin, setPin] = useState(false);
-  const [announce, setAnnounce] = useState(true);
+  const [announce, setAnnounce] = useState(false);
+
+  const [preview, setPreview] = useState<{ source: string; thumbUrl: string } | null>(null);
+  const [result, setResult] = useState<ActionResult | null>(null);
+  const [pending, start] = useTransition();
 
   const betNum = Number(bet) || 0;
   const payoutNum = Number(payout) || 0;
-  const pinned = clips.filter((c) => c.pinned).length;
+
+  function submit(status: 'draft' | 'published') {
+    const data = new FormData();
+    data.set('kind', mode);
+    data.set('status', status);
+    data.set('url', url);
+    data.set('title', title);
+    data.set('slot', slot);
+    data.set('date', date);
+    data.set('bet', bet);
+    data.set('payout', payout);
+    if (pin) data.set('pinned', 'on');
+
+    start(async () => {
+      const outcome = await saveClip(data);
+      setResult(outcome);
+      if (outcome.ok) {
+        setUrl('');
+        setTitle('');
+        setSlot('');
+        setBet('');
+        setPayout('');
+        setPin(false);
+        setPreview(null);
+      }
+    });
+  }
+
+  function fetchPreview() {
+    if (!url.trim()) return;
+    start(async () => {
+      const outcome = await inspectUrl(url);
+      if (outcome.ok) {
+        setPreview({ source: outcome.source, thumbUrl: outcome.thumbUrl });
+        setResult(null);
+      } else {
+        setPreview(null);
+        setResult(outcome);
+      }
+    });
+  }
 
   return (
     <>
@@ -50,12 +103,24 @@ export function ClipEditor({ clips }: { clips: Clip[] }) {
                 placeholder="paste a Kick, YouTube, Instagram or X link"
                 className="flex-1"
               />
-              <Button variant="outline">Fetch</Button>
+              <Button variant="outline" onClick={fetchPreview} disabled={pending || !url.trim()}>
+                Fetch
+              </Button>
             </div>
             <p className="mt-1.5 text-[12px] text-muted">
-              Kick, YouTube, Instagram and X. For a raw file, drop an mp4 instead and it goes to the
-              video host rather than the app server.
+              Kick, YouTube, Instagram and X. Kick and YouTube also give us a thumbnail from the
+              link alone; the other two need one uploaded, which is why their card falls back to a
+              drawn preview.
             </p>
+
+            <div className="mt-5">
+              <Label className="mb-1.5">Title</Label>
+              <Input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="what people read in the carousel"
+              />
+            </div>
 
             {mode === 'big_win' ? (
               <>
@@ -97,11 +162,19 @@ export function ClipEditor({ clips }: { clips: Clip[] }) {
           <div className="flex flex-col p-5">
             <Label className="mb-3">Preview</Label>
             <div className="relative aspect-video overflow-hidden rounded-[3px] border border-line bg-surface-2">
-              <div className="absolute inset-0 grid place-items-center">
-                <span className="font-mono text-[11.5px] uppercase tracking-[0.16em] text-faint">
-                  {url ? 'Fetching thumbnail…' : 'Paste a URL to preview'}
-                </span>
-              </div>
+              {preview?.thumbUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={preview.thumbUrl} alt="" className="size-full object-cover" />
+              ) : (
+                <div className="absolute inset-0 grid place-items-center">
+                  <span className="px-4 text-center font-mono text-[11.5px] uppercase tracking-[0.16em] text-faint">
+                    {pending ? 'Checking the link…'
+                      : preview ? `${preview.source} — no thumbnail from the link alone`
+                      : url ? 'Press Fetch to check the link'
+                      : 'Paste a URL to preview'}
+                  </span>
+                </div>
+              )}
               {mode === 'big_win' && betNum > 0 && payoutNum > 0 ? (
                 <span className="absolute left-3 top-3 font-mono text-[28px] font-bold leading-none tabular-nums text-gold [text-shadow:0_2px_12px_rgba(0,0,0,0.95)]">
                   {formatMultiplier(betNum, payoutNum)}
@@ -114,28 +187,49 @@ export function ClipEditor({ clips }: { clips: Clip[] }) {
                 checked={pin}
                 onChange={setPin}
                 label="Pin to the homepage wall"
-                hint={`${pinned} of 3 pins used. A fourth is refused with a message, not silently dropped.`}
-                disabled={!pin && pinned >= 3}
+                hint={`${pinnedCount} of 3 pins used. A fourth is refused with a message, not silently dropped.`}
+                disabled={!pin && pinnedCount >= 3}
               />
               <Toggle
                 checked={announce}
                 onChange={setAnnounce}
                 label="Announce in Discord"
-                hint="Posts to the clips channel when this is published, not when it is saved."
+                hint="Not wired up yet — there is no Discord bot behind this switch, so it does nothing."
+                disabled
               />
             </div>
 
+            {result ? (
+              <p
+                className={cn(
+                  'mt-4 text-[13px] leading-relaxed',
+                  result.ok ? 'text-brand' : 'text-danger',
+                )}
+                role="status"
+              >
+                {result.ok ? result.message : result.error}
+              </p>
+            ) : null}
+
             <div className="mt-auto flex gap-2 pt-5">
-              <Button variant="outline" className="flex-1">Save as draft</Button>
-              <Button className="flex-1">Publish</Button>
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => submit('draft')}
+                disabled={pending}
+              >
+                Save as draft
+              </Button>
+              <Button className="flex-1" onClick={() => submit('published')} disabled={pending}>
+                {pending ? 'Saving…' : 'Publish'}
+              </Button>
             </div>
           </div>
         </div>
 
         <p className="border-t border-line px-5 py-3 text-[12.5px] leading-relaxed text-muted">
-          Auto-synced YouTube and Instagram posts land here as drafts — <span className="text-gold">4 waiting</span>.
           Nothing reaches the site until someone publishes it, which is what stops the carousel
-          filling with filler inside a week.
+          filling with filler inside a week. Drafts are visible here and nowhere else.
         </p>
       </Card>
 
@@ -147,37 +241,80 @@ export function ClipEditor({ clips }: { clips: Clip[] }) {
       </h2>
 
       <Card>
-        <ul className="divide-y divide-line">
-          {clips.map((clip) => (
-            <li key={clip.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
-              <span className="w-6 shrink-0 cursor-grab text-center font-mono text-[13px] text-faint" aria-hidden>
-                ⠿
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-[14px] text-ink">{clip.title}</span>
-                <span className="mt-0.5 block font-mono text-[11.5px] tabular-nums text-faint">
-                  {SOURCE_LABELS[clip.source]} · {clip.aspect} · {dateShort(clip.occurredAt)}
-                  {clip.bet && clip.payout
-                    ? ` · ${coins(clip.bet)} → ${coins(clip.payout)} (${formatMultiplier(clip.bet, clip.payout)})`
-                    : ''}
-                </span>
-              </span>
-              <span className="shrink-0">
-                {clip.pinned ? <StatusPill tone="gold">Pinned</StatusPill> : null}
-              </span>
-              <span className="shrink-0">
-                <StatusPill tone={clip.status === 'published' ? 'brand' : 'muted'}>
-                  {clip.status}
-                </StatusPill>
-              </span>
-              <span className="w-[70px] shrink-0 text-right font-mono text-[11px] text-faint">
-                {relativeTime(clip.occurredAt)}
-              </span>
-            </li>
-          ))}
-        </ul>
+        {clips.length === 0 ? (
+          <p className="px-4 py-8 text-center text-[13.5px] text-muted">
+            Nothing added yet. Paste a link above and it appears here.
+          </p>
+        ) : (
+          <ul className="divide-y divide-line">
+            {clips.map((clip) => (
+              <ClipRow key={clip.id} clip={clip} onDone={setResult} />
+            ))}
+          </ul>
+        )}
       </Card>
     </>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+
+function ClipRow({ clip, onDone }: { clip: Clip; onDone: (r: ActionResult) => void }) {
+  const [pending, start] = useTransition();
+
+  function run(action: () => Promise<ActionResult>) {
+    start(async () => onDone(await action()));
+  }
+
+  return (
+    <li className={cn('flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3', pending && 'opacity-50')}>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[14px] text-ink">{clip.title}</span>
+        <span className="mt-0.5 block font-mono text-[11.5px] tabular-nums text-faint">
+          {SOURCE_LABELS[clip.source]} · {clip.aspect} · {dateShort(clip.occurredAt)}
+          {clip.bet && clip.payout
+            ? ` · ${coins(clip.bet)} → ${coins(clip.payout)} (${formatMultiplier(clip.bet, clip.payout)})`
+            : ''}
+        </span>
+      </span>
+
+      <span className="shrink-0">
+        <StatusPill tone={clip.status === 'published' ? 'brand' : 'muted'}>{clip.status}</StatusPill>
+      </span>
+
+      <span className="flex shrink-0 items-center gap-3 font-mono text-[11.5px]">
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => run(() => togglePin(clip.id, !clip.pinned))}
+          className={cn('hover:underline', clip.pinned ? 'text-gold' : 'text-muted')}
+        >
+          {clip.pinned ? 'Unpin' : 'Pin'}
+        </button>
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() =>
+            run(() => (clip.status === 'published' ? unpublishClip(clip.id) : publishClip(clip.id)))
+          }
+          className="text-brand hover:underline"
+        >
+          {clip.status === 'published' ? 'Unpublish' : 'Publish'}
+        </button>
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => run(() => removeClip(clip.id))}
+          className="text-danger hover:underline"
+        >
+          Delete
+        </button>
+      </span>
+
+      <span className="w-[70px] shrink-0 text-right font-mono text-[11px] text-faint">
+        {relativeTime(clip.occurredAt)}
+      </span>
+    </li>
   );
 }
 

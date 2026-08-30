@@ -4,17 +4,17 @@ import { Nav } from '@/components/site/Nav';
 import { Footer } from '@/components/site/Footer';
 import { MobileTabBar } from '@/components/site/MobileTabBar';
 import { AgeGate } from '@/components/site/AgeGate';
-import { stream, viewer } from '@/lib/mock';
+import { stream } from '@/lib/mock';
+import { viewerOrSignedOut } from '@/lib/viewer';
 
 /** The public site's chrome. Admin runs its own shell (UI Spec §15). */
 export default async function SiteLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
 
-  /**
-   * Identity is real; the coin balance is still mock until the database lands.
-   * Keeping the two separate here means the swap later is one line rather than
-   * a hunt through the components.
-   */
+  // Identity and balance both come from the database now, so the coin bar shows
+  // what the ledger says rather than a figure nobody earned.
+  const viewer = await viewerOrSignedOut();
+
   const account = session?.user
     ? {
         username: session.user.discordUsername ?? session.user.name ?? 'Account',

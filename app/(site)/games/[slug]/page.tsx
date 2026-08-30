@@ -2,7 +2,8 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { ArrowLeft } from 'lucide-react';
-import { gameConfigs, gamesKilled, viewer } from '@/lib/mock';
+import { gameConfigs, gamesKilled } from '@/lib/mock';
+import { viewerOrSignedOut } from '@/lib/viewer';
 import { Display, Label } from '@/components/ui/typography';
 import { Card } from '@/components/ui/surfaces';
 import { OptInGate } from '@/components/games/OptInGate';
@@ -31,11 +32,15 @@ export async function generateMetadata({
   };
 }
 
+// The screen reads the signed-in viewer's own state, so it renders per request.
+export const dynamic = 'force-dynamic';
+
 export default async function GamePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   if (!PLAYABLE.includes(slug as Playable)) notFound();
 
   // Every play endpoint refuses server-side too; this only hides the screen.
+  const viewer = await viewerOrSignedOut();
   if (!viewer.games.enabled || viewer.games.excludedUntil) return <OptInGate />;
 
   const game = gameConfigs.find((g) => g.slug === slug)!;

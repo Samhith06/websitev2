@@ -2,9 +2,11 @@ import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import { coins, maybe, money, relativeTime } from '@/lib/format';
 import {
-  bigWins, clips, prizeTiers, razed, schedule, siteStats, stream, viewer, weeklyPeriod, socials, aboutCopy,
+  prizeTiers, razed, schedule, siteStats, stream, weeklyPeriod, socials, aboutCopy,
   portraitUrl,
 } from '@/lib/mock';
+import { publishedBigWins, publishedClips } from '@/lib/store/clips';
+import { viewerOrSignedOut } from '@/lib/viewer';
 import { fetchRazedLeaderboard, healthFrom, toBoardRows } from '@/lib/razed';
 import { Display, Label, Num, SectionHeading } from '@/components/ui/typography';
 import { ButtonLink, Chip, ChipRow } from '@/components/ui/controls';
@@ -17,7 +19,14 @@ import { Podium, BoardRows } from '@/components/site/Leaderboard';
 import { ClipCarousel } from '@/components/site/ClipCard';
 import { BigWinCard } from '@/components/site/BigWinCard';
 
+export const dynamic = 'force-dynamic';
+
 export default async function HomePage() {
+  const [viewer, clips, bigWins] = await Promise.all([
+    viewerOrSignedOut(),
+    publishedClips(12),
+    publishedBigWins(3),
+  ]);
   const featured = bigWins[0];
   const compactWins = bigWins.slice(1, 3);
 

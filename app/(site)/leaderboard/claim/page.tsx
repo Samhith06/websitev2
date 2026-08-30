@@ -2,7 +2,8 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import { ArrowLeft } from 'lucide-react';
 import { dateRange } from '@/lib/format';
-import { frozenPeriod, viewer } from '@/lib/mock';
+import { frozenPeriod } from '@/lib/mock';
+import { viewerOrSignedOut } from '@/lib/viewer';
 import { Display, Label } from '@/components/ui/typography';
 import { ButtonLink } from '@/components/ui/controls';
 import { Card } from '@/components/ui/surfaces';
@@ -14,7 +15,10 @@ export const metadata: Metadata = {
   description: 'Claim your position on a frozen MattySpins leaderboard period.',
 };
 
-export default function ClaimPage() {
+export const dynamic = 'force-dynamic';
+
+export default async function ClaimPage() {
+  const viewer = await viewerOrSignedOut();
   return (
     <div className="container-page py-10 lg:py-14">
       <Link

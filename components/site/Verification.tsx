@@ -27,6 +27,8 @@ export function Verification({
 }) {
   const [state, setState] = useState<VerificationState>(initial);
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (state.status !== 'waiting') {
@@ -45,10 +47,49 @@ export function Verification({
     return () => clearInterval(id);
   }, [state]);
 
-  function generate() {
-    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    const code = `MS-${Array.from({ length: 4 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('')}`;
-    setState({ status: 'waiting', code, expiresAt: new Date(Date.now() + 10 * 60_000).toISOString() });
+  /**
+   * The wait polls the server, because the confirmation arrives from Kick and
+   * not from anything this page did. It is the first thing anyone ever does on
+   * the site, and having to refresh to find out whether it worked is how it
+   * gets read as broken.
+   */
+  useEffect(() => {
+    if (state.status !== 'waiting') return;
+    const id = setInterval(async () => {
+      try {
+        const response = await fetch('/api/kick/verify', { cache: 'no-store' });
+        if (!response.ok) return;
+        const next = (await response.json()) as VerificationState;
+        if (next.status === 'linked') setState(next);
+      } catch {
+        // A dropped poll is not worth showing anyone; the next one is in 4s.
+      }
+    }, 4000);
+    return () => clearInterval(id);
+  }, [state.status]);
+
+  /**
+   * The code is issued by the server and stored before it is shown. One
+   * invented in the browser would prove nothing — the mechanism rests on the
+   * site knowing a value the viewer could not have guessed, then seeing that
+   * exact value arrive from Kick with a user id attached.
+   */
+  async function generate() {
+    setBusy(true);
+    setError(null);
+    try {
+      const response = await fetch('/api/kick/verify', { method: 'POST' });
+      const payload = await response.json();
+      if (!response.ok) {
+        setError(payload?.detail ?? 'Could not issue a code. Try again in a moment.');
+        return;
+      }
+      setState(payload as VerificationState);
+    } catch {
+      setError('Could not reach the server. Check your connection and try again.');
+    } finally {
+      setBusy(false);
+    }
   }
 
   if (state.status === 'linked') {
@@ -93,9 +134,10 @@ export function Verification({
                 Codes last ten minutes so nobody can pass one around. Generate a new one and type it
                 in chat while Matty is live.
               </p>
-              <Button className="mt-5" onClick={generate}>
-                Generate a new code
+              <Button className="mt-5" onClick={generate} disabled={busy}>
+                {busy ? 'Generating…' : 'Generate a new code'}
               </Button>
+              {error ? <p className="mt-3 text-[13px] text-danger">{error}</p> : null}
             </>
           ) : (
             <>
@@ -134,9 +176,10 @@ export function Verification({
           One Kick account per site account, both ways. There is no casino account linking anywhere
           on this site.
         </p>
-        <Button className="mt-5" onClick={generate}>
-          Generate my code
+        <Button className="mt-5" onClick={generate} disabled={busy}>
+          {busy ? 'Generating…' : 'Generate my code'}
         </Button>
+        {error ? <p className="mt-3 text-[13px] text-danger">{error}</p> : null}
       </div>
     </Card>
   );

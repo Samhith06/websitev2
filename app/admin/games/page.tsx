@@ -2,7 +2,10 @@ import { Power } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { coins, maybe, mult, relativeTime } from '@/lib/format';
 import { KENO_RISK_LABELS, kenoPaytable, kenoRtp } from '@/lib/games';
-import { adminStats, biggestHitsToday, gameConfigs, gamesKilled } from '@/lib/mock';
+import { gameConfigs, gamesKilled } from '@/lib/mock';
+import { hasDatabase } from '@/lib/db';
+import { coinFlow } from '@/lib/store/coins';
+import { biggestRoundsToday } from '@/lib/store/play';
 import { AdminHeader } from '@/components/admin/AdminShell';
 import { AdminRow, AdminTable, Cell, FilterBar } from '@/components/admin/Table';
 import { Button, Chip, ChipRow, Input } from '@/components/ui/controls';
@@ -14,11 +17,21 @@ export const metadata = { title: 'Games' };
 
 const FEED_COLS = 'lg:grid-cols-[1fr_100px_100px_110px_120px_110px]';
 
-export default function AdminGamesPage() {
-  const netFlow =
-    adminStats.coinsMintedThisWeek !== null && adminStats.coinsDestroyedThisWeek !== null
-      ? adminStats.coinsMintedThisWeek - adminStats.coinsDestroyedThisWeek
-      : null;
+export const dynamic = 'force-dynamic';
+
+export default async function AdminGamesPage() {
+  const weekStart = new Date();
+  weekStart.setUTCHours(0, 0, 0, 0);
+  weekStart.setUTCDate(weekStart.getUTCDate() - 7);
+
+  const [flow, biggestHitsToday] = await Promise.all([
+    hasDatabase() ? coinFlow(weekStart) : Promise.resolve(null),
+    hasDatabase() ? biggestRoundsToday(25) : Promise.resolve([]),
+  ]);
+
+  const minted = flow?.minted ?? null;
+  const destroyed = flow?.destroyed ?? null;
+  const netFlow = minted !== null && destroyed !== null ? minted - destroyed : null;
 
   return (
     <>
@@ -58,13 +71,14 @@ export default function AdminGamesPage() {
           <Label>Coin flow this week</Label>
         </div>
         <div className="grid gap-px bg-line sm:grid-cols-3 [&>div]:bg-surface">
-          <Figure label="Minted by watching" value={maybe(adminStats.coinsMintedThisWeek, (n) => `+${coins(n)}`)} tone="brand" />
-          <Figure label="Destroyed by the edge" value={maybe(adminStats.coinsDestroyedThisWeek, (n) => `−${coins(n)}`)} tone="gold" />
+          <Figure label="Minted by watching" value={maybe(minted, (n) => `+${coins(n)}`)} tone="brand" />
+          <Figure label="Destroyed by the edge" value={maybe(destroyed, (n) => `−${coins(n)}`)} tone="gold" />
           <Figure label="Net" value={maybe(netFlow, (n) => `+${coins(n)}`)} />
         </div>
         <p className="border-t border-line px-4 py-3 text-[12.5px] leading-relaxed text-muted">
           If the games drain faster than the stream mints, the site feels punishing; slower, and the
-          shop inflates. The lever is the daily wager cap or shop prices — never the advertised RTP.
+          shop inflates. At 99% RTP the games are close to neutral rather than a real sink, so the
+          lever is shop prices — never the advertised RTP.
         </p>
       </Card>
 
@@ -97,6 +111,12 @@ export default function AdminGamesPage() {
       </FilterBar>
 
       <AdminTable cols={FEED_COLS} columns={['Player', 'Game', 'Bet', 'Multiplier', 'Payout', 'When']}>
+        {biggestHitsToday.length === 0 ? (
+          <p className="px-4 py-6 text-[13.5px] text-muted">
+            No rounds today. Anomalies show up in this feed before they show up in the balances,
+            so an empty one is the good case.
+          </p>
+        ) : null}
         {biggestHitsToday.map((round) => (
           <AdminRow key={round.id} cols={FEED_COLS} tint={round.multiplier > 200 ? 'gold' : undefined}>
             <Cell className="truncate text-ink">{round.player}</Cell>

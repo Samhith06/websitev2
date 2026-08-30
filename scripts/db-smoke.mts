@@ -1,0 +1,383 @@
+/**
+ * The database smoke test.
+ *
+ * Runs the real migrations and the real store modules against a real Postgres —
+ * not a mock — because the things worth checking here are the things only
+ * Postgres enforces: the unique indexes that make a double-tap one bet, the row
+ * lock that stops two concurrent rounds sharing a nonce, and the constraint that
+ * keeps a balance from going negative.
+ *
+ *   DATABASE_URL=postgres://... npm run db:smoke
+ *
+ * It drops and recreates the schema, so point it at a throwaway database and
+ * never at production. Pass --keep to run against the existing schema instead.
+ */
+import { ready, rows, write } from '../lib/db';
+import * as accounts from '../lib/store/accounts';
+import * as coins from '../lib/store/coins';
+import * as play from '../lib/store/play';
+import * as presence from '../lib/store/presence';
+import * as clips from '../lib/store/clips';
+
+let failures = 0;
+function check(name: string, condition: unknown, detail = '') {
+  if (condition) console.log(`  ok   ${name}`);
+  else {
+    failures += 1;
+    console.log(`  FAIL ${name}${detail ? ` — ${detail}` : ''}`);
+  }
+}
+function section(name: string) {
+  console.log(`\n== ${name} ==`);
+}
+
+if (!process.env.DATABASE_URL) {
+  console.error('DATABASE_URL is not set. This test needs a real Postgres.');
+  process.exit(1);
+}
+
+// Repeatable from a clean schema unless told otherwise.
+if (!process.argv.includes('--keep')) {
+  const { pool } = await import('../lib/db');
+  const p = pool();
+  if (p) await p.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
+}
+
+/* -------------------------------------------------------------------------- */
+section('migrations');
+
+await ready();
+const tables = (await rows<{ table_name: string }>(
+  `SELECT table_name FROM information_schema.tables WHERE table_schema='public' ORDER BY 1`,
+)).map((r) => r.table_name);
+
+for (const t of ['users', 'kick_links', 'verification_codes', 'coin_ledger', 'coin_balances',
+                 'seed_pairs', 'game_rounds', 'clips', 'presence_windows', 'stream_sessions',
+                 'kick_events', 'audit_log', 'sub_state', 'schema_migrations']) {
+  check(`table ${t}`, tables.includes(t));
+}
+check('the real clip is seeded', (await clips.listClips({})).length === 1);
+
+const before = await rows<{ n: number }>('SELECT count(*)::int AS n FROM schema_migrations');
+await ready();
+const after = await rows<{ n: number }>('SELECT count(*)::int AS n FROM schema_migrations');
+check('migrations are idempotent', before[0].n === after[0].n);
+
+/* -------------------------------------------------------------------------- */
+section('accounts');
+
+const alice = await accounts.ensureUser({ discordId: 'd-alice', discordUsername: 'alice' });
+const bob = await accounts.ensureUser({ discordId: 'd-bob', discordUsername: 'bob' });
+check('two distinct users', alice.id !== bob.id);
+
+const aliceAgain = await accounts.ensureUser({ discordId: 'd-alice', discordUsername: 'alice2' });
+check('ensureUser is an upsert, not a second row', aliceAgain.id === alice.id);
+check('a changed username is picked up', aliceAgain.discordUsername === 'alice2');
+
+/* -------------------------------------------------------------------------- */
+section('kick verification');
+
+const code = await accounts.issueVerificationCode(alice.id);
+check('code has the MS-XXXX shape', /^MS-[A-Z2-9]{4}$/.test(code.code), code.code);
+check('state is waiting', (await accounts.verificationStateFor(alice.id)).status === 'waiting');
+
+const wrong = await accounts.redeemVerificationCode({
+  code: 'MS-2222', kickUserId: '999', kickUsername: 'nobody',
+});
+check('an unknown code is refused', wrong.ok === false && wrong.reason === 'no-code');
+
+const redeemed = await accounts.redeemVerificationCode({
+  code: code.code.toLowerCase(), kickUserId: '8814422', kickUsername: 'alicekick',
+});
+check('a code typed in lower case still works', redeemed.ok === true);
+check('state is linked', (await accounts.verificationStateFor(alice.id)).status === 'linked');
+
+const replayed = await accounts.redeemVerificationCode({
+  code: code.code, kickUserId: '8814422', kickUsername: 'alicekick',
+});
+check('a code is single use', replayed.ok === false);
+
+// One Kick account cannot end up on two profiles.
+const bobCode = await accounts.issueVerificationCode(bob.id);
+const stolen = await accounts.redeemVerificationCode({
+  code: bobCode.code, kickUserId: '8814422', kickUsername: 'alicekick',
+});
+check('a Kick id cannot be claimed twice', stolen.ok === false && stolen.reason === 'kick-taken');
+
+const stale = await accounts.issueVerificationCode(bob.id);
+await write(`UPDATE verification_codes SET expires_at = now() - interval '1 minute' WHERE code = $1`, [stale.code]);
+const tooLate = await accounts.redeemVerificationCode({
+  code: stale.code, kickUserId: '777', kickUsername: 'late',
+});
+check('an expired code is refused', tooLate.ok === false && tooLate.reason === 'expired');
+check('an expired code reads as expired, not as an error',
+  (await accounts.verificationStateFor(bob.id)).status === 'expired');
+
+/* -------------------------------------------------------------------------- */
+section('coins');
+
+await coins.record({ userId: alice.id, delta: 500, kind: 'adjustment', reason: 'test seed' });
+let bal = await coins.balanceOf(alice.id);
+check('a credit lands', bal.balance === 500, JSON.stringify(bal));
+check('an adjustment is not "lifetime earned"', bal.lifetimeEarned === 0);
+
+await coins.record({ userId: alice.id, delta: 40, kind: 'watch', reason: 'tick', multiplier: 1 });
+bal = await coins.balanceOf(alice.id);
+check('watching does count as earned', bal.balance === 540 && bal.lifetimeEarned === 40, JSON.stringify(bal));
+
+let refused = false;
+try {
+  await coins.record({ userId: alice.id, delta: -10_000, kind: 'game', reason: 'overdraw' });
+} catch (error) {
+  refused = error instanceof coins.InsufficientCoins;
+}
+check('a balance cannot go negative', refused);
+check('the refused movement left nothing behind', (await coins.balanceOf(alice.id)).balance === 540);
+
+const ledger = await coins.ledgerFor(alice.id, 10);
+check('both movements are on the ledger', ledger.length === 2);
+check('each row carries the balance after it', ledger[0].balance === 540);
+
+/* -------------------------------------------------------------------------- */
+section('game rounds');
+
+const opening = await play.publicState(alice.id);
+check('a seed pair is created on first look', Boolean(opening.serverSeedHash) && opening.nonce === 0);
+
+const win = () => ({ multiplier: 2, payout: 40, outcome: { fake: true } });
+const lose = () => ({ multiplier: 0, payout: 0, outcome: {} });
+
+const first = await play.playRound({
+  userId: alice.id, game: 'keno', bet: 20, idempotencyKey: 'key-1', resolve: win,
+});
+check('a round settles', first.ok === true);
+check('the balance moves by the net', first.ok && first.balance === 560, first.ok ? String(first.balance) : '');
+check('the nonce advances', first.ok && first.nextNonce === 1);
+check('a win writes two ledger rows',
+  (await coins.ledgerFor(alice.id, 10)).filter((e) => e.kind === 'game').length === 2);
+
+const again = await play.playRound({
+  userId: alice.id, game: 'keno', bet: 20, idempotencyKey: 'key-1', resolve: win,
+});
+check('a repeated key returns the same round', again.ok === true && again.replayed === true);
+check('a repeated key moves no coins', (await coins.balanceOf(alice.id)).balance === 560);
+
+// Two rounds at once on different keys must not share a nonce.
+const [a, b] = await Promise.all([
+  play.playRound({ userId: alice.id, game: 'dice', bet: 10, idempotencyKey: 'race-a', resolve: lose }),
+  play.playRound({ userId: alice.id, game: 'dice', bet: 10, idempotencyKey: 'race-b', resolve: lose }),
+]);
+check('both concurrent rounds settle', a.ok && b.ok);
+check('concurrent rounds get different nonces', a.ok && b.ok && a.round.nonce !== b.round.nonce,
+  a.ok && b.ok ? `${a.round.nonce} vs ${b.round.nonce}` : '');
+
+// The same key twice at once is one bet.
+const beforeDouble = (await coins.balanceOf(alice.id)).balance;
+await Promise.all([
+  play.playRound({ userId: alice.id, game: 'dice', bet: 10, idempotencyKey: 'dup', resolve: lose }),
+  play.playRound({ userId: alice.id, game: 'dice', bet: 10, idempotencyKey: 'dup', resolve: lose }),
+]);
+const afterDouble = (await coins.balanceOf(alice.id)).balance;
+check('a double-tap is charged once', afterDouble === beforeDouble - 10, `${beforeDouble} -> ${afterDouble}`);
+
+const broke = await play.playRound({
+  userId: bob.id, game: 'limbo', bet: 50, idempotencyKey: 'bob-1', resolve: win,
+});
+check('no coins means no round', broke.ok === false && broke.error === 'insufficient-coins');
+
+const tiny = await play.playRound({
+  userId: alice.id, game: 'limbo', bet: 1, idempotencyKey: 'tiny', resolve: win,
+});
+check('a bet below the minimum is refused', tiny.ok === false && tiny.error === 'bet-below-minimum');
+
+/* -------------------------------------------------------------------------- */
+section('seed rotation');
+
+const priorState = await play.publicState(alice.id);
+const rotated = await play.rotateSeed(alice.id, 'my-own-seed');
+check('the old seed is revealed', rotated.revealedServerSeedHash === priorState.serverSeedHash);
+check('the new hash is different', rotated.serverSeedHash !== priorState.serverSeedHash);
+check('the nonce resets with the new pair', rotated.nonce === 0);
+check('a chosen client seed is applied', rotated.clientSeed === 'my-own-seed');
+check('the revealed seed stays readable',
+  (await play.publicState(alice.id)).previousServerSeedHash === priorState.serverSeedHash);
+
+/* -------------------------------------------------------------------------- */
+section('presence and the tick');
+
+/*
+ * The ceiling is measured over the last hour of watch and bonus rows, so a test
+ * that wants to observe one tick in isolation has to age the earlier ones out
+ * first. Without `quiet()`, the 40 MC watch row above eats the whole 30/hour
+ * allowance and the tick correctly pays nothing.
+ */
+const quiet = () => write(`UPDATE coin_ledger SET created_at = now() - interval '2 hours'`);
+const dueATick = () =>
+  write(`UPDATE stream_sessions SET last_tick_at = now() - interval '4 minutes' WHERE ended_at IS NULL`);
+const streakOf = async (userId: number) =>
+  (await rows<{ streak: number }>('SELECT streak FROM presence_windows WHERE user_id = $1', [userId]))[0]?.streak;
+
+check('no tick while the stream is offline', (await presence.runTick()).reason === 'not-live');
+
+await presence.streamWentLive();
+await presence.openWindow(alice.id, 'chat');
+await presence.openWindow(bob.id, 'chat');   // bob has no Kick link
+await quiet();
+
+const beforeTick = (await coins.balanceOf(alice.id)).balance;
+const tick = await presence.runTick();
+check('the tick runs', tick.ran === true);
+check('only the verified account is paid', tick.paid === 1, `paid ${tick.paid}`);
+check('a member earns 1 MC', (await coins.balanceOf(alice.id)).balance === beforeTick + 1);
+check('an unverified account earns nothing', (await coins.balanceOf(bob.id)).balance === 0);
+
+const early = await presence.runTick();
+check('a second tick inside the interval is refused', early.ran === false && early.reason === 'too-soon');
+
+// Multipliers never stack: the highest single one applies.
+await accounts.setSubState({ userId: alice.id, subActiveUntil: new Date(Date.now() + 86_400_000), source: 'webhook' });
+check('a sub is 2x', accounts.multiplierFor(await accounts.subStateFor(alice.id)).value === 2);
+await accounts.setSubState({ userId: alice.id, isVip: true, source: 'webhook' });
+check('VIP replaces sub rather than stacking with it',
+  accounts.multiplierFor(await accounts.subStateFor(alice.id)).value === 2.5);
+await accounts.setSubState({ userId: alice.id, isVip: false, source: 'webhook' });
+
+await quiet();
+await dueATick();
+const beforeSubTick = (await coins.balanceOf(alice.id)).balance;
+await presence.runTick();
+check('a sub earns 2 MC per tick', (await coins.balanceOf(alice.id)).balance === beforeSubTick + 2,
+  `${beforeSubTick} -> ${(await coins.balanceOf(alice.id)).balance}`);
+
+// Twenty consecutive ticks pays +10, times the multiplier.
+await write(
+  `UPDATE presence_windows SET streak = 19, last_tick_at = now() - interval '3 minutes' WHERE user_id = $1`,
+  [alice.id],
+);
+await quiet();
+await dueATick();
+const beforeBonus = (await coins.balanceOf(alice.id)).balance;
+const bonusTick = await presence.runTick();
+check('the hour bonus is paid', bonusTick.bonuses === 1, JSON.stringify(bonusTick));
+check('the bonus is (1 + 10) x 2', (await coins.balanceOf(alice.id)).balance === beforeBonus + 22,
+  `${beforeBonus} -> ${(await coins.balanceOf(alice.id)).balance}`);
+check('the streak resets after the bonus', (await streakOf(alice.id)) === 0);
+
+// A gap breaks the run towards the next bonus.
+await write(
+  `UPDATE presence_windows SET streak = 5, last_tick_at = now() - interval '30 minutes' WHERE user_id = $1`,
+  [alice.id],
+);
+await quiet();
+await dueATick();
+await presence.runTick();
+check('a missed tick resets the streak to one', (await streakOf(alice.id)) === 1);
+
+// The ceiling: 30/hour x 2 for a sub. Sitting one under it pays the remainder.
+await quiet();
+await coins.record({ userId: alice.id, delta: 59, kind: 'watch', reason: 'ceiling setup', multiplier: 2 });
+await dueATick();
+const atCeiling = (await coins.balanceOf(alice.id)).balance;
+await presence.runTick();
+check('the last coin under the ceiling is paid',
+  (await coins.balanceOf(alice.id)).balance === atCeiling + 1,
+  `${atCeiling} -> ${(await coins.balanceOf(alice.id)).balance}`);
+
+await dueATick();
+const overCeiling = (await coins.balanceOf(alice.id)).balance;
+await presence.runTick();
+check('nothing is paid over the ceiling',
+  (await coins.balanceOf(alice.id)).balance === overCeiling,
+  `${overCeiling} -> ${(await coins.balanceOf(alice.id)).balance}`);
+
+// Offline closes every window, so no tick can pay after the stream stops.
+await presence.streamWentOffline();
+check('every window closes when the stream ends', (await presence.openWindowCount()) === 0);
+check('no tick runs after the stream ends', (await presence.runTick()).ran === false);
+
+/* -------------------------------------------------------------------------- */
+section('freezing');
+
+await presence.streamWentLive();
+await accounts.freezeUser(alice.id, 'banned in chat', null);
+await presence.openWindow(alice.id, 'chat');
+await quiet();
+const whileFrozen = (await coins.balanceOf(alice.id)).balance;
+const frozenTick = await presence.runTick();
+check('a frozen account earns nothing', frozenTick.paid === 0, JSON.stringify(frozenTick));
+check('a frozen account keeps the coins it had',
+  (await coins.balanceOf(alice.id)).balance === whileFrozen);
+await accounts.unfreezeUser(alice.id);
+
+/* -------------------------------------------------------------------------- */
+section('clips');
+
+const kick = await clips.createClip({
+  kind: 'clip',
+  url: 'https://kick.com/mattyspinss/clips/clip_TESTID123',
+  title: 'A test clip',
+  status: 'published',
+});
+check('a Kick clip is recognised', kick.source === 'kick' && kick.id === 'clip_TESTID123');
+check('its embed is built from the link', kick.embedUrl.includes('player.kick.com/mattyspinss?clip='));
+check('its thumbnail is built from the link', kick.thumbUrl.includes('clips.kick.com'));
+
+const youtube = await clips.createClip({
+  kind: 'big_win', url: 'https://www.youtube.com/watch?v=abc123XYZ',
+  title: 'A big win', status: 'draft', bet: 20, payout: 5000,
+});
+check('a YouTube link is recognised', youtube.source === 'youtube' && youtube.id === 'yt_abc123XYZ');
+check('a draft is not public', (await clips.publishedBigWins()).length === 0);
+await clips.setClipStatus(youtube.id, 'published');
+check('publishing makes it public', (await clips.publishedBigWins()).length === 1);
+check('a short is 9:16', clips.parseSourceUrl('https://youtube.com/shorts/xyz789')?.aspect === '9:16');
+
+let badHost: string | null = null;
+try {
+  await clips.createClip({ kind: 'clip', url: 'https://example.com/nope', title: 'x', status: 'draft' });
+} catch (error) {
+  badHost = (error as Error).message;
+}
+check('an unknown host is refused', badHost !== null, badHost ?? '');
+
+let noFigures: string | null = null;
+try {
+  await clips.createClip({ kind: 'big_win', url: 'https://kick.com/a/clips/c1', title: 'x', status: 'draft' });
+} catch (error) {
+  noFigures = (error as Error).message;
+}
+check('a big win needs a bet and a payout', noFigures !== null, noFigures ?? '');
+
+await clips.setClipPinned(kick.id, true);
+check('a pin is counted', (await clips.pinnedCount()) === 1);
+for (const n of [2, 3]) {
+  const extra = await clips.createClip({
+    kind: 'clip', url: `https://kick.com/m/clips/clip_p${n}`, title: `pin ${n}`, status: 'published',
+  });
+  await clips.setClipPinned(extra.id, true);
+}
+const fourth = await clips.createClip({
+  kind: 'clip', url: 'https://kick.com/m/clips/clip_p4', title: 'pin 4', status: 'published',
+});
+let pinRefused: string | null = null;
+try {
+  await clips.setClipPinned(fourth.id, true);
+} catch (error) {
+  pinRefused = (error as Error).message;
+}
+check('a fourth pin is refused with a message', pinRefused !== null, pinRefused ?? '');
+
+/* -------------------------------------------------------------------------- */
+section('admin figures');
+
+const flow = await coins.coinFlow(new Date(Date.now() - 7 * 86_400_000));
+check('coin flow reports minted and destroyed',
+  typeof flow.minted === 'number' && typeof flow.destroyed === 'number', JSON.stringify(flow));
+check('rounds today is counted', (await play.roundsToday()) > 0);
+check('the round feed masks usernames',
+  (await play.biggestRoundsToday(5)).every((r) => r.masked !== r.player));
+check('the member list carries balances',
+  (await accounts.recentUsers(10)).some((u) => u.balance > 0));
+
+console.log(`\n${failures === 0 ? 'ALL PASSED' : `${failures} FAILED`}\n`);
+process.exit(failures === 0 ? 0 : 1);

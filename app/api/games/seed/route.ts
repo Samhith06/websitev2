@@ -1,14 +1,15 @@
 import { NextResponse } from 'next/server';
-import { getSession, publicState, rotateSeed } from '@/lib/session';
-import { NOT_SIGNED_IN, currentPlayerId } from '@/lib/player';
+import { publicState, rotateSeed } from '@/lib/store/play';
+import { requireUser } from '@/lib/player';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 /** The commitment as it stands: the hash, the client seed, the next nonce. */
 export async function GET() {
-  const playerId = await currentPlayerId();
-  if (!playerId) return NextResponse.json(NOT_SIGNED_IN, { status: 401 });
-  return NextResponse.json(publicState(playerId));
+  const gate = await requireUser();
+  if (!gate.ok) return NextResponse.json(gate.refusal, { status: gate.status });
+  return NextResponse.json(await publicState(gate.user.id));
 }
 
 /**
@@ -16,8 +17,8 @@ export async function GET() {
  * on it can be recomputed — that is the whole point of the commitment.
  */
 export async function POST(request: Request) {
-  const playerId = await currentPlayerId();
-  if (!playerId) return NextResponse.json(NOT_SIGNED_IN, { status: 401 });
+  const gate = await requireUser();
+  if (!gate.ok) return NextResponse.json(gate.refusal, { status: gate.status });
 
   let clientSeed: string | undefined;
   try {
@@ -26,5 +27,5 @@ export async function POST(request: Request) {
   } catch {
     // Rotating without setting a new client seed is fine.
   }
-  return NextResponse.json(rotateSeed(getSession(playerId), clientSeed));
+  return NextResponse.json(await rotateSeed(gate.user.id, clientSeed));
 }

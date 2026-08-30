@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { clips } from '@/lib/mock';
+import { publishedClips } from '@/lib/store/clips';
 import { Display, Label } from '@/components/ui/typography';
 import { Chip, ChipRow } from '@/components/ui/controls';
 import { EmptyState } from '@/components/ui/surfaces';
@@ -19,6 +19,10 @@ const SOURCES: Array<{ value: ClipSource | 'all'; label: string }> = [
   { value: 'x', label: 'X' },
 ];
 
+// Clips are rows now, and a newly published one should appear without a
+// redeploy, so the listing is rendered per request.
+export const dynamic = 'force-dynamic';
+
 export default async function ClipsPage({
   searchParams,
 }: {
@@ -27,7 +31,7 @@ export default async function ClipsPage({
   const { source } = await searchParams;
   const active = (SOURCES.find((s) => s.value === source)?.value ?? 'all') as ClipSource | 'all';
 
-  const published = clips.filter((c) => c.status === 'published');
+  const published = await publishedClips(60);
   const visible = active === 'all' ? published : published.filter((c) => c.source === active);
 
   return (

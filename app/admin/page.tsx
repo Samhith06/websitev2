@@ -1,7 +1,12 @@
 import Link from 'next/link';
 import { coins, maybe, money, relativeTime } from '@/lib/format';
-import { adminStats, auditLog, redemptions, siteStats, stream, weeklyPeriod } from '@/lib/mock';
+import { siteStats, stream, weeklyPeriod } from '@/lib/mock';
 import { fetchRazedLeaderboard, healthFrom } from '@/lib/razed';
+import { databaseHealth, hasDatabase, rows } from '@/lib/db';
+import { coinFlow } from '@/lib/store/coins';
+import { roundsToday } from '@/lib/store/play';
+import { earnersNow, lastTickAt } from '@/lib/store/presence';
+import { userCount } from '@/lib/store/accounts';
 import { AdminHeader } from '@/components/admin/AdminShell';
 import { StatusPill } from '@/components/admin/Table';
 import { Card, Hairlines, Stat } from '@/components/ui/surfaces';
@@ -16,17 +21,42 @@ export const metadata = { title: 'Overview' };
  * exists to answer "is anything broken and does anything need me", and every
  * extra element makes that slower.
  */
-export default async function AdminOverview() {
-  const pending = redemptions.filter((r) => r.status === 'pending');
+export const dynamic = 'force-dynamic';
 
-  // Feed health is the whole point of this card, so it is the real call. A
-  // green light nobody checked is worse than no light at all.
-  const feedHealth = healthFrom(
-    await fetchRazedLeaderboard({
+type AuditRow = { id: string; admin_name: string; action: string; target: string; created_at: Date };
+
+export default async function AdminOverview() {
+  // Every figure on this page is a real query or an em dash. A green light
+  // nobody checked is worse than no light at all, and an invented number on
+  // the screen you use to spot problems is worse than both.
+  const weekStart = new Date();
+  weekStart.setUTCHours(0, 0, 0, 0);
+  weekStart.setUTCDate(weekStart.getUTCDate() - 7);
+
+  const [feed, db, flow, rounds, earning, members, tickedAt, auditLog] = await Promise.all([
+    fetchRazedLeaderboard({
       from: weeklyPeriod.startsAt.slice(0, 10),
       to: weeklyPeriod.endsAt.slice(0, 10),
     }),
-  );
+    databaseHealth(),
+    hasDatabase() ? coinFlow(weekStart) : Promise.resolve(null),
+    hasDatabase() ? roundsToday() : Promise.resolve(null),
+    hasDatabase() ? earnersNow() : Promise.resolve(null),
+    hasDatabase() ? userCount() : Promise.resolve(null),
+    hasDatabase() ? lastTickAt() : Promise.resolve(null),
+    hasDatabase()
+      ? rows<AuditRow>(
+          `SELECT id::text, admin_name, action, target, created_at
+             FROM audit_log ORDER BY created_at DESC LIMIT 10`,
+        )
+      : Promise.resolve([] as AuditRow[]),
+  ]);
+
+  const feedHealth = healthFrom(feed);
+  const minted = flow?.minted ?? null;
+  const destroyed = flow?.destroyed ?? null;
+  // A tick inside the last ten minutes means the job is running.
+  const ticking = Boolean(tickedAt && Date.now() - new Date(tickedAt).getTime() < 10 * 60_000);
 
   return (
     <>
@@ -36,14 +66,14 @@ export default async function AdminOverview() {
       />
 
       <Hairlines cols="grid-cols-2 lg:grid-cols-4">
-        <Stat label="Coins minted this week" value={maybe(adminStats.coinsMintedThisWeek)} />
+        <Stat label="Coins minted this week" value={maybe(minted)} />
         <Stat
           label="Destroyed by the edge"
-          value={maybe(adminStats.coinsDestroyedThisWeek)}
-          sub="2% of everything wagered"
+          value={maybe(destroyed)}
+          sub="1% of everything wagered"
         />
-        <Stat label="Members earning" value={maybe(siteStats.membersEarning)} />
-        <Stat label="Rounds today" value={maybe(adminStats.roundsToday)} />
+        <Stat label="Earning right now" value={maybe(earning)} sub={`${maybe(members)} accounts`} />
+        <Stat label="Rounds today" value={maybe(rounds)} />
       </Hairlines>
 
       <div className="mt-5 grid gap-4 lg:grid-cols-2">
@@ -58,24 +88,18 @@ export default async function AdminOverview() {
             </ButtonLink>
           </div>
           <div className="p-4">
+            {/* The shop has no tables yet, so this is a known nothing rather
+                than a zero anyone should read as "all caught up". */}
             <div className="flex items-baseline gap-3">
-              <Num tone={pending.length > 0 ? 'gold' : 'muted'} className="text-[34px] leading-none">
-                {pending.length}
+              <Num tone="muted" className="text-[34px] leading-none">
+                —
               </Num>
               <span className="text-[13.5px] text-muted">waiting on a moderator</span>
             </div>
-            <ul className="mt-4 space-y-2">
-              {pending.map((r) => (
-                <li key={r.id} className="flex items-baseline justify-between gap-3 text-[13.5px]">
-                  <span className="min-w-0 truncate text-ink-2">
-                    {r.itemName} <span className="text-faint">· {r.member}</span>
-                  </span>
-                  <span className="shrink-0 font-mono text-[11.5px] tabular-nums text-faint">
-                    {relativeTime(r.createdAt)}
-                  </span>
-                </li>
-              ))}
-            </ul>
+            <p className="mt-4 text-[13px] leading-relaxed text-muted">
+              Redemptions are not stored yet. The shop is the next piece of work that needs a
+              table; until it has one, nothing can queue here.
+            </p>
           </div>
         </Card>
 
@@ -102,9 +126,19 @@ export default async function AdminOverview() {
             />
             <FeedRow
               name="Coin tick job"
-              detail={stream.live ? 'Running every 3 minutes' : 'Paused while offline'}
-              tone={stream.live ? 'brand' : 'muted'}
-              status={stream.live ? 'Ticking' : 'Paused'}
+              detail={
+                tickedAt
+                  ? `Last tick ${relativeTime(tickedAt)}`
+                  : 'No tick recorded — the scheduler has never called /api/kick/tick'
+              }
+              tone={ticking ? 'brand' : 'gold'}
+              status={ticking ? 'Ticking' : 'Idle'}
+            />
+            <FeedRow
+              name="Database"
+              detail={db.ok ? `Connected · ${db.latencyMs}ms` : db.detail}
+              tone={db.ok ? 'brand' : 'danger'}
+              status={db.ok ? 'Connected' : 'Missing'}
             />
           </div>
         </Card>
@@ -121,21 +155,19 @@ export default async function AdminOverview() {
           <div className="px-4 py-4">
             <Label className="mb-2">Minted by watching</Label>
             <Num tone="brand" className="text-[24px]">
-              {maybe(adminStats.coinsMintedThisWeek, (n) => `+${coins(n)}`)}
+              {maybe(minted, (n) => `+${coins(n)}`)}
             </Num>
           </div>
           <div className="px-4 py-4">
             <Label className="mb-2">Destroyed by the edge</Label>
             <Num tone="gold" className="text-[24px]">
-              {maybe(adminStats.coinsDestroyedThisWeek, (n) => `−${coins(n)}`)}
+              {maybe(destroyed, (n) => `−${coins(n)}`)}
             </Num>
           </div>
           <div className="px-4 py-4">
             <Label className="mb-2">Net into circulation</Label>
             <Num className="text-[24px]">
-              {adminStats.coinsMintedThisWeek !== null && adminStats.coinsDestroyedThisWeek !== null
-                ? `+${coins(adminStats.coinsMintedThisWeek - adminStats.coinsDestroyedThisWeek)}`
-                : '—'}
+              {minted !== null && destroyed !== null ? `+${coins(minted - destroyed)}` : '—'}
             </Num>
           </div>
         </div>
@@ -156,14 +188,19 @@ export default async function AdminOverview() {
           </Link>
         </div>
         <ul className="divide-y divide-line">
-          {auditLog.slice(0, 10).map((entry) => (
+          {auditLog.length === 0 ? (
+            <li className="px-4 py-6 text-[13.5px] text-muted">
+              Nothing logged yet. Admin actions that change something are recorded here.
+            </li>
+          ) : null}
+          {auditLog.map((entry) => (
             <li key={entry.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-4 py-2.5">
               <span className="font-mono text-[11.5px] tabular-nums text-faint">
-                {relativeTime(entry.createdAt)}
+                {relativeTime(entry.created_at.toISOString())}
               </span>
               <span className="text-[13.5px] text-ink">{entry.action}</span>
               <span className="min-w-0 flex-1 truncate text-[13px] text-muted">{entry.target}</span>
-              <span className="font-mono text-[11px] text-faint">{entry.admin}</span>
+              <span className="font-mono text-[11px] text-faint">{entry.admin_name}</span>
             </li>
           ))}
         </ul>

@@ -4,26 +4,27 @@ import {
   KENO_MAX_PICKS, KENO_RISKS, capPayout, diceChance, diceMultiplier, diceWins, kenoHits,
   kenoPaytable,
 } from '@/lib/games';
-import { checkBet, getSession, settle } from '@/lib/session';
-import { NOT_SIGNED_IN, currentPlayerId } from '@/lib/player';
+import { playRound, type PlayFailure, type Resolution } from '@/lib/store/play';
+import { requireUser } from '@/lib/player';
 import type { KenoRisk } from '@/lib/games';
 import type { GameSlug } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 /**
  * Server-authoritative, always. The browser sends "play"; it never computes an
  * outcome and is never trusted with one (Master Plan §9).
  *
- * It is also authenticated. Coins belong to an account, so a round that cannot
- * name the account it is spending from is refused before anything is drawn.
- *
- * Every request carries an idempotency key. Without one a double-tap is two
- * bets, and that is the bug players notice first and forgive last.
+ * It is also authenticated, and now transactional: the seed pair is locked, the
+ * outcome is drawn against the locked nonce, and the round, the ledger rows and
+ * the balance are one write or none. The resolver below is handed the seed
+ * material by `playRound` rather than reading it first, which is what stops two
+ * simultaneous rounds sharing a nonce.
  */
 export async function POST(request: Request) {
-  const playerId = await currentPlayerId();
-  if (!playerId) return NextResponse.json(NOT_SIGNED_IN, { status: 401 });
+  const gate = await requireUser();
+  if (!gate.ok) return NextResponse.json(gate.refusal, { status: gate.status });
 
   let body: Record<string, unknown>;
   try {
@@ -37,103 +38,104 @@ export async function POST(request: Request) {
   const idempotencyKey = String(body.idempotencyKey ?? '');
 
   if (!idempotencyKey) {
-    return NextResponse.json(
-      { ok: false, error: 'invalid-request', detail: 'Missing idempotency key.' },
-      { status: 400 },
-    );
+    return bad('Missing idempotency key.');
   }
 
-  const session = getSession(playerId);
+  const resolve = resolverFor(game, body);
+  if (!resolve) return bad('Unknown game.');
 
-  // A replayed key returns the original round without touching the balance.
-  const replay = session.seen.get(idempotencyKey);
-  if (replay) {
-    return NextResponse.json(
-      settle(session, {
-        game: replay.game, bet: replay.bet, multiplier: replay.multiplier,
-        payout: replay.payout, outcome: replay.outcome, idempotencyKey,
-      }),
-    );
-  }
+  const result = await playRound({
+    userId: gate.user.id,
+    game,
+    bet,
+    idempotencyKey,
+    resolve,
+  });
 
-  const failure = checkBet(session, bet);
-  if (failure) return NextResponse.json(failure, { status: 400 });
+  return NextResponse.json(result, { status: result.ok ? 200 : 400 });
+}
 
-  const { serverSeed, clientSeed, nonce } = session;
+type Resolver = (seed: { serverSeed: string; clientSeed: string; nonce: number }) => Resolution | PlayFailure;
 
+/**
+ * One resolver per game. Each returns either a resolution or a refusal, and the
+ * refusal path is taken before any coins move — validation that reads the
+ * request lives here, beside the maths it protects.
+ */
+function resolverFor(game: GameSlug, body: Record<string, unknown>): Resolver | null {
   switch (game) {
     /* ------------------------------------------------------------------ */
     case 'keno': {
       const picks = (body.picks as number[]) ?? [];
       const risk = body.risk as KenoRisk;
-      if (!KENO_RISKS.includes(risk)) {
-        return bad('Unknown risk level.');
-      }
-      if (
-        !Array.isArray(picks) || picks.length < 1 || picks.length > KENO_MAX_PICKS ||
-        new Set(picks).size !== picks.length ||
-        picks.some((n) => !Number.isInteger(n) || n < 1 || n > 40)
-      ) {
-        return bad('Pick between 1 and 10 distinct numbers from 1 to 40.');
-      }
 
-      const { drawn } = kenoDraw(serverSeed, clientSeed, nonce);
-      const hits = kenoHits(picks, drawn);
-      const multiplier = kenoPaytable(risk, picks.length)[hits.length] ?? 0;
-      const payout = capPayout(bet, multiplier);
+      return ({ serverSeed, clientSeed, nonce }) => {
+        if (!KENO_RISKS.includes(risk)) return refuse('Unknown risk level.');
+        if (
+          !Array.isArray(picks) || picks.length < 1 || picks.length > KENO_MAX_PICKS ||
+          new Set(picks).size !== picks.length ||
+          picks.some((n) => !Number.isInteger(n) || n < 1 || n > 40)
+        ) {
+          return refuse('Pick between 1 and 10 distinct numbers from 1 to 40.');
+        }
 
-      return NextResponse.json(
-        settle(session, {
-          game, bet, multiplier, payout, idempotencyKey,
+        const { drawn } = kenoDraw(serverSeed, clientSeed, nonce);
+        const hits = kenoHits(picks, drawn);
+        const multiplier = kenoPaytable(risk, picks.length)[hits.length] ?? 0;
+        return {
+          multiplier,
+          payout: capPayout(Number(body.bet), multiplier),
           outcome: { drawn, picks, hits, risk },
-        }),
-      );
+        };
+      };
     }
 
     /* ------------------------------------------------------------------ */
     case 'dice': {
       const target = Number(body.target);
       const direction = body.direction === 'over' ? 'over' : 'under';
-      if (!Number.isFinite(target) || target < 2 || target > 98) {
-        return bad('Target must be between 2 and 98.');
-      }
 
-      const { roll } = diceRoll(serverSeed, clientSeed, nonce);
-      const won = diceWins(roll, target, direction);
-      const multiplier = won ? diceMultiplier(diceChance(target, direction)) : 0;
-      const payout = capPayout(bet, multiplier);
-
-      return NextResponse.json(
-        settle(session, {
-          game, bet, multiplier, payout, idempotencyKey,
+      return ({ serverSeed, clientSeed, nonce }) => {
+        if (!Number.isFinite(target) || target < 2 || target > 98) {
+          return refuse('Target must be between 2 and 98.');
+        }
+        const { roll } = diceRoll(serverSeed, clientSeed, nonce);
+        const won = diceWins(roll, target, direction);
+        const multiplier = won ? diceMultiplier(diceChance(target, direction)) : 0;
+        return {
+          multiplier,
+          payout: capPayout(Number(body.bet), multiplier),
           outcome: { roll, target, direction, won, chance: diceChance(target, direction) },
-        }),
-      );
+        };
+      };
     }
 
     /* ------------------------------------------------------------------ */
     case 'limbo': {
       const target = Number(body.target);
-      if (!Number.isFinite(target) || target < 1.01 || target > 1_000_000) {
-        return bad('Target must be between 1.01× and 1,000,000×.');
-      }
 
-      const { result } = limboResult(serverSeed, clientSeed, nonce);
-      const won = result >= target;
-      const multiplier = won ? Math.floor(target * 100) / 100 : 0;
-      const payout = capPayout(bet, multiplier);
-
-      return NextResponse.json(
-        settle(session, {
-          game, bet, multiplier, payout, idempotencyKey,
+      return ({ serverSeed, clientSeed, nonce }) => {
+        if (!Number.isFinite(target) || target < 1.01 || target > 1_000_000) {
+          return refuse('Target must be between 1.01× and 1,000,000×.');
+        }
+        const { result } = limboResult(serverSeed, clientSeed, nonce);
+        const won = result >= target;
+        const multiplier = won ? Math.floor(target * 100) / 100 : 0;
+        return {
+          multiplier,
+          payout: capPayout(Number(body.bet), multiplier),
           outcome: { result, target, won },
-        }),
-      );
+        };
+      };
     }
 
     default:
-      return bad('Unknown game.');
+      return null;
   }
+}
+
+function refuse(detail: string): PlayFailure {
+  return { ok: false, error: 'invalid-request', detail };
 }
 
 function bad(detail: string) {

@@ -115,7 +115,9 @@ export default function PrizesPage() {
                 {money(period.pot)}
               </Cell>
               <Cell label="Winner" className="truncate text-[13.5px] text-ink-2">
-                {period.status === 'open' ? '—' : period.rows[0].maskedUsername}
+                {/* A period only has a winner once the feed has returned rows
+                    for it. An em dash says "not yet"; a crash says nothing. */}
+                {period.rows[0]?.maskedUsername ?? '—'}
               </Cell>
               <Cell>
                 {period.status === 'frozen' ? (

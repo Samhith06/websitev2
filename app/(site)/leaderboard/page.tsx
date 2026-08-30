@@ -276,9 +276,9 @@ function Archive() {
                   {p.type}
                 </span>
               </div>
-              <div className="text-[14px] text-ink-2 lg:px-4 lg:py-3.5">{p.rows[0].maskedUsername}</div>
+              <div className="text-[14px] text-ink-2 lg:px-4 lg:py-3.5">{p.rows[0]?.maskedUsername ?? '—'}</div>
               <div className="font-mono text-[13.5px] tabular-nums text-ink-2 lg:px-4 lg:py-3.5">
-                {money(p.rows[0].wagered)}
+                {p.rows[0] ? money(p.rows[0].wagered) : '—'}
               </div>
               <div className="font-mono text-[13.5px] tabular-nums text-gold lg:px-4 lg:py-3.5">
                 {money(p.pot)}

@@ -2,7 +2,9 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import { cn } from '@/lib/cn';
 import { coins, mult, relativeTime } from '@/lib/format';
-import { biggestHitsToday, gameConfigs, gamesKilled, viewer } from '@/lib/mock';
+import { gameConfigs, gamesKilled } from '@/lib/mock';
+import { viewerOrSignedOut } from '@/lib/viewer';
+import { biggestRoundsToday } from '@/lib/store/play';
 import { Display, Label, Num } from '@/components/ui/typography';
 import { Chip, ChipRow } from '@/components/ui/controls';
 import { Card } from '@/components/ui/surfaces';
@@ -17,7 +19,11 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default function GamesLobby() {
+export const dynamic = 'force-dynamic';
+
+export default async function GamesLobby() {
+  const viewer = await viewerOrSignedOut();
+
   // Direct URLs redirect to the gate until it has been completed (§39).
   if (!viewer.games.enabled || viewer.games.excludedUntil) return <OptInGate />;
 
@@ -39,6 +45,7 @@ export default function GamesLobby() {
   }
 
   const limits = viewer.games;
+  const biggestHitsToday = await biggestRoundsToday(12);
 
   return (
     <div className="container-page py-10 lg:py-14">
@@ -102,8 +109,10 @@ export default function GamesLobby() {
       </div>
 
       {/* ------------------------------------------------------------- */}
-      {/* Biggest hits today                                            */}
+      {/* Biggest hits today. Absent rather than empty on a quiet day —  */}
+      {/* a table of column headings over nothing reads as broken.       */}
       {/* ------------------------------------------------------------- */}
+      {biggestHitsToday.length > 0 ? (
       <section className="mt-[56px]">
         <Display size="m" as="h2">
           Biggest hits today
@@ -122,7 +131,7 @@ export default function GamesLobby() {
                 key={round.id}
                 className="grid grid-cols-2 gap-1 border-t border-line px-4 py-3.5 lg:grid-cols-[1fr_100px_100px_110px_120px_90px] lg:items-center lg:gap-0 lg:px-0 lg:py-0"
               >
-                <div className="text-[14px] text-ink lg:px-4 lg:py-3.5">{round.player}</div>
+                <div className="text-[14px] text-ink lg:px-4 lg:py-3.5">{round.masked}</div>
                 <div className="font-mono text-[12px] uppercase tracking-[0.12em] text-muted lg:px-4 lg:py-3.5">
                   {round.game}
                 </div>
@@ -153,6 +162,7 @@ export default function GamesLobby() {
           </div>
         </div>
       </section>
+      ) : null}
 
       {/* ------------------------------------------------------------- */}
       {/* Two closing cards                                             */}

@@ -1,10 +1,10 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { bigWins } from '@/lib/mock';
+import { publishedBigWins } from '@/lib/store/clips';
 import { coins, dateShort, formatMultiplier, multiplier } from '@/lib/format';
 import { Display, Label, Num } from '@/components/ui/typography';
 import { Chip, ChipRow } from '@/components/ui/controls';
-import { Card } from '@/components/ui/surfaces';
+import { Card, EmptyState } from '@/components/ui/surfaces';
 import { BigWinCard } from '@/components/site/BigWinCard';
 import type { Clip } from '@/lib/types';
 
@@ -36,6 +36,8 @@ function monthsOf(wins: Clip[]) {
   return [...set.entries()];
 }
 
+export const dynamic = 'force-dynamic';
+
 export default async function WinsPage({
   searchParams,
 }: {
@@ -44,7 +46,7 @@ export default async function WinsPage({
   const { sort: sortParam, month } = await searchParams;
   const sort: Sort = sortParam === 'win' ? 'win' : sortParam === 'date' ? 'date' : 'multiplier';
 
-  const published = bigWins.filter((w) => w.status === 'published');
+  const published = await publishedBigWins(120);
   const months = monthsOf(published);
   const filtered = month
     ? published.filter((w) => w.occurredAt.slice(0, 7) === month)
@@ -71,11 +73,14 @@ export default async function WinsPage({
         </ChipRow>
       </div>
 
-      {/* Record cards, pinned above the grid. */}
-      <div className="mt-8 grid gap-5 md:grid-cols-2">
-        <RecordCard label="Biggest multiplier ever" win={biggestMultiplier} kind="multiplier" />
-        <RecordCard label="Biggest win ever" win={biggestWin} kind="win" />
-      </div>
+      {/* Record cards, pinned above the grid — but only once there is a record
+          to hold. "Biggest ever" over an empty wall is a claim about nothing. */}
+      {biggestMultiplier && biggestWin ? (
+        <div className="mt-8 grid gap-5 md:grid-cols-2">
+          <RecordCard label="Biggest multiplier ever" win={biggestMultiplier} kind="multiplier" />
+          <RecordCard label="Biggest win ever" win={biggestWin} kind="win" />
+        </div>
+      ) : null}
 
       {months.length > 1 ? (
         <ChipRow label="Filter by month" className="mt-8">
@@ -90,11 +95,18 @@ export default async function WinsPage({
         </ChipRow>
       ) : null}
 
-      <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        {wins.map((win) => (
-          <BigWinCard key={win.id} win={win} variant="compact" />
-        ))}
-      </div>
+      {wins.length === 0 ? (
+        <EmptyState className="mt-10" title="No wins on the wall yet.">
+          Big wins are added from the admin clip editor, with the bet and the payout that produced
+          them. Nothing is listed here until one is.
+        </EmptyState>
+      ) : (
+        <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {wins.map((win) => (
+            <BigWinCard key={win.id} win={win} variant="compact" />
+          ))}
+        </div>
+      )}
 
       <p className="mt-10 max-w-2xl text-[13.5px] leading-relaxed text-muted">
         Every multiplier on this page is calculated from the bet and the payout beside it, never

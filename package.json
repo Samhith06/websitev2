@@ -9,15 +9,18 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "check:rtp": "node scripts/check-rtp.mjs .",
+    "db:smoke": "node --import tsx --conditions=react-server scripts/db-smoke.mts",
     "dev:clean": "node -e \"require('fs').rmSync('.next',{recursive:true,force:true})\" && next dev -p 3000",
     "build:clean": "node -e \"require('fs').rmSync('.next',{recursive:true,force:true})\" && next build",
     "images": "node scripts/optimise-images.mjs"
   },
   "dependencies": {
+    "@types/pg": "^8.23.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.462.0",
     "next": "^15.4.0",
     "next-auth": "^5.0.0-beta.32",
+    "pg": "^8.23.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "server-only": "^0.0.1",
@@ -29,6 +32,7 @@
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
     "tailwindcss": "^4.1.0",
+    "tsx": "^4.23.13",
     "typescript": "^5.7.0"
   },
   "engines": {

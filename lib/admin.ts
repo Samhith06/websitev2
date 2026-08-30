@@ -32,8 +32,25 @@ export function modIds(): string[] {
   return idsFrom(process.env.MOD_DISCORD_IDS);
 }
 
+/**
+ * Local review without a Discord app configured.
+ *
+ * This lives here, beside `roleFor`, rather than in the admin layout, because
+ * the layout is not the only thing that asks "is this an admin" — every server
+ * action does too, and a bypass that only the layout knew about produced a
+ * screen you could open but not use. One answer, one place.
+ *
+ * The `NODE_ENV` check is the important half and is evaluated at build time, so
+ * a production bundle cannot open it however the environment is set. It is
+ * scaffolding, not a feature flag, and it comes out once sign-in works.
+ */
+export function devBypass(): boolean {
+  return process.env.NODE_ENV !== 'production' && process.env.DEV_ADMIN_BYPASS === 'true';
+}
+
 /** Owner wins if an id somehow appears in both lists. */
 export function roleFor(discordId: string | null | undefined): AdminRole | null {
+  if (devBypass()) return 'owner';
   if (!discordId) return null;
   if (ownerIds().includes(discordId)) return 'owner';
   if (modIds().includes(discordId)) return 'mod';
