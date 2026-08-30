@@ -3,11 +3,12 @@ import type { Metadata } from 'next';
 import { ArrowRight, TriangleAlert } from 'lucide-react';
 import { dateRange, money, relativeTime } from '@/lib/format';
 import {
-  archivedPeriods, feedHealth, frozenPeriod, monthlyPeriod, razed, weeklyPeriod,
+  archivedPeriods, frozenPeriod, monthlyPeriod, prizeTiers, razed, weeklyPeriod,
 } from '@/lib/mock';
-import { Display, Label, Num, SectionHeading } from '@/components/ui/typography';
+import { fetchRazedLeaderboard, healthFrom, toBoardRows } from '@/lib/razed';
+import { Display, Label, SectionHeading } from '@/components/ui/typography';
 import { ButtonLink, Chip, ChipRow } from '@/components/ui/controls';
-import { Banner, Card, Hairlines, Stat } from '@/components/ui/surfaces';
+import { Banner, Card, EmptyState, Hairlines, Stat } from '@/components/ui/surfaces';
 import { RazedWordmark, RazedZ } from '@/components/ui/marks';
 import { Countdown } from '@/components/ui/Countdown';
 import { BoardRows, Podium, ProvenanceRow } from '@/components/site/Leaderboard';
@@ -27,15 +28,27 @@ export default async function LeaderboardPage({
   searchParams: Promise<{ period?: string }>;
 }) {
   const { period } = await searchParams;
+
+  /**
+   * Straight from Razed, server-side, every time the page is built. The key
+   * never reaches the browser and the browser never talks to Razed.
+   */
+  const base = period === 'monthly' ? monthlyPeriod : period === 'frozen' ? frozenPeriod : weeklyPeriod;
+  const feed = await fetchRazedLeaderboard({
+    from: base.startsAt.slice(0, 10),
+    to: base.endsAt.slice(0, 10),
+  });
+  const feedHealth = healthFrom(feed);
+  const prizeFor = (rank: number) =>
+    prizeTiers.find((t) => rank >= t.rankFrom && rank <= t.rankTo)?.amount ?? 0;
+  const liveRows = feed.ok ? toBoardRows(feed.rows, prizeFor) : [];
   const tab: Tab =
     period === 'monthly' ? 'monthly'
     : period === 'archive' ? 'archive'
     : period === 'frozen' ? 'frozen'
     : 'weekly';
 
-  const active: Period =
-    tab === 'monthly' ? monthlyPeriod : tab === 'frozen' ? frozenPeriod : weeklyPeriod;
-
+  const active: Period = { ...base, rows: liveRows };
   const stale = feedHealth.status !== 'healthy';
 
   return (
@@ -72,9 +85,13 @@ export default async function LeaderboardPage({
           rigging, so it says so in gold, above the board. */}
       {stale ? (
         <Banner tone="gold" className="mt-6" icon={<TriangleAlert size={16} />}>
-          <span className="text-ink">This board may be behind.</span> The last successful sync with
-          Razed was {relativeTime(feedHealth.lastSyncAt)} ({feedHealth.code}). Positions will catch
-          up automatically once the feed recovers.
+          <span className="text-ink">
+            {feed.ok
+              ? 'This board may be behind.'
+              : 'The board cannot be shown right now.'}
+          </span>{' '}
+          {feedHealth.code} Nothing is invented while the feed is unavailable — the positions below
+          are whatever Razed last returned, and the timestamp above says when that was.
         </Banner>
       ) : null}
 
@@ -112,31 +129,23 @@ export default async function LeaderboardPage({
           </div>
         </Card>
 
-        <Card tone="gold">
-          <div className="border-b border-gold-line px-5 py-3.5">
-            <Label className="text-gold/70">Last month’s winner</Label>
+        {/* No period has closed on this site yet. Rather than dress the space
+            with a winner nobody won, it says what will appear here. */}
+        <Card>
+          <div className="border-b border-line px-5 py-3.5">
+            <Label>Last month&rsquo;s winner</Label>
           </div>
           <div className="px-5 py-5">
-            <Display size="s" as="p" className="text-ink">
-              {archivedPeriods[2].rows[0].maskedUsername}
-            </Display>
-            <div className="mt-3 flex items-baseline gap-3">
-              <Num tone="gold" className="text-[30px] leading-none">
-                {money(archivedPeriods[2].rows[0].prize)}
-              </Num>
-              <span className="text-[13.5px] text-muted">
-                on {money(archivedPeriods[2].rows[0].wagered)} wagered
-              </span>
-            </div>
-            <p className="mt-4 text-[13.5px] leading-relaxed text-ink-2">
-              Paid by bank transfer three days after the period closed. The full frozen board for
-              that month stays in the archive permanently.
+            <p className="text-[14px] leading-relaxed text-ink-2">
+              No period has closed yet. When the first monthly board freezes and its prize is paid,
+              the winner and their wagered total appear here, and the frozen board itself stays in
+              the archive permanently.
             </p>
             <Link
               href="/leaderboard?period=archive"
-              className="mt-4 inline-flex items-center gap-1.5 text-[14px] text-gold transition-colors duration-150 hover:brightness-110"
+              className="mt-4 inline-flex items-center gap-1.5 text-[14px] text-brand transition-colors duration-150 hover:text-brand-dim"
             >
-              See it in the archive
+              Open the archive
               <ArrowRight size={15} />
             </Link>
           </div>
@@ -192,6 +201,14 @@ function BoardView({ period }: { period: Period }) {
         <Stat label="Prize pool" value={money(period.pot)} tone="gold" />
       </Hairlines>
 
+      {period.rows.length === 0 ? (
+        <EmptyState className="mt-8" title="No board to show yet.">
+          Positions come straight from Razed for accounts registered under the code{' '}
+          {razed.referralCode}. Nothing appears here until that feed returns players — we do not
+          fill the gap with placeholders.
+        </EmptyState>
+      ) : (
+        <>
       <Podium rows={period.rows} className="mt-8" />
 
       <div className="mt-6 space-y-3">
@@ -203,6 +220,8 @@ function BoardView({ period }: { period: Period }) {
         />
         <ProvenanceRow frozen={frozen} />
       </div>
+        </>
+      )}
 
       {frozen ? (
         <div className="mt-5">
@@ -220,6 +239,20 @@ function BoardView({ period }: { period: Period }) {
  * convinces a new viewer to sign up. Never delete a row from it.
  */
 function Archive() {
+  // Empty until a period actually freezes. An archive is evidence, so it shows
+  // nothing rather than an example of what evidence would look like.
+  if (archivedPeriods.length === 0) {
+    return (
+      <div className="mt-8">
+        <SectionHeading title="Closed periods" size="s" />
+        <EmptyState className="mt-5" title="Nothing has closed yet.">
+          The first board to freeze lands here and stays permanently. Frozen boards are never
+          edited and never removed.
+        </EmptyState>
+      </div>
+    );
+  }
+
   return (
     <div className="mt-8">
       <SectionHeading title="Closed periods" size="s" />

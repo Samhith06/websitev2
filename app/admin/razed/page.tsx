@@ -1,5 +1,6 @@
-import { coins, money, relativeTime } from '@/lib/format';
-import { feedHealth, razed, razedPlayers, razedReturnedCount } from '@/lib/mock';
+import { money, relativeTime } from '@/lib/format';
+import { razed, weeklyPeriod } from '@/lib/mock';
+import { fetchRazedLeaderboard, healthFrom } from '@/lib/razed';
 import { AdminHeader } from '@/components/admin/AdminShell';
 import { AdminRow, AdminTable, Cell, FilterBar, StatusPill } from '@/components/admin/Table';
 import { Button, Chip, ChipRow, Input } from '@/components/ui/controls';
@@ -10,7 +11,16 @@ export const metadata = { title: 'Razed players' };
 
 const COLS = 'lg:grid-cols-[56px_1fr_180px_130px_100px_140px_90px]';
 
-export default function RazedPlayersPage() {
+export default async function RazedPlayersPage() {
+  const from = weeklyPeriod.startsAt.slice(0, 10);
+  const to = weeklyPeriod.endsAt.slice(0, 10);
+
+  // The live call, unmasked: a moderator on this screen is verifying a claim
+  // against the real usernames Razed returned.
+  const feed = await fetchRazedLeaderboard({ from, to, top: 25 });
+  const feedHealth = healthFrom(feed);
+  const players = feed.ok ? feed.rows : [];
+
   const health =
     feedHealth.status === 'healthy'
       ? { tone: 'brand' as const, text: `Feed healthy · ${feedHealth.code}` }
@@ -44,11 +54,11 @@ export default function RazedPlayersPage() {
       >
         <div>
           <Label className="mb-1.5">From</Label>
-          <Input type="date" className="h-9 w-40 text-[13px]" defaultValue="2026-08-24" />
+          <Input type="date" className="h-9 w-40 text-[13px]" defaultValue={from} />
         </div>
         <div>
           <Label className="mb-1.5">To</Label>
-          <Input type="date" className="h-9 w-40 text-[13px]" defaultValue="2026-08-31" />
+          <Input type="date" className="h-9 w-40 text-[13px]" defaultValue={to} />
         </div>
         <div>
           <Label className="mb-1.5">Top</Label>
@@ -65,42 +75,33 @@ export default function RazedPlayersPage() {
         cols={COLS}
         columns={['Rank', 'Razed player', 'Matched member', 'Wagered', 'Coins', 'Last seen in chat', '']}
       >
-        {razedPlayers.map((player) => (
-          <AdminRow key={player.rank} cols={COLS} tint={player.flag ? 'danger' : undefined}>
+        {players.map((player) => (
+          <AdminRow key={player.rank} cols={COLS}>
             <Cell className="font-mono tabular-nums text-muted">{player.rank}</Cell>
 
             {/* Unmasked here — a moderator is verifying a claim against it. */}
             <Cell className="truncate text-ink">{player.username}</Cell>
 
+            {/* Nobody is matched yet: matching is a moderator's note held in
+                our own store, and that store does not exist. Razed knows
+                nothing about our members, so this stays honestly empty. */}
             <Cell label="Matched">
-              {player.flag ? (
-                <span className="inline-flex items-center gap-2 text-[13px] text-danger">
-                  <span className="size-1.5 shrink-0 rounded-full bg-danger" aria-hidden />
-                  <span className="truncate">{player.flag}</span>
-                </span>
-              ) : player.matched ? (
-                <span className="inline-flex items-center gap-2 text-[13px] text-ink-2">
-                  <span className="size-1.5 shrink-0 rounded-full bg-brand" aria-hidden />
-                  <span className="truncate">{player.matched.discord}</span>
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-2 text-[13px] text-gold">
-                  <span className="size-1.5 shrink-0 rounded-full bg-gold" aria-hidden />
-                  Unmatched
-                </span>
-              )}
+              <span className="inline-flex items-center gap-2 text-[13px] text-gold">
+                <span className="size-1.5 shrink-0 rounded-full bg-gold" aria-hidden />
+                Unmatched
+              </span>
             </Cell>
 
             <Cell label="Wagered" className="font-mono tabular-nums text-ink-2">
               {money(player.wagered)}
             </Cell>
 
-            <Cell label="Coins" className="font-mono tabular-nums text-ink-2">
-              {coins(player.coins)}
+            <Cell label="Coins" className="font-mono tabular-nums text-faint">
+              &mdash;
             </Cell>
 
             <Cell label="Last seen" className="font-mono text-[12.5px] tabular-nums text-faint">
-              {player.lastSeenInChat ? relativeTime(player.lastSeenInChat) : 'never'}
+              &mdash;
             </Cell>
 
             <Cell>
@@ -110,7 +111,7 @@ export default function RazedPlayersPage() {
                 type="button"
                 className="text-[13px] text-brand transition-colors duration-150 hover:text-brand-dim"
               >
-                {player.matched ? 'View' : 'Invite'}
+                Invite
               </button>
             </Cell>
           </AdminRow>
@@ -119,14 +120,11 @@ export default function RazedPlayersPage() {
 
       {/* State the ceiling plainly. Razed returns a top-N list and a moderator
           needs to know they are not looking at everybody. */}
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-        <span className="font-mono text-[11.5px] tabular-nums text-faint">
-          Showing {razedPlayers.length} of {razedReturnedCount} returned by Razed
-        </span>
-        <button type="button" className="text-[13px] text-brand hover:text-brand-dim">
-          Show all {razedReturnedCount}
-        </button>
-      </div>
+      <p className="mt-3 font-mono text-[11.5px] tabular-nums text-faint">
+        {feed.ok
+          ? `Showing all ${feed.returned} rows Razed returned for this period`
+          : `Razed returned nothing — ${feedHealth.code}`}
+      </p>
 
       <p className="mt-5 max-w-3xl text-[12.5px] leading-relaxed text-muted">
         This is a top-N feed, not a per-player lookup: someone below the cut-off does not appear

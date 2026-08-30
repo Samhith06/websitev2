@@ -1,6 +1,7 @@
 import Link from 'next/link';
-import { coins, money, relativeTime } from '@/lib/format';
-import { adminStats, auditLog, feedHealth, redemptions, siteStats, stream } from '@/lib/mock';
+import { coins, maybe, money, relativeTime } from '@/lib/format';
+import { adminStats, auditLog, redemptions, siteStats, stream, weeklyPeriod } from '@/lib/mock';
+import { fetchRazedLeaderboard, healthFrom } from '@/lib/razed';
 import { AdminHeader } from '@/components/admin/AdminShell';
 import { StatusPill } from '@/components/admin/Table';
 import { Card, Hairlines, Stat } from '@/components/ui/surfaces';
@@ -15,8 +16,17 @@ export const metadata = { title: 'Overview' };
  * exists to answer "is anything broken and does anything need me", and every
  * extra element makes that slower.
  */
-export default function AdminOverview() {
+export default async function AdminOverview() {
   const pending = redemptions.filter((r) => r.status === 'pending');
+
+  // Feed health is the whole point of this card, so it is the real call. A
+  // green light nobody checked is worse than no light at all.
+  const feedHealth = healthFrom(
+    await fetchRazedLeaderboard({
+      from: weeklyPeriod.startsAt.slice(0, 10),
+      to: weeklyPeriod.endsAt.slice(0, 10),
+    }),
+  );
 
   return (
     <>
@@ -26,14 +36,14 @@ export default function AdminOverview() {
       />
 
       <Hairlines cols="grid-cols-2 lg:grid-cols-4">
-        <Stat label="Coins minted this week" value={coins(adminStats.coinsMintedThisWeek)} />
+        <Stat label="Coins minted this week" value={maybe(adminStats.coinsMintedThisWeek)} />
         <Stat
           label="Destroyed by the edge"
-          value={coins(adminStats.coinsDestroyedThisWeek)}
+          value={maybe(adminStats.coinsDestroyedThisWeek)}
           sub="2% of everything wagered"
         />
-        <Stat label="Members earning" value={coins(siteStats.membersEarning)} />
-        <Stat label="Rounds today" value={coins(adminStats.roundsToday)} />
+        <Stat label="Members earning" value={maybe(siteStats.membersEarning)} />
+        <Stat label="Rounds today" value={maybe(adminStats.roundsToday)} />
       </Hairlines>
 
       <div className="mt-5 grid gap-4 lg:grid-cols-2">
@@ -111,19 +121,21 @@ export default function AdminOverview() {
           <div className="px-4 py-4">
             <Label className="mb-2">Minted by watching</Label>
             <Num tone="brand" className="text-[24px]">
-              +{coins(adminStats.coinsMintedThisWeek)}
+              {maybe(adminStats.coinsMintedThisWeek, (n) => `+${coins(n)}`)}
             </Num>
           </div>
           <div className="px-4 py-4">
             <Label className="mb-2">Destroyed by the edge</Label>
             <Num tone="gold" className="text-[24px]">
-              −{coins(adminStats.coinsDestroyedThisWeek)}
+              {maybe(adminStats.coinsDestroyedThisWeek, (n) => `−${coins(n)}`)}
             </Num>
           </div>
           <div className="px-4 py-4">
             <Label className="mb-2">Net into circulation</Label>
             <Num className="text-[24px]">
-              +{coins(adminStats.coinsMintedThisWeek - adminStats.coinsDestroyedThisWeek)}
+              {adminStats.coinsMintedThisWeek !== null && adminStats.coinsDestroyedThisWeek !== null
+                ? `+${coins(adminStats.coinsMintedThisWeek - adminStats.coinsDestroyedThisWeek)}`
+                : '—'}
             </Num>
           </div>
         </div>
@@ -158,7 +170,7 @@ export default function AdminOverview() {
       </Card>
 
       <p className="mt-6 max-w-2xl text-[12.5px] leading-relaxed text-muted">
-        Paid out to date: {money(siteStats.paidOutToDate)} across every finalised period. Prize
+        Paid out to date: {maybe(siteStats.paidOutToDate, money)} across every finalised period. Prize
         records live under Prizes and periods.
       </p>
     </>

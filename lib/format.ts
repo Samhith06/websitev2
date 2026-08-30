@@ -109,3 +109,14 @@ export function clipLength(seconds: number): string {
   const s = seconds % 60;
   return `${m}:${String(s).padStart(2, '0')}`;
 }
+
+/**
+ * A figure we do not have yet. Renders as an em dash rather than zero, because
+ * "0" is a claim and an unknown is not.
+ */
+export function maybe(
+  value: number | null | undefined,
+  format: (n: number) => string = coins,
+): string {
+  return value === null || value === undefined ? '—' : format(value);
+}

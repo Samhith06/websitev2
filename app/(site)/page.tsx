@@ -1,13 +1,14 @@
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
-import { coins, money, relativeTime } from '@/lib/format';
+import { coins, maybe, money, relativeTime } from '@/lib/format';
 import {
-  bigWins, clips, feedHealth, razed, schedule, siteStats, stream, viewer, weeklyPeriod, socials, aboutCopy,
+  bigWins, clips, prizeTiers, razed, schedule, siteStats, stream, viewer, weeklyPeriod, socials, aboutCopy,
   portraitUrl,
 } from '@/lib/mock';
+import { fetchRazedLeaderboard, healthFrom, toBoardRows } from '@/lib/razed';
 import { Display, Label, Num, SectionHeading } from '@/components/ui/typography';
 import { ButtonLink, Chip, ChipRow } from '@/components/ui/controls';
-import { Card, Hairlines, Stat } from '@/components/ui/surfaces';
+import { Card, EmptyState, Hairlines, Stat } from '@/components/ui/surfaces';
 import { CoinMark, PlatformMark, RazedWordmark, RazedZ } from '@/components/ui/marks';
 import { Countdown } from '@/components/ui/Countdown';
 import { Hero } from '@/components/site/Hero';
@@ -16,9 +17,21 @@ import { Podium, BoardRows } from '@/components/site/Leaderboard';
 import { ClipCarousel } from '@/components/site/ClipCard';
 import { BigWinCard } from '@/components/site/BigWinCard';
 
-export default function HomePage() {
+export default async function HomePage() {
   const featured = bigWins[0];
   const compactWins = bigWins.slice(1, 3);
+
+  // The same server-side call the full board makes, so the preview and the
+  // board can never disagree, and the timestamp below is a real one.
+  const feed = await fetchRazedLeaderboard({
+    from: weeklyPeriod.startsAt.slice(0, 10),
+    to: weeklyPeriod.endsAt.slice(0, 10),
+  });
+  const feedHealth = healthFrom(feed);
+  const boardRows = feed.ok
+    ? toBoardRows(feed.rows, (rank) =>
+        prizeTiers.find((t) => rank >= t.rankFrom && rank <= t.rankTo)?.amount ?? 0)
+    : [];
 
   return (
     <>
@@ -29,12 +42,12 @@ export default function HomePage() {
       {/* ----------------------------------------------------------------- */}
       <div className="container-page mt-[56px]">
         <Hairlines cols="grid-cols-2 lg:grid-cols-4">
-          <Stat label="Weekly prize pool" value={money(siteStats.weeklyPrizePool)} tone="gold" />
+          <Stat label="Weekly prize pool" value={maybe(siteStats.weeklyPrizePool, money)} tone="gold" />
           <Stat label="Board resets in">
             <Countdown to={weeklyPeriod.endsAt} className="block text-[26px] leading-none lg:text-[30px]" />
           </Stat>
-          <Stat label="Members earning" value={coins(siteStats.membersEarning)} />
-          <Stat label="Paid out to date" value={money(siteStats.paidOutToDate)} tone="gold" />
+          <Stat label="Members earning" value={maybe(siteStats.membersEarning)} />
+          <Stat label="Paid out to date" value={maybe(siteStats.paidOutToDate, money)} tone="gold" />
         </Hairlines>
       </div>
 
@@ -62,8 +75,17 @@ export default function HomePage() {
           }
         />
 
-        <Podium rows={weeklyPeriod.rows} className="mt-10" />
-        <BoardRows rows={weeklyPeriod.rows.slice(0, 6)} from={4} className="mt-5" />
+        {boardRows.length === 0 ? (
+          <EmptyState className="mt-10" title="No board to show yet.">
+            Positions come straight from Razed for accounts registered under the code{' '}
+            {razed.referralCode}. Nothing appears here until that feed returns players.
+          </EmptyState>
+        ) : (
+          <>
+            <Podium rows={boardRows} className="mt-10" />
+            <BoardRows rows={boardRows.slice(0, 6)} from={4} className="mt-5" />
+          </>
+        )}
 
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
           <span className="font-mono text-[11.5px] tabular-nums text-faint">
@@ -144,6 +166,7 @@ export default function HomePage() {
       {/* ----------------------------------------------------------------- */}
       {/* Biggest wins — a full-bleed band                                  */}
       {/* ----------------------------------------------------------------- */}
+      {bigWins.length > 0 ? (
       <Section bleed>
         <SectionHeading
           eyebrow="Real bets, real payouts, on stream"
@@ -175,6 +198,7 @@ export default function HomePage() {
           </ButtonLink>
         </div>
       </Section>
+      ) : null}
 
       {/* ----------------------------------------------------------------- */}
       {/* About Matty                                                       */}

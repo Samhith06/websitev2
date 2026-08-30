@@ -1,6 +1,6 @@
 import { Power } from 'lucide-react';
 import { cn } from '@/lib/cn';
-import { coins, mult, relativeTime } from '@/lib/format';
+import { coins, maybe, mult, relativeTime } from '@/lib/format';
 import { KENO_RISK_LABELS, kenoPaytable, kenoRtp } from '@/lib/games';
 import { adminStats, biggestHitsToday, gameConfigs, gamesKilled } from '@/lib/mock';
 import { AdminHeader } from '@/components/admin/AdminShell';
@@ -15,7 +15,10 @@ export const metadata = { title: 'Games' };
 const FEED_COLS = 'lg:grid-cols-[1fr_100px_100px_110px_120px_110px]';
 
 export default function AdminGamesPage() {
-  const netFlow = adminStats.coinsMintedThisWeek - adminStats.coinsDestroyedThisWeek;
+  const netFlow =
+    adminStats.coinsMintedThisWeek !== null && adminStats.coinsDestroyedThisWeek !== null
+      ? adminStats.coinsMintedThisWeek - adminStats.coinsDestroyedThisWeek
+      : null;
 
   return (
     <>
@@ -55,9 +58,9 @@ export default function AdminGamesPage() {
           <Label>Coin flow this week</Label>
         </div>
         <div className="grid gap-px bg-line sm:grid-cols-3 [&>div]:bg-surface">
-          <Figure label="Minted by watching" value={`+${coins(adminStats.coinsMintedThisWeek)}`} tone="brand" />
-          <Figure label="Destroyed by the edge" value={`−${coins(adminStats.coinsDestroyedThisWeek)}`} tone="gold" />
-          <Figure label="Net" value={`+${coins(netFlow)}`} />
+          <Figure label="Minted by watching" value={maybe(adminStats.coinsMintedThisWeek, (n) => `+${coins(n)}`)} tone="brand" />
+          <Figure label="Destroyed by the edge" value={maybe(adminStats.coinsDestroyedThisWeek, (n) => `−${coins(n)}`)} tone="gold" />
+          <Figure label="Net" value={maybe(netFlow, (n) => `+${coins(n)}`)} />
         </div>
         <p className="border-t border-line px-4 py-3 text-[12.5px] leading-relaxed text-muted">
           If the games drain faster than the stream mints, the site feels punishing; slower, and the
