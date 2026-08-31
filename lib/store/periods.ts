@@ -335,3 +335,21 @@ export function toUiPeriod(period: StoredPeriod, rows: Period['rows']): Period {
     rows,
   };
 }
+
+/**
+ * What has actually been paid, summed from the tiers of every period marked
+ * paid or archived.
+ *
+ * Derived rather than stored, like every other money figure here — a hand-kept
+ * running total is a number that drifts the first time somebody edits a tier.
+ * A period still open or merely frozen has not paid anything, so it is excluded.
+ */
+export async function paidOutToDate(): Promise<number> {
+  const row = await one<{ total: string }>(
+    `SELECT COALESCE(SUM((t.rank_to - t.rank_from + 1) * t.amount), 0)::text AS total
+       FROM prize_tiers t
+       JOIN lb_periods p ON p.id = t.period_id
+      WHERE p.status IN ('paid', 'archived')`,
+  );
+  return Number(row?.total ?? 0);
+}

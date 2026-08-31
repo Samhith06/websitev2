@@ -1,64 +1,49 @@
-import { coins } from '@/lib/format';
-import { shopItems } from '@/lib/mock';
+import { hasDatabase } from '@/lib/db';
+import { allItems } from '@/lib/store/shop';
 import { AdminHeader } from '@/components/admin/AdminShell';
-import { AdminRow, AdminTable, Cell, StatusPill } from '@/components/admin/Table';
-import { Button } from '@/components/ui/controls';
-import { CoinMark } from '@/components/ui/marks';
+import { ShopEditor } from '@/components/admin/ShopEditor';
+import { Card } from '@/components/ui/surfaces';
 
 export const metadata = { title: 'Shop items' };
+export const dynamic = 'force-dynamic';
 
-const COLS = 'lg:grid-cols-[1fr_120px_110px_110px_130px_110px]';
+export default async function AdminShopPage() {
+  if (!hasDatabase()) {
+    return (
+      <>
+        <AdminHeader eyebrow="Prices, stock, cooldowns" title="Shop items" />
+        <Card tone="gold">
+          <div className="px-5 py-5">
+            <p className="text-[15px] text-ink">No database is configured.</p>
+            <p className="mt-2 max-w-2xl text-[13.5px] leading-relaxed text-ink-2">
+              Shop items are rows in Postgres. Set{' '}
+              <code className="font-mono text-gold">DATABASE_URL</code> and the launch catalogue
+              creates itself.
+            </p>
+          </div>
+        </Card>
+      </>
+    );
+  }
 
-export default function AdminShopPage() {
+  const items = await allItems();
+
   return (
     <>
-      <AdminHeader
-        eyebrow="Prices, stock, cooldowns"
-        title="Shop items"
-        right={<Button size="sm">New item</Button>}
+      <AdminHeader eyebrow="Prices, stock, cooldowns" title="Shop items" />
+      <ShopEditor
+        items={items.map((i) => ({
+          id: i.id,
+          name: i.name,
+          description: i.description,
+          cost: i.cost,
+          category: i.category,
+          stock: i.stock,
+          cooldownDays: i.cooldownDays,
+          needsReview: i.needsReview,
+          active: i.active,
+        }))}
       />
-
-      <AdminTable cols={COLS} columns={['Item', 'Category', 'Cost', 'Stock', 'Cooldown', 'Status']}>
-        {shopItems.map((item) => {
-          const out = item.stock === 0;
-          return (
-            <AdminRow key={item.id} cols={COLS} tint={out ? 'gold' : undefined}>
-              <Cell>
-                <span className="block truncate text-ink">{item.name}</span>
-                <span className="mt-0.5 block truncate text-[12.5px] text-muted">
-                  {item.description}
-                </span>
-              </Cell>
-              <Cell label="Category" className="font-mono text-[12px] uppercase tracking-[0.12em] text-muted">
-                {item.category}
-              </Cell>
-              <Cell label="Cost">
-                <span className="inline-flex items-center gap-1.5 font-mono tabular-nums text-brand">
-                  <CoinMark size={13} />
-                  {coins(item.cost)}
-                </span>
-              </Cell>
-              <Cell label="Stock" className="font-mono tabular-nums text-ink-2">
-                {item.stock === null ? '∞' : item.stock}
-              </Cell>
-              <Cell label="Cooldown" className="font-mono text-[12.5px] tabular-nums text-faint">
-                {item.cooldownDaysRemaining ? `${item.cooldownDaysRemaining} days` : '—'}
-              </Cell>
-              <Cell>
-                <StatusPill tone={out ? 'gold' : item.active ? 'brand' : 'muted'}>
-                  {out ? 'Out of stock' : item.active ? 'Live' : 'Hidden'}
-                </StatusPill>
-              </Cell>
-            </AdminRow>
-          );
-        })}
-      </AdminTable>
-
-      <p className="mt-5 max-w-3xl text-[12.5px] leading-relaxed text-muted">
-        An out-of-stock item stays visible on the public shop with its price shown and the button
-        replaced by a chip. Hiding it removes a reason to keep earning, which is the opposite of
-        what the shop is for.
-      </p>
     </>
   );
 }

@@ -19,6 +19,8 @@ import * as play from '../lib/store/play';
 import * as presence from '../lib/store/presence';
 import * as clips from '../lib/store/clips';
 import * as periods from '../lib/store/periods';
+import * as shop from '../lib/store/shop';
+import * as settings from '../lib/store/settings';
 
 let failures = 0;
 function check(name: string, condition: unknown, detail = '') {
@@ -440,6 +442,108 @@ check('the copy carries the same pot', next.pot === 5800, String(next.pot));
 await periods.setPeriodStatus(week.id, 'paid');
 check('a paid board appears in the archive',
   (await periods.archivedPeriods()).some((p) => p.id === week.id));
+
+/* -------------------------------------------------------------------------- */
+section('the shop');
+
+const catalogue = await shop.listItems(alice.id);
+check('the launch catalogue is seeded', catalogue.length === 8, String(catalogue.length));
+
+const entry = catalogue.find((i) => i.cost === 50)!;
+const hoodie = catalogue.find((i) => i.name.includes('hoodie'))!;
+const deck = catalogue.find((i) => i.name.includes('card deck'))!;
+const colour = catalogue.find((i) => i.name.includes('chat colour'))!;
+
+await coins.record({ userId: alice.id, delta: 5000, kind: 'adjustment', reason: 'shop test float' });
+const startBalance = (await coins.balanceOf(alice.id)).balance;
+
+const bought = await shop.redeem(alice.id, Number(entry.id));
+check('an affordable item is redeemed', bought.ok === true, bought.ok ? '' : bought.error);
+check('the coins are taken', (await coins.balanceOf(alice.id)).balance === startBalance - 50);
+check('an entry is granted without review',
+  bought.ok && bought.redemption.status === 'fulfilled', bought.ok ? bought.redemption.status : '');
+
+const reviewed = await shop.redeem(alice.id, Number(hoodie.id));
+check('a merch item queues for review',
+  reviewed.ok && reviewed.redemption.status === 'pending', reviewed.ok ? reviewed.redemption.status : '');
+check('it appears in the moderator queue', (await shop.pendingCount()) === 1);
+
+// Stock actually moves.
+const afterBuy = await shop.listItems(alice.id);
+check('stock is decremented',
+  afterBuy.find((i) => i.name.includes('hoodie'))!.stock === 13,
+  String(afterBuy.find((i) => i.name.includes('hoodie'))!.stock));
+
+const soldOut = await shop.redeem(alice.id, Number(deck.id));
+check('an out-of-stock item is refused', soldOut.ok === false, soldOut.ok ? '' : soldOut.error);
+
+// Cooldowns are personal and enforced.
+const colourOnce = await shop.redeem(alice.id, Number(colour.id));
+check('a cooldown item can be bought once', colourOnce.ok === true, colourOnce.ok ? '' : colourOnce.error);
+const colourTwice = await shop.redeem(alice.id, Number(colour.id));
+check('and refused inside its cooldown', colourTwice.ok === false, colourTwice.ok ? '' : colourTwice.error);
+check('the cooldown is reported to the buyer',
+  (await shop.listItems(alice.id)).find((i) => i.id === colour.id)!.cooldownDaysRemaining === 14);
+check('but not to somebody else',
+  (await shop.listItems(bob.id)).find((i) => i.id === colour.id)!.cooldownDaysRemaining === 0);
+
+// Nobody can spend what they do not have.
+const noCoins = await shop.redeem(bob.id, Number(hoodie.id));
+check('no coins means no purchase', noCoins.ok === false, noCoins.ok ? '' : noCoins.error);
+check('and nothing was taken', (await coins.balanceOf(bob.id)).balance === 0);
+check('and no stock was consumed',
+  (await shop.listItems(bob.id)).find((i) => i.name.includes('hoodie'))!.stock === 13);
+
+// Rejecting refunds and restocks, in one write.
+const beforeRefund = (await coins.balanceOf(alice.id)).balance;
+const queued = (await shop.queue('pending'))[0];
+const rejectedNoReason = await shop.resolveRedemption({
+  id: Number(queued.id), status: 'rejected', handledBy: 'test',
+});
+check('a rejection without a reason is refused', rejectedNoReason.ok === false);
+
+const rejected = await shop.resolveRedemption({
+  id: Number(queued.id), status: 'rejected', handledBy: 'test', reason: 'Out of that size',
+});
+check('a rejection succeeds with one', rejected.ok === true);
+check('the coins come back', (await coins.balanceOf(alice.id)).balance === beforeRefund + hoodie.cost);
+check('the stock comes back',
+  (await shop.listItems(alice.id)).find((i) => i.name.includes('hoodie'))!.stock === 14);
+check('the queue is empty again', (await shop.pendingCount()) === 0);
+
+const twice = await shop.resolveRedemption({
+  id: Number(queued.id), status: 'fulfilled', handledBy: 'test',
+});
+check('a handled redemption cannot be handled again', twice.ok === false);
+
+check('the member sees their redemptions', (await shop.redemptionsFor(alice.id)).length === 3);
+
+/* -------------------------------------------------------------------------- */
+section('operational switches');
+
+check('games are on by default', (await settings.gamesAreKilled()) === false);
+await settings.setGamesKilled(true, 'test');
+check('the kill switch persists', (await settings.gamesAreKilled()) === true);
+check('and makes every game unplayable', (await settings.gameIsPlayable('keno')) === false);
+await settings.setGamesKilled(false, 'test');
+
+await settings.setGameEnabled('dice', false, 'test');
+check('one game can be switched off', (await settings.gameIsPlayable('dice')) === false);
+check('without affecting the others', (await settings.gameIsPlayable('keno')) === true);
+await settings.setGameEnabled('dice', true, 'test');
+check('and switched back on', (await settings.gameIsPlayable('dice')) === true);
+
+/* -------------------------------------------------------------------------- */
+section('rate limits');
+
+const flood: boolean[] = [];
+for (let i = 0; i < 3; i += 1) {
+  const r = await play.playRound({
+    userId: bob.id, game: 'limbo', bet: 10, idempotencyKey: 'flood-' + i, resolve: lose,
+  });
+  flood.push(r.ok === false && r.error === 'rate-limited');
+}
+check('the limit is not hit by ordinary play', flood.every((x) => x === false));
 
 /* -------------------------------------------------------------------------- */
 section('admin figures');

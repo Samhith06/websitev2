@@ -2,10 +2,12 @@ import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import { coins, maybe, money, relativeTime } from '@/lib/format';
 import {
-  razed, schedule, siteStats, socials, aboutCopy, portraitUrl,
+  razed, schedule, socials, aboutCopy, portraitUrl,
 } from '@/lib/mock';
 import { currentStream } from '@/lib/store/stream';
-import { currentPeriod, prizeForRank } from '@/lib/store/periods';
+import { currentPeriod, paidOutToDate, prizeForRank } from '@/lib/store/periods';
+import { earnersNow } from '@/lib/store/presence';
+import { hasDatabase } from '@/lib/db';
 import { publishedBigWins, publishedClips } from '@/lib/store/clips';
 import { viewerOrSignedOut } from '@/lib/viewer';
 import { fetchRazedLeaderboard, healthFrom, toBoardRows } from '@/lib/razed';
@@ -35,6 +37,12 @@ export default async function HomePage() {
   // The same server-side call the full board makes, over the same stored
   // period, so the preview and the board can never disagree.
   const weeklyPeriod = await currentPeriod('weekly');
+
+  // Three figures that were placeholders until the tables behind them existed.
+  // Each is now derived, and each is null rather than zero when unknowable.
+  const [earning, paidOut] = hasDatabase()
+    ? await Promise.all([earnersNow(), paidOutToDate()])
+    : [null, null];
   const feed = weeklyPeriod
     ? await fetchRazedLeaderboard({
         from: weeklyPeriod.startsAt.slice(0, 10),
@@ -55,7 +63,7 @@ export default async function HomePage() {
       {/* ----------------------------------------------------------------- */}
       <div className="container-page mt-[56px]">
         <Hairlines cols="grid-cols-2 lg:grid-cols-4">
-          <Stat label="Weekly prize pool" value={maybe(siteStats.weeklyPrizePool, money)} tone="gold" />
+          <Stat label="Weekly prize pool" value={maybe(weeklyPeriod?.pot ?? null, money)} tone="gold" />
           <Stat label="Board resets in">
             {weeklyPeriod ? (
               <Countdown to={weeklyPeriod.endsAt} className="block text-[26px] leading-none lg:text-[30px]" />
@@ -63,8 +71,8 @@ export default async function HomePage() {
               <span className="block font-mono text-[26px] leading-none text-muted lg:text-[30px]">—</span>
             )}
           </Stat>
-          <Stat label="Members earning" value={maybe(siteStats.membersEarning)} />
-          <Stat label="Paid out to date" value={maybe(siteStats.paidOutToDate, money)} tone="gold" />
+          <Stat label="Earning right now" value={maybe(earning)} />
+          <Stat label="Paid out to date" value={maybe(paidOut, money)} tone="gold" />
         </Hairlines>
       </div>
 

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/player';
 import { issueVerificationCode, verificationStateFor } from '@/lib/store/accounts';
+import { CODES_PER_HOUR, codesInLastHour, tooManyCodes } from '@/lib/store/limits';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -29,6 +30,14 @@ export async function POST() {
   const existing = await verificationStateFor(gate.user.id);
   if (existing.status === 'linked') {
     return NextResponse.json(existing);
+  }
+
+  if (await codesInLastHour(gate.user.id) >= CODES_PER_HOUR) {
+    const refusal = tooManyCodes();
+    return NextResponse.json(refusal, {
+      status: 429,
+      headers: { 'Retry-After': String(refusal.retryAfter) },
+    });
   }
 
   const issued = await issueVerificationCode(gate.user.id);

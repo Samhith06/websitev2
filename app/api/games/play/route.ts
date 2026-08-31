@@ -6,6 +6,7 @@ import {
 } from '@/lib/games';
 import { playRound, type PlayFailure, type Resolution } from '@/lib/store/play';
 import { requireUser } from '@/lib/player';
+import { gameIsPlayable } from '@/lib/store/settings';
 import type { KenoRisk } from '@/lib/games';
 import type { GameSlug } from '@/lib/types';
 
@@ -44,6 +45,19 @@ export async function POST(request: Request) {
   const resolve = resolverFor(game, body);
   if (!resolve) return bad('Unknown game.');
 
+  // The kill switch is checked here, not only in the lobby. A switch that
+  // leaves the API accepting bets is not a switch.
+  if (!(await gameIsPlayable(game))) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: 'game-unavailable',
+        detail: 'This game is switched off right now. Nothing has been staked.',
+      },
+      { status: 503 },
+    );
+  }
+
   const result = await playRound({
     userId: gate.user.id,
     game,
@@ -52,7 +66,16 @@ export async function POST(request: Request) {
     resolve,
   });
 
-  return NextResponse.json(result, { status: result.ok ? 200 : 400 });
+  if (result.ok) return NextResponse.json(result);
+
+  // 429 with Retry-After, so a client can back off rather than guess.
+  if (result.error === 'rate-limited') {
+    return NextResponse.json(result, {
+      status: 429,
+      headers: { 'Retry-After': String(result.retryAfter) },
+    });
+  }
+  return NextResponse.json(result, { status: 400 });
 }
 
 type Resolver = (seed: { serverSeed: string; clientSeed: string; nonce: number }) => Resolution | PlayFailure;

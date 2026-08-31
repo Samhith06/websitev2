@@ -2,14 +2,16 @@ import type { Metadata } from 'next';
 import { Gift, MessageSquare, Shirt, Tv } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { coins } from '@/lib/format';
-import { shopItems} from '@/lib/mock';
+import { listItems } from '@/lib/store/shop';
 import { currentStream } from '@/lib/store/stream';
 import { viewerOrSignedOut } from '@/lib/viewer';
+import { currentUser } from '@/lib/player';
 import { Display, Label, Num } from '@/components/ui/typography';
 import { Button, Chip, ChipRow } from '@/components/ui/controls';
 import { Card } from '@/components/ui/surfaces';
 import { CoinMark } from '@/components/ui/marks';
 import { CoinBar } from '@/components/site/CoinBar';
+import { ShopItemCard } from '@/components/site/ShopItemCard';
 import type { ShopCategory, ShopItem } from '@/lib/types';
 
 export const metadata: Metadata = {
@@ -43,8 +45,13 @@ export default async function ShopPage({
   const { category } = await searchParams;
   const active = (CATEGORIES.find((c) => c.value === category)?.value ?? 'all') as ShopCategory | 'all';
 
-  const items = shopItems.filter((i) => i.active && (active === 'all' || i.category === active));
-  const [viewer, stream] = await Promise.all([viewerOrSignedOut(), currentStream()]);
+  const [viewer, stream, user] = await Promise.all([
+    viewerOrSignedOut(), currentStream(), currentUser(),
+  ]);
+  // The catalogue is per-viewer: a cooldown is personal, so it is computed for
+  // this account rather than shown as a property of the item.
+  const catalogue = await listItems(user?.id ?? null);
+  const items = catalogue.filter((i) => active === 'all' || i.category === active);
   const zeroCoins = viewer.signedIn && viewer.balance === 0;
 
   return (
@@ -84,7 +91,13 @@ export default async function ShopPage({
 
       <div className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
         {items.map((item) => (
-          <ItemCard key={item.id} item={item} signedIn={viewer.signedIn} balance={viewer.balance} />
+          <ShopItemCard
+            key={item.id}
+            item={item}
+            signedIn={viewer.signedIn}
+            balance={viewer.balance}
+            needsReview={item.needsReview}
+          />
         ))}
       </div>
 
@@ -94,72 +107,5 @@ export default async function ShopPage({
         roles are granted straight away.
       </p>
     </div>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-
-function ItemCard({
-  item,
-  signedIn,
-  balance,
-}: {
-  item: ShopItem;
-  signedIn: boolean;
-  balance: number;
-}) {
-  const style = CATEGORY_STYLE[item.category];
-  const Icon = style.icon;
-
-  const outOfStock = item.stock === 0;
-  const onCooldown = (item.cooldownDaysRemaining ?? 0) > 0;
-  // Never hide an unavailable item — its price is part of what makes the coin
-  // feel worth earning (§10).
-  const unavailable = outOfStock || onCooldown;
-  const affordable = !signedIn || balance >= item.cost;
-
-  return (
-    <Card hover className={cn('flex flex-col', unavailable && 'opacity-55')}>
-      <div className={cn('grid h-24 place-items-center border-b', style.tint)}>
-        <Icon size={26} strokeWidth={1.6} />
-      </div>
-
-      <div className="flex flex-1 flex-col p-5">
-        <Label className="mb-2">{style.label}</Label>
-        <h2 className="text-[16px] font-semibold leading-snug text-ink">{item.name}</h2>
-        <p className="mt-2 text-[13.5px] leading-relaxed text-muted">{item.description}</p>
-
-        {item.stock !== null && item.stock > 0 ? (
-          <p className="mt-3 font-mono text-[11.5px] tabular-nums text-faint">{item.stock} left</p>
-        ) : null}
-      </div>
-
-      <div className="flex items-center justify-between gap-3 border-t border-line px-5 py-4">
-        <span className="flex items-center gap-1.5">
-          <CoinMark size={16} />
-          <Num tone={unavailable ? 'muted' : 'brand'} className="text-[20px] font-medium leading-none">
-            {coins(item.cost)}
-          </Num>
-        </span>
-
-        {outOfStock ? (
-          <span className="rounded-[2px] border border-line bg-surface-2 px-2.5 py-1.5 font-mono text-[10.5px] uppercase tracking-[0.14em] text-faint">
-            Out of stock
-          </span>
-        ) : onCooldown ? (
-          <span className="rounded-[2px] border border-line bg-surface-2 px-2.5 py-1.5 font-mono text-[10.5px] uppercase tracking-[0.14em] text-faint">
-            In {item.cooldownDaysRemaining} days
-          </span>
-        ) : !signedIn ? (
-          <Button size="sm" variant="discord">
-            Sign in to redeem
-          </Button>
-        ) : (
-          <Button size="sm" disabled={!affordable}>
-            {affordable ? 'Redeem' : `Need ${coins(item.cost - balance)}`}
-          </Button>
-        )}
-      </div>
-    </Card>
   );
 }

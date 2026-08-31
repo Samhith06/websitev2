@@ -2,7 +2,8 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import { cn } from '@/lib/cn';
 import { coins, mult, relativeTime } from '@/lib/format';
-import { gameConfigs, gamesKilled } from '@/lib/mock';
+import { gameConfigs } from '@/lib/mock';
+import { disabledGames, gamesAreKilled } from '@/lib/store/settings';
 import { viewerOrSignedOut } from '@/lib/viewer';
 import { biggestRoundsToday } from '@/lib/store/play';
 import { Display, Label, Num } from '@/components/ui/typography';
@@ -22,12 +23,14 @@ export const metadata: Metadata = {
 export const dynamic = 'force-dynamic';
 
 export default async function GamesLobby() {
-  const viewer = await viewerOrSignedOut();
+  const [viewer, killed, disabled] = await Promise.all([
+    viewerOrSignedOut(), gamesAreKilled(), disabledGames(),
+  ]);
 
   // Direct URLs redirect to the gate until it has been completed (§39).
   if (!viewer.games.enabled || viewer.games.excludedUntil) return <OptInGate />;
 
-  if (gamesKilled) {
+  if (killed) {
     return (
       <div className="container-page py-24">
         <Card className="mx-auto max-w-lg p-8 text-center">

@@ -179,19 +179,6 @@ export const gamesKilled = false;
 /* Admin                                                                      */
 /* -------------------------------------------------------------------------- */
 
-/**
- * `null` means "we do not have this figure yet" and the interface says so.
- * Zero would be a claim, and a wrong one.
- */
-export const siteStats: {
-  weeklyPrizePool: number | null;
-  membersEarning: number | null;
-  paidOutToDate: number | null;
-} = {
-  weeklyPrizePool: null,
-  membersEarning: null,
-  paidOutToDate: null,
-};
 
 export const socials = [
   { platform: 'Kick', handle: 'kick.com/mattyspinss', url: 'https://kick.com/mattyspinss' },

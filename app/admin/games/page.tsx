@@ -2,11 +2,15 @@ import { Power } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { coins, maybe, mult, relativeTime } from '@/lib/format';
 import { KENO_RISK_LABELS, kenoPaytable, kenoRtp } from '@/lib/games';
-import { gameConfigs, gamesKilled } from '@/lib/mock';
+import { gameConfigs } from '@/lib/mock';
+import { disabledGames, gamesAreKilled } from '@/lib/store/settings';
+import { currentIdentity } from '@/lib/player';
+import { roleFor } from '@/lib/admin';
 import { hasDatabase } from '@/lib/db';
 import { coinFlow } from '@/lib/store/coins';
 import { biggestRoundsToday } from '@/lib/store/play';
 import { AdminHeader } from '@/components/admin/AdminShell';
+import { GameToggle, KillSwitch } from '@/components/admin/GameSwitches';
 import { AdminRow, AdminTable, Cell, FilterBar } from '@/components/admin/Table';
 import { Button, Chip, ChipRow, Input } from '@/components/ui/controls';
 import { Card } from '@/components/ui/surfaces';
@@ -24,10 +28,14 @@ export default async function AdminGamesPage() {
   weekStart.setUTCHours(0, 0, 0, 0);
   weekStart.setUTCDate(weekStart.getUTCDate() - 7);
 
-  const [flow, biggestHitsToday] = await Promise.all([
+  const [flow, biggestHitsToday, killed, disabled, identity] = await Promise.all([
     hasDatabase() ? coinFlow(weekStart) : Promise.resolve(null),
     hasDatabase() ? biggestRoundsToday(25) : Promise.resolve([]),
+    gamesAreKilled(),
+    disabledGames(),
+    currentIdentity(),
   ]);
+  const isOwner = roleFor(identity?.discordId) === 'owner';
 
   const minted = flow?.minted ?? null;
   const destroyed = flow?.destroyed ?? null;
@@ -43,25 +51,7 @@ export default async function AdminGamesPage() {
       {/* ------------------------------------------------------------- */}
       {/* Kill switch, owner-only, at the top                           */}
       {/* ------------------------------------------------------------- */}
-      <Card tone={gamesKilled ? 'danger' : 'default'} className="mb-5">
-        <div className="flex flex-wrap items-center justify-between gap-4 px-4 py-4">
-          <div className="flex items-start gap-3">
-            <Power size={18} className={cn('mt-0.5 shrink-0', gamesKilled ? 'text-danger' : 'text-muted')} />
-            <div>
-              <p className="text-[15px] text-ink">
-                {gamesKilled ? 'Every game is currently disabled' : 'Kill switch'}
-              </p>
-              <p className="mt-1 max-w-2xl text-[12.5px] leading-relaxed text-muted">
-                Disables every game instantly, without a deploy. The lobby is replaced by a single
-                message and every play endpoint refuses. Rounds already in progress still settle.
-              </p>
-            </div>
-          </div>
-          <Button variant={gamesKilled ? 'primary' : 'danger'}>
-            {gamesKilled ? 'Bring games back' : 'Disable every game'}
-          </Button>
-        </div>
-      </Card>
+      <KillSwitch killed={killed} isOwner={isOwner} />
 
       {/* ------------------------------------------------------------- */}
       {/* Coin flow — the number Matty actually needs                   */}
@@ -87,7 +77,12 @@ export default async function AdminGamesPage() {
       {/* ------------------------------------------------------------- */}
       <div className="grid gap-4 lg:grid-cols-2">
         {gameConfigs.map((game) => (
-          <GameConfigCard key={game.slug} game={game} />
+          <GameConfigCard
+            key={game.slug}
+            game={game}
+            enabled={!disabled.includes(game.slug)}
+            isOwner={isOwner}
+          />
         ))}
       </div>
 
@@ -144,7 +139,15 @@ export default async function AdminGamesPage() {
 
 /* -------------------------------------------------------------------------- */
 
-function GameConfigCard({ game }: { game: GameConfig }) {
+function GameConfigCard({
+  game,
+  enabled,
+  isOwner,
+}: {
+  game: GameConfig;
+  enabled: boolean;
+  isOwner: boolean;
+}) {
   const showPaytable = game.slug === 'keno';
   const table = showPaytable ? kenoPaytable('classic', 6) : [];
   const rtp = showPaytable ? kenoRtp('classic', 6) : game.rtp;
@@ -153,22 +156,25 @@ function GameConfigCard({ game }: { game: GameConfig }) {
     <Card className={cn(game.comingSoon && 'opacity-60')}>
       <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
         <Label>{game.name}</Label>
-        <label className="flex cursor-pointer items-center gap-2 text-[12.5px] text-muted">
-          <input
-            type="checkbox"
-            defaultChecked={game.enabled}
-            disabled={game.comingSoon}
-            className="size-4 accent-[#2B8FFF]"
-          />
-          Enabled
-        </label>
+        <GameToggle
+          slug={game.slug}
+          enabled={enabled && !game.comingSoon}
+          disabled={Boolean(game.comingSoon)}
+          isOwner={isOwner}
+        />
       </div>
 
+      {/* Read-only, deliberately. These live in `lib/games.ts` and the keno
+          tables in `data/keno-paytables.json`, where `npm run check:rtp`
+          verifies all forty land on 99%. A box here that let somebody type an
+          arbitrary RTP would make the figure printed on every game page untrue
+          with no check in the way, which is a worse outcome than editing a
+          file and shipping it. */}
       <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-4">
-        <Field label="RTP" defaultValue={game.rtp} step="0.001" />
-        <Field label="Min bet" defaultValue={game.minBet} />
-        <Field label="Max bet" defaultValue={game.maxBet} />
-        <Field label="Max win" defaultValue={game.maxWin} />
+        <Field label="RTP" value={`${(game.rtp * 100).toFixed(2)}%`} />
+        <Field label="Min bet" value={`${game.minBet} MC`} />
+        <Field label="Max bet" value={`${game.maxBet} MC`} />
+        <Field label="Max win" value={`${coins(game.maxWin)} MC`} />
       </div>
 
       {showPaytable ? (
@@ -185,12 +191,9 @@ function GameConfigCard({ game }: { game: GameConfig }) {
                 <span className="w-16 shrink-0 font-mono text-[12px] tabular-nums text-muted">
                   {hits} hit{hits === 1 ? '' : 's'}
                 </span>
-                <Input
-                  defaultValue={multiplier}
-                  className="h-7 w-24 text-[12px]"
-                  type="number"
-                  step="0.01"
-                />
+                <span className="w-24 shrink-0 font-mono text-[12.5px] tabular-nums text-ink-2">
+                  {mult(multiplier)}
+                </span>
                 <span className="font-mono text-[11.5px] text-faint">
                   {multiplier === 0 ? 'losing tier — shown to players explicitly' : ''}
                 </span>
@@ -198,25 +201,23 @@ function GameConfigCard({ game }: { game: GameConfig }) {
             ))}
           </div>
           <p className="border-t border-line px-4 py-2.5 text-[11.5px] leading-relaxed text-muted">
-            All forty tables (four risk levels × ten pick counts) are editable. The RTP above is
-            recomputed from the table itself, so a bad edit shows up here before it ships.
+            All forty tables (four risk levels × ten pick counts) live in
+            <code className="mx-1 font-mono">data/keno-paytables.json</code> and are checked by
+            <code className="mx-1 font-mono">npm run check:rtp</code>. The RTP above is recomputed
+            from the table itself, so a bad edit fails the check before it ships.
           </p>
         </div>
       ) : null}
 
-      <div className="flex justify-end gap-2 border-t border-line px-4 py-3">
-        <Button variant="outline" size="sm" disabled={game.comingSoon}>Preview</Button>
-        <Button size="sm" disabled={game.comingSoon}>Save</Button>
-      </div>
     </Card>
   );
 }
 
-function Field({ label, defaultValue, step }: { label: string; defaultValue: number; step?: string }) {
+function Field({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <Label className="mb-1.5">{label}</Label>
-      <Input type="number" step={step} defaultValue={defaultValue} className="h-9 text-[13px]" />
+      <Num className="text-[15px]">{value}</Num>
     </div>
   );
 }

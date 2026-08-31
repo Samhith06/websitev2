@@ -2,7 +2,8 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { ArrowLeft } from 'lucide-react';
-import { gameConfigs, gamesKilled } from '@/lib/mock';
+import { gameConfigs } from '@/lib/mock';
+import { gamesAreKilled } from '@/lib/store/settings';
 import { viewerOrSignedOut } from '@/lib/viewer';
 import { Display, Label } from '@/components/ui/typography';
 import { Card } from '@/components/ui/surfaces';
@@ -40,12 +41,12 @@ export default async function GamePage({ params }: { params: Promise<{ slug: str
   if (!PLAYABLE.includes(slug as Playable)) notFound();
 
   // Every play endpoint refuses server-side too; this only hides the screen.
-  const viewer = await viewerOrSignedOut();
+  const [viewer, killed] = await Promise.all([viewerOrSignedOut(), gamesAreKilled()]);
   if (!viewer.games.enabled || viewer.games.excludedUntil) return <OptInGate />;
 
   const game = gameConfigs.find((g) => g.slug === slug)!;
 
-  if (gamesKilled || !game.enabled) {
+  if (killed || !game.enabled) {
     return (
       <div className="container-page py-24">
         <Card className="mx-auto max-w-lg p-8 text-center">

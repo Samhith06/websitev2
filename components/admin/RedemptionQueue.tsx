@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useTransition } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { coins, relativeTime } from '@/lib/format';
@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/surfaces';
 import { Label } from '@/components/ui/typography';
 import { CoinMark } from '@/components/ui/marks';
 import { StatusPill } from './Table';
+import { decideRedemption } from '@/app/admin/redemptions/actions';
 import type { Redemption } from '@/lib/types';
 
 const REJECT_PRESETS = ['Out of stock', 'Ineligible', 'Suspected abuse'];
@@ -21,8 +22,10 @@ const REJECT_PRESETS = ['Out of stock', 'Ineligible', 'Suspected abuse'];
  * the moderator's name and the time — seeing what your co-moderator just did
  * prevents the double-approval.
  */
-export function RedemptionQueue({ initial }: { initial: Redemption[] }) {
+export function RedemptionQueue({ initial, who }: { initial: Redemption[]; who: string }) {
   const [items, setItems] = useState(initial);
+  const [failed, setFailed] = useState<string | null>(null);
+  const [pendingAction, start] = useTransition();
   const [rejecting, setRejecting] = useState<string | null>(null);
   const [reason, setReason] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -42,21 +45,43 @@ export function RedemptionQueue({ initial }: { initial: Redemption[] }) {
       : handled;
 
   function decide(id: string, status: Redemption['status'], why?: string) {
+    if (status !== 'approved' && status !== 'fulfilled' && status !== 'rejected') return;
+
+    // Optimistic, then reconciled: a moderator working a queue should not wait
+    // on a round trip per row, but a refusal has to put the row back rather
+    // than leave a decision on screen that never happened.
+    const before = items;
     setItems((prev) =>
       prev.map((item) =>
         item.id === id
-          ? { ...item, status, handledBy: 'Matty (owner)', reason: why, createdAt: item.createdAt }
+          ? { ...item, status, handledBy: who, reason: why, createdAt: item.createdAt }
           : item,
       ),
     );
     setJustHandled((prev) => (prev.includes(id) ? prev : [...prev, id]));
     setRejecting(null);
     setReason('');
+    setFailed(null);
+
+    start(async () => {
+      const result = await decideRedemption(Number(id), status, why);
+      if (!result.ok) {
+        setItems(before);
+        setJustHandled((prev) => prev.filter((x) => x !== id));
+        setFailed(result.error);
+      }
+    });
   }
 
   return (
     <>
-      <ChipRow label="Queue view" className="mb-4">
+      {failed ? (
+        <p className="mb-4 rounded-[6px] border border-danger-line bg-danger-bg px-4 py-3 text-[13px] text-danger" role="status">
+          {failed}
+        </p>
+      ) : null}
+
+      <ChipRow label="Queue view" className={cn('mb-4', pendingAction && 'opacity-70')}>
         <Chip active={tab === 'queue'} onClick={() => setTab('queue')}>
           Queue · {pending.length}
         </Chip>

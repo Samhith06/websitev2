@@ -9,6 +9,7 @@ import { currentUser } from '@/lib/player';
 import { currentViewer } from '@/lib/viewer';
 import { verificationStateFor } from '@/lib/store/accounts';
 import { ledgerFor } from '@/lib/store/coins';
+import { pendingCountFor, redemptionsFor } from '@/lib/store/shop';
 import { Display, Label, Num } from '@/components/ui/typography';
 import { Button, ButtonLink, StatusDot } from '@/components/ui/controls';
 import { Card } from '@/components/ui/surfaces';
@@ -43,10 +44,12 @@ export default async function ProfilePage() {
   const viewer = user ? await currentViewer() : null;
   if (!user || !viewer) return <SignedOut />;
 
-  const [verification, ledger, stream] = await Promise.all([
+  const [verification, ledger, stream, redemptions, pending] = await Promise.all([
     verificationStateFor(user.id),
     ledgerFor(user.id, 60),
     currentStream(),
+    redemptionsFor(user.id, 20),
+    pendingCountFor(user.id),
   ]);
 
   const linked = verification.status === 'linked';
@@ -181,7 +184,7 @@ export default async function ProfilePage() {
                 <SettingRow
                   icon={<Gift size={16} className="text-muted" />}
                   title="Pending redemptions"
-                  detail={`${viewer.pendingRedemptions} awaiting a moderator`}
+                  detail={`${pending} awaiting a moderator`}
                   action={<Link href="#redemptions" className="text-[12px] text-brand hover:underline">View</Link>}
                 />
                 <SettingRow
@@ -257,15 +260,42 @@ export default async function ProfilePage() {
           {/* ========================================================= */}
           <section id="redemptions" className="scroll-mt-24">
             <Label className="mb-3">Redemptions</Label>
-            <Card className="px-5 py-6">
-              <p className="text-[14px] text-muted">
-                Nothing redeemed yet. Anything you buy in the{' '}
-                <Link href="/shop" className="text-brand underline underline-offset-2">
-                  shop
-                </Link>{' '}
-                appears here with its status while a moderator works through it.
-              </p>
-            </Card>
+            {redemptions.length === 0 ? (
+              <Card className="px-5 py-6">
+                <p className="text-[14px] text-muted">
+                  Nothing redeemed yet. Anything you buy in the{' '}
+                  <Link href="/shop" className="text-brand underline underline-offset-2">
+                    shop
+                  </Link>{' '}
+                  appears here with its status while a moderator works through it.
+                </p>
+              </Card>
+            ) : (
+              <div className="space-y-2">
+                {redemptions.map((r) => (
+                  <Card key={r.id} tone={r.status === 'rejected' ? 'danger' : 'default'}>
+                    <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
+                      <div className="min-w-0">
+                        <p className="text-[14.5px] text-ink">{r.itemName}</p>
+                        <p className="mt-1 flex items-center gap-2 font-mono text-[11.5px] tabular-nums text-faint">
+                          <CoinMark size={12} />
+                          {coins(r.cost)} · {relativeTime(r.createdAt)}
+                          {r.handledBy ? ` · handled by ${r.handledBy}` : ''}
+                        </p>
+                        {/* A rejection always carries its reason, and the coins
+                            come back automatically — the shop promises both. */}
+                        {r.reason ? (
+                          <p className="mt-1.5 text-[13px] text-danger">{r.reason}</p>
+                        ) : null}
+                      </div>
+                      <StatusDot tone={r.status === 'rejected' ? 'danger' : r.status === 'fulfilled' ? 'brand' : 'gold'}>
+                        {r.status}
+                      </StatusDot>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            )}
           </section>
 
           {/* ========================================================= */}

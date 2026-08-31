@@ -5,6 +5,7 @@ import { generateServerSeed, hashServerSeed } from '@/lib/fairness';
 import { LIMITS } from '@/lib/games';
 import { maskUsername } from '@/lib/format';
 import { InsufficientCoins, apply, balanceOf } from './coins';
+import { ROUNDS_PER_MINUTE, roundsInLastMinute, tooManyRounds } from './limits';
 import type { GameSlug } from '@/lib/types';
 
 /**
@@ -108,7 +109,8 @@ function defaultClientSeed(): string {
 export type PlayFailure =
   | { ok: false; error: 'bet-below-minimum' | 'bet-above-maximum'; limit: number }
   | { ok: false; error: 'insufficient-coins'; shortfall: number }
-  | { ok: false; error: 'invalid-request'; detail: string };
+  | { ok: false; error: 'invalid-request'; detail: string }
+  | { ok: false; error: 'rate-limited'; detail: string; retryAfter: number };
 
 export type PlaySuccess = {
   ok: true;
@@ -165,6 +167,13 @@ export async function playRound(input: {
       );
       if (replay.rows[0]) {
         return snapshot(client, input.userId, toRound(replay.rows[0]), pair, true);
+      }
+
+      // Checked after the replay lookup so a retried key is never refused for
+      // rate: returning the original round costs nothing and a client retrying
+      // a dropped response has done nothing wrong.
+      if (await roundsInLastMinute(client, input.userId) >= ROUNDS_PER_MINUTE) {
+        return tooManyRounds();
       }
 
       const { rows: balanceRows } = await client.query<{ balance: number }>(

@@ -1,14 +1,15 @@
 import Link from 'next/link';
 import { coins, maybe, money, relativeTime } from '@/lib/format';
-import { siteStats} from '@/lib/mock';
+
 import { currentStream } from '@/lib/store/stream';
-import { currentPeriod } from '@/lib/store/periods';
+import { currentPeriod, paidOutToDate } from '@/lib/store/periods';
 import { fetchRazedLeaderboard, healthFrom } from '@/lib/razed';
 import { databaseHealth, hasDatabase, rows } from '@/lib/db';
 import { coinFlow } from '@/lib/store/coins';
 import { roundsToday } from '@/lib/store/play';
 import { earnersNow, lastTickAt } from '@/lib/store/presence';
 import { userCount } from '@/lib/store/accounts';
+import { pendingCount, queue } from '@/lib/store/shop';
 import { AdminHeader } from '@/components/admin/AdminShell';
 import { StatusPill } from '@/components/admin/Table';
 import { Card, Hairlines, Stat } from '@/components/ui/surfaces';
@@ -37,6 +38,10 @@ export default async function AdminOverview() {
 
   const weekly = hasDatabase() ? await currentPeriod('weekly') : null;
   const stream = await currentStream();
+  const paidOut = hasDatabase() ? await paidOutToDate() : null;
+  const [waiting, pending] = hasDatabase()
+    ? await Promise.all([pendingCount(), queue('pending', 6)])
+    : [null, []];
 
   const [feed, db, flow, rounds, earning, members, tickedAt, auditLog] = await Promise.all([
     weekly
@@ -101,18 +106,31 @@ export default async function AdminOverview() {
             </ButtonLink>
           </div>
           <div className="p-4">
-            {/* The shop has no tables yet, so this is a known nothing rather
-                than a zero anyone should read as "all caught up". */}
             <div className="flex items-baseline gap-3">
-              <Num tone="muted" className="text-[34px] leading-none">
-                —
+              <Num tone={waiting ? 'gold' : 'muted'} className="text-[34px] leading-none">
+                {maybe(waiting)}
               </Num>
               <span className="text-[13.5px] text-muted">waiting on a moderator</span>
             </div>
-            <p className="mt-4 text-[13px] leading-relaxed text-muted">
-              Redemptions are not stored yet. The shop is the next piece of work that needs a
-              table; until it has one, nothing can queue here.
-            </p>
+            {pending.length === 0 ? (
+              <p className="mt-4 text-[13px] leading-relaxed text-muted">
+                Nothing waiting. Entries and Discord roles are granted the moment they are bought
+                and never reach this queue.
+              </p>
+            ) : (
+              <ul className="mt-4 space-y-2">
+                {pending.map((r) => (
+                  <li key={r.id} className="flex items-baseline justify-between gap-3 text-[13.5px]">
+                    <span className="min-w-0 truncate text-ink-2">
+                      {r.itemName} <span className="text-faint">· {r.member}</span>
+                    </span>
+                    <span className="shrink-0 font-mono text-[11.5px] tabular-nums text-faint">
+                      {relativeTime(r.createdAt)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </Card>
 
@@ -220,7 +238,7 @@ export default async function AdminOverview() {
       </Card>
 
       <p className="mt-6 max-w-2xl text-[12.5px] leading-relaxed text-muted">
-        Paid out to date: {maybe(siteStats.paidOutToDate, money)} across every finalised period. Prize
+        Paid out to date: {maybe(paidOut, money)} across every finalised period. Prize
         records live under Prizes and periods.
       </p>
     </>
