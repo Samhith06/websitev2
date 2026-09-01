@@ -59,7 +59,7 @@ export async function GET() {
     }
 
     // Case 2: Kick says offline, DB says live → Close session
-    if (!kickStatus.isLive && dbIsLive) {
+    if (!kickStatus.isLive && dbIsLive && dbSession) {
       await write(`UPDATE stream_sessions SET ended_at = NOW() WHERE id = $1`, [
         dbSession.id,
       ]);
