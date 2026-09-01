@@ -1,44 +1,95 @@
-import 'server-only';
-import { hasDatabase, one } from '@/lib/db';
-import { channel, offlineStream } from '@/lib/mock';
-import type { StreamState } from '@/lib/types';
+import "server-only";
+import { hasDatabase, one } from "@/lib/db";
+import { channel, offlineStream } from "@/lib/mock";
+import { fetchKickLiveStatus, fetchLastVOD } from "@/lib/kick-api";
+import type { StreamState } from "@/lib/types";
 
 /**
- * Whether Matty is actually live.
+ * Whether Matty is actually live - now with AUTOMATIC detection!
  *
- * This used to be a constant. The hero said "LIVE ON KICK · 1,284 viewers ·
- * uptime 01:40:54" while the Kick player embedded next to it said the channel
- * was offline — the site contradicting itself on the one fact a visitor can
- * check in a single glance.
+ * This function tries multiple sources in priority order:
+ * 1. Database webhook session (most reliable, if configured)
+ * 2. Direct Kick API check (automatic fallback)
+ * 3. Offline state (default)
  *
- * The truth now comes from `stream_sessions`, which the
- * `livestream.status.updated` webhook opens and closes. Two consequences worth
- * being deliberate about:
- *
- *   • **Until that webhook is configured, the site says offline.** That is the
- *     honest default: we have not been told a stream started, so we do not
- *     claim one has.
- *   • **The viewer count is unknown, not zero.** Kick's per-user API cannot
- *     tell us who is watching and the aggregate count needs a separate call we
- *     do not make, so the count is omitted rather than guessed. An invented
- *     "1,284 watching" is worse than no number at all.
+ * This means the site will automatically show live status even without
+ * webhooks configured, by directly querying Kick's public API.
  */
 export async function currentStream(): Promise<StreamState> {
-  if (!hasDatabase()) return offlineStream;
+  // Try database first (webhook-based)
+  if (hasDatabase()) {
+    const session = await one<{ started_at: Date; title: string | null }>(
+      `SELECT started_at, title FROM stream_sessions WHERE ended_at IS NULL LIMIT 1`,
+    ).catch(() => null);
 
-  const session = await one<{ started_at: Date; title: string | null }>(
-    `SELECT started_at, title FROM stream_sessions WHERE ended_at IS NULL LIMIT 1`,
-  ).catch(() => null);
+    if (session) {
+      return {
+        ...offlineStream,
+        live: true,
+        startedAt: session.started_at.toISOString(),
+        title: session.title,
+        viewers: null,
+        channel,
+      };
+    }
+  }
 
-  if (!session) return offlineStream;
+  // Fallback to direct Kick API check (automatic!)
+  const kickStatus = await fetchKickLiveStatus();
+
+  if (kickStatus.isLive) {
+    // Optionally sync to database if we have one
+    if (hasDatabase()) {
+      try {
+        await syncLiveStatusToDatabase(kickStatus.title || "Live on Kick");
+      } catch (error) {
+        console.error(
+          "[stream] Failed to sync live status to database:",
+          error,
+        );
+      }
+    }
+
+    return {
+      ...offlineStream,
+      live: true,
+      startedAt: kickStatus.startTime || new Date().toISOString(),
+      title: kickStatus.title || "Live on Kick",
+      viewers: kickStatus.viewers,
+      thumbUrl: kickStatus.thumbnailUrl || offlineStream.thumbUrl,
+      channel,
+    };
+  }
+
+  // Get last VOD for offline state
+  const lastVod = await fetchLastVOD();
 
   return {
     ...offlineStream,
-    live: true,
-    startedAt: session.started_at.toISOString(),
-    title: session.title,
-    // Deliberately absent: see above.
-    viewers: null,
-    channel,
+    lastVodUrl: lastVod?.url || offlineStream.lastVodUrl,
+    lastVodTitle: lastVod?.title || offlineStream.lastVodTitle,
+    lastVodThumb: lastVod?.thumbnail || offlineStream.lastVodThumb,
   };
+}
+
+/**
+ * Sync the detected live status to database
+ * This creates a session if one doesn't exist
+ */
+async function syncLiveStatusToDatabase(title: string): Promise<void> {
+  const { write } = await import("@/lib/db");
+
+  // Check if there's already an open session
+  const existing = await one<{ id: number }>(
+    `SELECT id FROM stream_sessions WHERE ended_at IS NULL LIMIT 1`,
+  ).catch(() => null);
+
+  if (!existing) {
+    // Create new session
+    await write(
+      `INSERT INTO stream_sessions (started_at, title) VALUES (NOW(), $1)`,
+      [title],
+    );
+    console.log("[stream] Auto-created session from Kick API detection");
+  }
 }

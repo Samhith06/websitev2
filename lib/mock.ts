@@ -14,9 +14,17 @@
  * behave like the real thing while clicking through.
  */
 import type {
-  LeaderboardRow, Casino, GameConfig, Giveaway,
-  Period, PrizeClaim, PrizeTier, Redemption, ShopItem, StreamState,
-} from './types';
+  LeaderboardRow,
+  Casino,
+  GameConfig,
+  Giveaway,
+  Period,
+  PrizeClaim,
+  PrizeTier,
+  Redemption,
+  ShopItem,
+  StreamState,
+} from "./types";
 
 const now = Date.now();
 const mins = (n: number) => new Date(now + n * 60_000).toISOString();
@@ -27,7 +35,7 @@ const days = (n: number) => hours(n * 24);
 /* The two clocks                                                             */
 /* -------------------------------------------------------------------------- */
 
-export const channel = 'mattyspinss';
+export const channel = "mattyspinss";
 
 /**
  * The offline shape, and the only stream state this file still holds.
@@ -42,18 +50,18 @@ export const offlineStream: StreamState = {
   title: null,
   viewers: null,
   startedAt: null,
-  thumbUrl: '/brand/stream-thumb.svg',
+  thumbUrl: "/brand/stream-thumb.svg",
   channel,
   nextStreamAt: days(1),
   lastVodUrl: `https://kick.com/${channel}`,
-  lastVodThumb: '/brand/stream-thumb.svg',
-  lastVodTitle: 'Latest stream on Kick',
+  lastVodThumb: "/brand/stream-thumb.svg",
+  lastVodTitle: "Latest stream on Kick",
 };
 
 export const schedule = [
-  { day: 'Tue', time: '8:00 PM', note: 'Bonus hunt', platform: 'Kick' },
-  { day: 'Thu', time: '8:00 PM', note: 'Viewer slot picks', platform: 'Kick' },
-  { day: 'Sat', time: '7:00 PM', note: 'Big bet Saturday', platform: 'Kick' },
+  { day: "Tue", time: "8:00 PM", note: "Bonus hunt", platform: "Kick" },
+  { day: "Thu", time: "8:00 PM", note: "Viewer slot picks", platform: "Kick" },
+  { day: "Sat", time: "7:00 PM", note: "Big bet Saturday", platform: "Kick" },
 ];
 
 /*
@@ -69,15 +77,15 @@ export const schedule = [
 /* -------------------------------------------------------------------------- */
 
 export const razed: Casino = {
-  id: 'razed',
-  name: 'Razed',
-  slug: 'razed',
-  referralCode: 'MATTYSPINS',
-  affiliateUrl: 'https://razed.com/?ref=Mattyspins',
-  offer: '200% up to $1,000 on your first deposit, plus 100 free spins',
-  offerDetail: 'Wagering requirements apply. Sign up under the code and every dollar you wager counts towards the weekly board automatically.',
+  id: "razed",
+  name: "Razed",
+  slug: "razed",
+  referralCode: "MATTYSPINS",
+  affiliateUrl: "https://razed.com/?ref=Mattyspins",
+  offer: "200% up to $1,000 on your first deposit, plus 100 free spins",
+  offerDetail:
+    "Wagering requirements apply. Sign up under the code and every dollar you wager counts towards the weekly board automatically.",
 };
-
 
 /**
  * The board is supplied by Razed at request time (see `lib/razed.ts`). Nothing
@@ -87,21 +95,21 @@ export const razed: Casino = {
 const weeklyRows: LeaderboardRow[] = [];
 
 export const weeklyPeriod: Period = {
-  id: 'w-2026-35',
-  type: 'weekly',
+  id: "w-2026-35",
+  type: "weekly",
   startsAt: days(-4),
   endsAt: days(3),
-  status: 'open',
+  status: "open",
   pot: 6_000,
   rows: weeklyRows,
 };
 
 export const monthlyPeriod: Period = {
-  id: 'm-2026-08',
-  type: 'monthly',
+  id: "m-2026-08",
+  type: "monthly",
   startsAt: days(-28),
   endsAt: days(2),
-  status: 'open',
+  status: "open",
   pot: 15_000,
   rows: weeklyRows.map((r) => ({
     ...r,
@@ -112,43 +120,112 @@ export const monthlyPeriod: Period = {
 
 /** A frozen period drives the claim flow and the "verifying" banner (§28). */
 export const frozenPeriod: Period = {
-  id: 'w-2026-34',
-  type: 'weekly',
+  id: "w-2026-34",
+  type: "weekly",
   startsAt: days(-11),
   endsAt: days(-4),
-  status: 'frozen',
+  status: "frozen",
   pot: 6_000,
   rows: weeklyRows.map((r) => ({ ...r, movement: null })),
-  claimedRanks: { 1: 'paid', 3: 'pending' },
+  claimedRanks: { 1: "paid", 3: "pending" },
 };
 
 /** Frozen boards are kept forever. None have closed yet. */
 export const archivedPeriods: Period[] = [];
 
 export const prizeTiers: PrizeTier[] = [
-  { id: 't1', rankFrom: 1, rankTo: 1, amount: 2_000, currency: 'USD' },
-  { id: 't2', rankFrom: 2, rankTo: 2, amount: 1_000, currency: 'USD' },
-  { id: 't3', rankFrom: 3, rankTo: 3, amount: 600, currency: 'USD' },
-  { id: 't4', rankFrom: 4, rankTo: 10, amount: 400, currency: 'USD' },
+  { id: "t1", rankFrom: 1, rankTo: 1, amount: 2_000, currency: "USD" },
+  { id: "t2", rankFrom: 2, rankTo: 2, amount: 1_000, currency: "USD" },
+  { id: "t3", rankFrom: 3, rankTo: 3, amount: 600, currency: "USD" },
+  { id: "t4", rankFrom: 4, rankTo: 10, amount: 400, currency: "USD" },
 ];
 
 /** A claim appears once a period freezes and someone claims a position. */
 export const activeClaim: PrizeClaim | null = null;
-
 
 /* -------------------------------------------------------------------------- */
 /* Shop and giveaways                                                         */
 /* -------------------------------------------------------------------------- */
 
 export const shopItems: ShopItem[] = [
-  { id: 's1', name: 'Weekly giveaway entry', description: "One entry into this week's draw. Enter as many times as the cap allows.", cost: 50, category: 'entries', stock: null, active: true },
-  { id: 's2', name: 'Monthly draw entry', description: 'One entry into the monthly prize draw. Bigger pot, longer odds.', cost: 150, category: 'entries', stock: null, active: true },
-  { id: 's3', name: 'Custom chat colour', description: 'Your name in the colour of your choice in Discord for 14 days.', cost: 200, category: 'discord', stock: null, cooldownDaysRemaining: 12, active: true },
-  { id: 's4', name: 'Shoutout on stream', description: 'Matty reads your message out live. Keep it clean and he will read it.', cost: 350, category: 'stream', stock: 8, active: true },
-  { id: 's5', name: 'High Roller role', description: 'The gold Discord role and its channels for 30 days.', cost: 500, category: 'discord', stock: null, active: true },
-  { id: 's6', name: 'Pick the next slot', description: 'You choose what he opens next. One pick, taken live.', cost: 750, category: 'stream', stock: 3, active: true },
-  { id: 's7', name: 'Signed card deck', description: 'A deck signed by Matty, posted anywhere he can legally post it.', cost: 1_000, category: 'merch', stock: 0, active: true },
-  { id: 's8', name: 'MattySpins hoodie', description: 'Heavyweight, embroidered mark. Sizes S to XXL.', cost: 1_250, category: 'merch', stock: 14, active: true },
+  {
+    id: "s1",
+    name: "Weekly giveaway entry",
+    description:
+      "One entry into this week's draw. Enter as many times as the cap allows.",
+    cost: 50,
+    category: "entries",
+    stock: null,
+    active: true,
+  },
+  {
+    id: "s2",
+    name: "Monthly draw entry",
+    description:
+      "One entry into the monthly prize draw. Bigger pot, longer odds.",
+    cost: 150,
+    category: "entries",
+    stock: null,
+    active: true,
+  },
+  {
+    id: "s3",
+    name: "Custom chat colour",
+    description:
+      "Your name in the colour of your choice in Discord for 14 days.",
+    cost: 200,
+    category: "discord",
+    stock: null,
+    cooldownDaysRemaining: 12,
+    active: true,
+  },
+  {
+    id: "s4",
+    name: "Shoutout on stream",
+    description:
+      "Matty reads your message out live. Keep it clean and he will read it.",
+    cost: 350,
+    category: "stream",
+    stock: 8,
+    active: true,
+  },
+  {
+    id: "s5",
+    name: "High Roller role",
+    description: "The gold Discord role and its channels for 30 days.",
+    cost: 500,
+    category: "discord",
+    stock: null,
+    active: true,
+  },
+  {
+    id: "s6",
+    name: "Pick the next slot",
+    description: "You choose what he opens next. One pick, taken live.",
+    cost: 750,
+    category: "stream",
+    stock: 3,
+    active: true,
+  },
+  {
+    id: "s7",
+    name: "Signed card deck",
+    description:
+      "A deck signed by Matty, posted anywhere he can legally post it.",
+    cost: 1_000,
+    category: "merch",
+    stock: 0,
+    active: true,
+  },
+  {
+    id: "s8",
+    name: "MattySpins hoodie",
+    description: "Heavyweight, embroidered mark. Sizes S to XXL.",
+    cost: 1_250,
+    category: "merch",
+    stock: 14,
+    active: true,
+  },
 ];
 
 /** Real redemptions arrive with the shop and the database. */
@@ -165,11 +242,65 @@ export const pastGiveaways: Giveaway[] = [];
 /* -------------------------------------------------------------------------- */
 
 export const gameConfigs: GameConfig[] = [
-  { slug: 'keno', name: 'Keno', description: 'Pick up to ten of forty. Ten are drawn. Four risk levels change the shape of the paytable, not the edge.', imageUrl: '/brand/Keno.webp', enabled: true, rtp: 0.99, minBet: 10, maxBet: 100, maxWin: 20_000 },
-  { slug: 'dice', name: 'Dice', description: 'Slide a target, call over or under. The payout follows the chance exactly.', imageUrl: '/brand/Dice.webp', enabled: true, rtp: 0.99, minBet: 10, maxBet: 100, maxWin: 20_000 },
-  { slug: 'limbo', name: 'Limbo', description: 'Name a multiplier and see whether the round beats it. Nothing else to decide.', imageUrl: '/brand/Limbo.webp', enabled: true, rtp: 0.99, minBet: 10, maxBet: 100, maxWin: 20_000 },
-  { slug: 'blackjack', name: 'Blackjack', description: 'Six decks, dealer stands on all 17. Perfect pairs and 21+3 alongside, both at 99%.', enabled: true, rtp: 0.995, minBet: 10, maxBet: 100, maxWin: 20_000 },
-  { slug: 'baccarat', name: 'Baccarat', description: 'Coming after fairness has run in public for a month.', enabled: false, comingSoon: true, rtp: 0.99, minBet: 10, maxBet: 100, maxWin: 20_000 },
+  {
+    slug: "keno",
+    name: "Keno",
+    description:
+      "Pick up to ten of forty. Ten are drawn. Four risk levels change the shape of the paytable, not the edge.",
+    imageUrl: "/brand/Keno.webp",
+    enabled: true,
+    rtp: 0.99,
+    minBet: 10,
+    maxBet: 100,
+    maxWin: 20_000,
+  },
+  {
+    slug: "dice",
+    name: "Dice",
+    description:
+      "Slide a target, call over or under. The payout follows the chance exactly.",
+    imageUrl: "/brand/Dice.webp",
+    enabled: true,
+    rtp: 0.99,
+    minBet: 10,
+    maxBet: 100,
+    maxWin: 20_000,
+  },
+  {
+    slug: "limbo",
+    name: "Limbo",
+    description:
+      "Name a multiplier and see whether the round beats it. Nothing else to decide.",
+    imageUrl: "/brand/Limbo.webp",
+    enabled: true,
+    rtp: 0.99,
+    minBet: 10,
+    maxBet: 100,
+    maxWin: 20_000,
+  },
+  {
+    slug: "blackjack",
+    name: "Blackjack",
+    description:
+      "Six decks, dealer stands on all 17. Perfect pairs and 21+3 alongside, both at 99%.",
+    imageUrl: "/brand/Blackjack.webp",
+    enabled: true,
+    rtp: 0.995,
+    minBet: 10,
+    maxBet: 100,
+    maxWin: 20_000,
+  },
+  {
+    slug: "baccarat",
+    name: "Baccarat",
+    description: "Coming after fairness has run in public for a month.",
+    enabled: false,
+    comingSoon: true,
+    rtp: 0.99,
+    minBet: 10,
+    maxBet: 100,
+    maxWin: 20_000,
+  },
 ];
 
 /** Owner-only kill switch (§38). Flip to see the lobby's replacement message. */
@@ -179,21 +310,36 @@ export const gamesKilled = false;
 /* Admin                                                                      */
 /* -------------------------------------------------------------------------- */
 
-
 export const socials = [
-  { platform: 'Kick', handle: 'kick.com/mattyspinss', url: 'https://kick.com/mattyspinss' },
-  { platform: 'YouTube', handle: '@MattySpinss', url: 'https://youtube.com/@MattySpinss' },
-  { platform: 'Instagram', handle: '@mattyspinss', url: 'https://instagram.com/mattyspinss' },
-  { platform: 'X', handle: '@mattyspinsslots', url: 'https://x.com/mattyspinsslots' },
+  {
+    platform: "Kick",
+    handle: "kick.com/mattyspinss",
+    url: "https://kick.com/mattyspinss",
+  },
+  {
+    platform: "YouTube",
+    handle: "@MattySpinss",
+    url: "https://youtube.com/@MattySpinss",
+  },
+  {
+    platform: "Instagram",
+    handle: "@mattyspinss",
+    url: "https://instagram.com/mattyspinss",
+  },
+  {
+    platform: "X",
+    handle: "@mattyspinsslots",
+    url: "https://x.com/mattyspinsslots",
+  },
 ];
 
-export const discordInvite = 'https://discord.gg/mattyspins';
+export const discordInvite = "https://discord.gg/mattyspins";
 
 /**
  * Matty's portrait. Everything that shows him reads it from here, so replacing
  * the photograph is a one-line change.
  */
-export const portraitUrl = '/brand/Mattyimage.webp';
+export const portraitUrl = "/brand/Mattyimage.webp";
 
 /**
  * Built from Matty's own description of himself, in his voice, at the 120–150
@@ -201,8 +347,8 @@ export const portraitUrl = '/brand/Mattyimage.webp';
  * paragraph is his own line, the rest is written from it.
  */
 export const aboutCopy = [
-  'I’m MattySpins, a UK-based gaming creator building a community around slots, crypto casinos and live entertainment. I’m all about sharing the wins, the losses and the best opportunities I find with my community.',
-  'The losses part matters. Anyone can post a 5,000× and say nothing for a fortnight. You see the sessions that go nowhere too, because a highlight reel with the bad nights cut out is not a real picture of what this is.',
-  'The board here comes straight out of Razed, so nobody has to take my word for what anybody wagered. Coins are the other half: turn up, talk in chat, and you earn them. You cannot buy them and I would not sell them if you asked. Spend them on entries, on Discord perks, on picking what I open next.',
-  'If you only ever watch and never sign up, that is completely fine by me. Pull up a chair.',
+  "I’m MattySpins, a UK-based gaming creator building a community around slots, crypto casinos and live entertainment. I’m all about sharing the wins, the losses and the best opportunities I find with my community.",
+  "The losses part matters. Anyone can post a 5,000× and say nothing for a fortnight. You see the sessions that go nowhere too, because a highlight reel with the bad nights cut out is not a real picture of what this is.",
+  "The board here comes straight out of Razed, so nobody has to take my word for what anybody wagered. Coins are the other half: turn up, talk in chat, and you earn them. You cannot buy them and I would not sell them if you asked. Spend them on entries, on Discord perks, on picking what I open next.",
+  "If you only ever watch and never sign up, that is completely fine by me. Pull up a chair.",
 ];

@@ -1,30 +1,50 @@
-import Link from 'next/link';
-import { ArrowRight, Award, Sparkles, Timer } from 'lucide-react';
-import { maybe, money, relativeTime } from '@/lib/format';
+import Link from "next/link";
+import { ArrowRight, Award, Sparkles, Timer } from "lucide-react";
+import { maybe, money, relativeTime } from "@/lib/format";
 import {
-  razed, schedule, socials, aboutCopy, portraitUrl, discordInvite,
-} from '@/lib/mock';
-import { currentStream } from '@/lib/store/stream';
-import { currentPeriod, paidOutToDate, prizeForRank } from '@/lib/store/periods';
-import { earnersNow } from '@/lib/store/presence';
-import { hasDatabase } from '@/lib/db';
-import { publishedBigWins, publishedClips } from '@/lib/store/clips';
-import { viewerOrSignedOut } from '@/lib/viewer';
-import { fetchRazedLeaderboard, healthFrom, toBoardRows } from '@/lib/razed';
-import { Display, Label, Num, SectionHeading } from '@/components/ui/typography';
-import { ButtonLink, Chip, ChipRow } from '@/components/ui/controls';
-import { Card, EmptyState, Hairlines, Stat } from '@/components/ui/surfaces';
-import { CoinMark, PlatformMark, RazedWordmark, RazedZ } from '@/components/ui/marks';
-import { Countdown } from '@/components/ui/Countdown';
-import { Hero } from '@/components/site/Hero';
-import { Section } from '@/components/site/Section';
-import { Podium, BoardRows } from '@/components/site/Leaderboard';
-import { ClipCarousel } from '@/components/site/ClipCard';
-import { BigWinCard } from '@/components/site/BigWinCard';
-import { WatchLive } from '@/components/site/WatchLive';
-import { Socials } from '@/components/site/Socials';
+  razed,
+  schedule,
+  socials,
+  aboutCopy,
+  portraitUrl,
+  discordInvite,
+} from "@/lib/mock";
+import { currentStream } from "@/lib/store/stream";
+import {
+  currentPeriod,
+  paidOutToDate,
+  prizeForRank,
+} from "@/lib/store/periods";
+import { earnersNow } from "@/lib/store/presence";
+import { hasDatabase } from "@/lib/db";
+import { publishedBigWins, publishedClips } from "@/lib/store/clips";
+import { viewerOrSignedOut } from "@/lib/viewer";
+import { fetchRazedLeaderboard, healthFrom, toBoardRows } from "@/lib/razed";
+import {
+  Display,
+  Label,
+  Num,
+  SectionHeading,
+} from "@/components/ui/typography";
+import { ButtonLink, Chip, ChipRow } from "@/components/ui/controls";
+import { Card, EmptyState, Hairlines, Stat } from "@/components/ui/surfaces";
+import {
+  CoinMark,
+  PlatformMark,
+  RazedWordmark,
+  RazedZ,
+} from "@/components/ui/marks";
+import { Countdown } from "@/components/ui/Countdown";
+import { BackgroundEffects } from "@/components/ui/BackgroundEffects";
+import { Hero } from "@/components/site/Hero";
+import { Section } from "@/components/site/Section";
+import { Podium, BoardRows } from "@/components/site/Leaderboard";
+import { ClipCarousel } from "@/components/site/ClipCard";
+import { BigWinCard } from "@/components/site/BigWinCard";
+import { WatchLive } from "@/components/site/WatchLive";
+import { Socials } from "@/components/site/Socials";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
   const [viewer, clips, bigWins, stream] = await Promise.all([
@@ -38,7 +58,7 @@ export default async function HomePage() {
 
   // The same server-side call the full board makes, over the same stored
   // period, so the preview and the board can never disagree.
-  const weeklyPeriod = await currentPeriod('weekly');
+  const weeklyPeriod = await currentPeriod("weekly");
 
   // Three figures that were placeholders until the tables behind them existed.
   // Each is now derived, and each is null rather than zero when unknowable.
@@ -58,6 +78,9 @@ export default async function HomePage() {
 
   return (
     <>
+      {/* Enhanced animated background effects */}
+      <BackgroundEffects />
+
       <Hero stream={stream} viewer={viewer} schedule={schedule} />
 
       {/* ----------------------------------------------------------------- */}
@@ -65,16 +88,29 @@ export default async function HomePage() {
       {/* ----------------------------------------------------------------- */}
       <div className="container-page mt-[56px]">
         <Hairlines cols="grid-cols-2 lg:grid-cols-4">
-          <Stat label="Weekly prize pool" value={maybe(weeklyPeriod?.pot ?? null, money)} tone="gold" />
+          <Stat
+            label="Weekly prize pool"
+            value={maybe(weeklyPeriod?.pot ?? null, money)}
+            tone="gold"
+          />
           <Stat label="Board resets in">
             {weeklyPeriod ? (
-              <Countdown to={weeklyPeriod.endsAt} className="block text-[26px] leading-none lg:text-[30px]" />
+              <Countdown
+                to={weeklyPeriod.endsAt}
+                className="block text-[26px] leading-none lg:text-[30px]"
+              />
             ) : (
-              <span className="block font-mono text-[26px] leading-none text-muted lg:text-[30px]">—</span>
+              <span className="block font-mono text-[26px] leading-none text-muted lg:text-[30px]">
+                —
+              </span>
             )}
           </Stat>
           <Stat label="Earning right now" value={maybe(earning)} />
-          <Stat label="Paid out to date" value={maybe(paidOut, money)} tone="gold" />
+          <Stat
+            label="Paid out to date"
+            value={maybe(paidOut, money)}
+            tone="gold"
+          />
         </Hairlines>
       </div>
 
@@ -92,7 +128,10 @@ export default async function HomePage() {
           }
           title="Leaderboard"
           right={
-            <ChipRow label="Board period" className="rounded-[3px] border border-line bg-surface-2 p-1">
+            <ChipRow
+              label="Board period"
+              className="rounded-[3px] border border-line bg-surface-2 p-1"
+            >
               <Chip as="link" href="/leaderboard" active>
                 Weekly
               </Chip>
@@ -105,12 +144,17 @@ export default async function HomePage() {
 
         {boardRows.length === 0 ? (
           <EmptyState className="mt-8" title="No board to show yet.">
-            Positions come straight from Razed for accounts registered under the code{' '}
-            {razed.referralCode}. Nothing appears here until that feed returns players.
+            Positions come straight from Razed for accounts registered under the
+            code {razed.referralCode}. Nothing appears here until that feed
+            returns players.
           </EmptyState>
         ) : (
           <div className="mt-8 grid gap-6 lg:grid-cols-12 lg:items-start">
-            <Podium rows={boardRows} variant="compact" className="lg:col-span-5" />
+            <Podium
+              rows={boardRows}
+              variant="compact"
+              className="lg:col-span-5"
+            />
             <BoardRows
               rows={boardRows.slice(0, 6)}
               from={4}
@@ -122,7 +166,10 @@ export default async function HomePage() {
                   className="group flex items-center justify-center gap-1.5 px-4 py-3.5 font-mono text-[11px] uppercase tracking-[0.16em] text-brand transition-colors duration-150 hover:bg-surface-2 hover:text-brand-dim"
                 >
                   View the full board
-                  <ArrowRight size={14} className="transition-transform duration-150 group-hover:translate-x-0.5" />
+                  <ArrowRight
+                    size={14}
+                    className="transition-transform duration-150 group-hover:translate-x-0.5"
+                  />
                 </Link>
               }
             />
@@ -131,7 +178,9 @@ export default async function HomePage() {
 
         <div className="mt-4">
           <span className="font-mono text-[11.5px] tabular-nums text-faint">
-            {feedHealth ? `Updated ${relativeTime(feedHealth.lastSyncAt)} · all times UTC` : 'No board is open'}
+            {feedHealth
+              ? `Updated ${relativeTime(feedHealth.lastSyncAt)} · all times UTC`
+              : "No board is open"}
           </span>
         </div>
       </Section>
@@ -173,8 +222,9 @@ export default async function HomePage() {
         </Hairlines>
 
         <p className="mt-5 max-w-2xl text-[13.5px] leading-relaxed text-muted">
-          Coins cannot be bought. There are no packages, no top-ups and no payment path — they are
-          earned by turning up and nothing else. They have no cash value and cannot be transferred.
+          Coins cannot be bought. There are no packages, no top-ups and no
+          payment path — they are earned by turning up and nothing else. They
+          have no cash value and cannot be transferred.
         </p>
       </Section>
 
@@ -187,11 +237,21 @@ export default async function HomePage() {
             title="Top clips"
             right={
               <ChipRow label="Clip source">
-                <Chip active as="link" href="/clips">All</Chip>
-                <Chip as="link" href="/clips?source=kick">Kick</Chip>
-                <Chip as="link" href="/clips?source=youtube">YouTube</Chip>
-                <Chip as="link" href="/clips?source=instagram">Instagram</Chip>
-                <Chip as="link" href="/clips?source=x">X</Chip>
+                <Chip active as="link" href="/clips">
+                  All
+                </Chip>
+                <Chip as="link" href="/clips?source=kick">
+                  Kick
+                </Chip>
+                <Chip as="link" href="/clips?source=youtube">
+                  YouTube
+                </Chip>
+                <Chip as="link" href="/clips?source=instagram">
+                  Instagram
+                </Chip>
+                <Chip as="link" href="/clips?source=x">
+                  X
+                </Chip>
               </ChipRow>
             }
           />
@@ -212,9 +272,15 @@ export default async function HomePage() {
               title="Biggest wins"
               right={
                 <ChipRow label="Sort wins">
-                  <Chip active as="link" href="/wins?sort=multiplier">By multiplier</Chip>
-                  <Chip as="link" href="/wins?sort=win">By win</Chip>
-                  <Chip as="link" href="/wins">All time</Chip>
+                  <Chip active as="link" href="/wins?sort=multiplier">
+                    By multiplier
+                  </Chip>
+                  <Chip as="link" href="/wins?sort=win">
+                    By win
+                  </Chip>
+                  <Chip as="link" href="/wins">
+                    All time
+                  </Chip>
                 </ChipRow>
               }
             />
@@ -278,7 +344,10 @@ export default async function HomePage() {
                 </div>
                 <div className="px-5 py-4">
                   {schedule.map((slot) => (
-                    <div key={slot.day} className="flex items-baseline justify-between gap-3 py-1.5">
+                    <div
+                      key={slot.day}
+                      className="flex items-baseline justify-between gap-3 py-1.5"
+                    >
                       <span className="text-[14px] text-ink-2">{slot.day}</span>
                       <Num tone="brand" className="text-[13.5px]">
                         {slot.time}
@@ -307,10 +376,13 @@ export default async function HomePage() {
                     className="flex items-center gap-2.5 py-1.5 text-ink-2 transition-colors duration-150 hover:text-brand-dim"
                   >
                     <PlatformMark platform="discord" size={15} />
-                    <span className="font-mono text-[12.5px]">Join the Discord</span>
+                    <span className="font-mono text-[12.5px]">
+                      Join the Discord
+                    </span>
                   </a>
                   <p className="mt-2 text-[13px] leading-relaxed text-muted">
-                    Extra streams, giveaway draws and prize claims all get announced there first.
+                    Extra streams, giveaway draws and prize claims all get
+                    announced there first.
                   </p>
                   <Link
                     href="/official"
@@ -347,17 +419,21 @@ export default async function HomePage() {
       {/* Razed strip                                                       */}
       {/* ----------------------------------------------------------------- */}
       <Section>
-        <Card tone="inset" className="flex flex-col gap-6 p-6 md:flex-row md:items-center md:justify-between lg:p-8">
+        <Card
+          tone="inset"
+          className="flex flex-col gap-6 p-6 md:flex-row md:items-center md:justify-between lg:p-8"
+        >
           <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:gap-6">
             <RazedWordmark size="lg" className="shrink-0" />
             <div>
               <Display size="s" as="h2">
-                Play on Razed under code <span className="text-brand">{razed.referralCode}</span>
+                Play on Razed under code{" "}
+                <span className="text-brand">{razed.referralCode}</span>
               </Display>
               <p className="mt-2 max-w-xl text-[14px] leading-relaxed text-ink-2">
-                {razed.offer}. Sign up under the code and every dollar you wager counts towards the
-                weekly board automatically — there is nothing to link and nothing to claim until the
-                period closes.
+                {razed.offer}. Sign up under the code and every dollar you wager
+                counts towards the weekly board automatically — there is nothing
+                to link and nothing to claim until the period closes.
               </p>
             </div>
           </div>
@@ -415,20 +491,25 @@ function CoinRule({
   brand?: boolean;
 }) {
   return (
-    <div className={brand ? 'relative px-5 py-6' : 'px-5 py-6'}>
-      {brand ? <span className="absolute inset-0 bg-brand-bg" aria-hidden /> : null}
+    <div className={brand ? "relative px-5 py-6" : "px-5 py-6"}>
+      {brand ? (
+        <span className="absolute inset-0 bg-brand-bg" aria-hidden />
+      ) : null}
       <div className="relative">
         <span
           className={
             brand
-              ? 'mb-4 grid size-10 place-items-center rounded-full border border-brand-line bg-brand/10 text-brand'
-              : 'mb-4 grid size-10 place-items-center rounded-full border border-line bg-surface-2 text-ink-2'
+              ? "mb-4 grid size-10 place-items-center rounded-full border border-brand-line bg-brand/10 text-brand"
+              : "mb-4 grid size-10 place-items-center rounded-full border border-line bg-surface-2 text-ink-2"
           }
         >
           {icon}
         </span>
         <div className="flex items-baseline gap-2">
-          <Num tone={brand ? 'brand' : 'ink'} className="text-[30px] font-medium leading-none lg:text-[34px]">
+          <Num
+            tone={brand ? "brand" : "ink"}
+            className="text-[30px] font-medium leading-none lg:text-[34px]"
+          >
             {figure}
           </Num>
           <span className="text-[14px] text-muted">{unit}</span>

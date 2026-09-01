@@ -1,8 +1,8 @@
-import { cn } from '@/lib/cn';
-import { coins, dateShort, formatMultiplier } from '@/lib/format';
-import { Label } from '@/components/ui/typography';
-import { PlayerFrame } from './PlayerFrame';
-import type { Clip } from '@/lib/types';
+import { cn } from "@/lib/cn";
+import { coins, dateShort, formatMultiplier } from "@/lib/format";
+import { Label } from "@/components/ui/typography";
+import { PlayerFrame } from "./PlayerFrame";
+import type { Clip } from "@/lib/types";
 
 /**
  * The component the site is judged on (UI Spec §23). Two variants from one
@@ -15,16 +15,16 @@ import type { Clip } from '@/lib/types';
  */
 export function BigWinCard({
   win,
-  variant = 'compact',
+  variant = "compact",
   className,
 }: {
   win: Clip;
-  variant?: 'featured' | 'compact';
+  variant?: "featured" | "compact";
   className?: string;
 }) {
   const bet = win.bet ?? 0;
   const payout = win.payout ?? 0;
-  const featured = variant === 'featured';
+  const featured = variant === "featured";
 
   const overlay = featured ? (
     <span className="absolute left-4 top-4 text-left">
@@ -42,7 +42,9 @@ export function BigWinCard({
   );
 
   return (
-    <article className={cn('flex flex-col', className)}>
+    <article
+      className={cn("flex flex-col card-hover shadow-elevated", className)}
+    >
       <PlayerFrame
         thumbUrl={win.thumbUrl}
         embedUrl={win.embedUrl || win.url}
@@ -58,9 +60,14 @@ export function BigWinCard({
       {/* Three hairline-divided cells at equal width. */}
       <div className="mt-px grid grid-cols-3 gap-px border-x border-b border-line bg-line [&>*]:bg-surface">
         <Figure label="Bet" value={coins(bet)} featured={featured} />
-        <Figure label="Win" value={coins(payout)} featured={featured} tone="gold" />
         <Figure
-          label={featured ? 'Multiplier' : 'Multi'}
+          label="Win"
+          value={coins(payout)}
+          featured={featured}
+          tone="gold"
+        />
+        <Figure
+          label={featured ? "Multiplier" : "Multi"}
           value={formatMultiplier(bet, payout)}
           featured={featured}
           tone="gold"
@@ -69,11 +76,16 @@ export function BigWinCard({
 
       <div
         className={cn(
-          'flex items-baseline justify-between gap-4 border-x border-b border-line bg-surface px-4',
-          featured ? 'py-3.5' : 'py-3',
+          "flex items-baseline justify-between gap-4 border-x border-b border-line bg-surface px-4",
+          featured ? "py-3.5" : "py-3",
         )}
       >
-        <h3 className={cn('min-w-0 truncate font-semibold text-ink', featured ? 'text-[16px]' : 'text-[14px]')}>
+        <h3
+          className={cn(
+            "min-w-0 truncate font-semibold text-ink",
+            featured ? "text-[16px]" : "text-[14px]",
+          )}
+        >
           {win.title}
         </h3>
         <p className="shrink-0 font-mono text-[11.5px] tabular-nums text-faint">
@@ -88,21 +100,23 @@ function Figure({
   label,
   value,
   featured,
-  tone = 'ink',
+  tone = "ink",
 }: {
   label: string;
   value: string;
   featured: boolean;
-  tone?: 'ink' | 'gold';
+  tone?: "ink" | "gold";
 }) {
   return (
-    <div className={cn('px-4', featured ? 'py-4' : 'py-3')}>
-      <Label className={featured ? 'mb-2' : 'mb-1.5 text-[10px]'}>{label}</Label>
+    <div className={cn("px-4", featured ? "py-4" : "py-3")}>
+      <Label className={featured ? "mb-2" : "mb-1.5 text-[10px]"}>
+        {label}
+      </Label>
       <span
         className={cn(
-          'block font-mono font-medium leading-none tabular-nums',
-          tone === 'gold' ? 'text-gold' : 'text-ink',
-          featured ? 'text-[24px] lg:text-[30px]' : 'text-[16px]',
+          "block font-mono font-medium leading-none tabular-nums",
+          tone === "gold" ? "text-gold" : "text-ink",
+          featured ? "text-[24px] lg:text-[30px]" : "text-[16px]",
         )}
       >
         {value}
