@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import { Anton, Barlow, JetBrains_Mono } from 'next/font/google';
+import { Anton, Archivo, Barlow, JetBrains_Mono, Spectral } from 'next/font/google';
 import './globals.css';
 
 /** Three faces: a condensed display used only in uppercase, a workhorse sans,
@@ -7,6 +7,11 @@ import './globals.css';
 const anton = Anton({ subsets: ['latin'], weight: '400', variable: '--font-anton', display: 'swap' });
 const barlow = Barlow({ subsets: ['latin'], weight: ['400', '500', '600', '700'], variable: '--font-barlow', display: 'swap' });
 const jetbrains = JetBrains_Mono({ subsets: ['latin'], weight: ['400', '500', '700'], variable: '--font-jetbrains', display: 'swap' });
+
+/** Two more, used only by the blackjack table, which follows its own design:
+ *  Archivo for its chrome and Spectral for every figure on the felt. */
+const archivo = Archivo({ subsets: ['latin'], weight: ['400', '500', '600', '700'], variable: '--font-archivo', display: 'swap' });
+const spectral = Spectral({ subsets: ['latin'], weight: ['400', '500', '600'], variable: '--font-spectral', display: 'swap' });
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://mattyspins.com'),
@@ -38,7 +43,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${anton.variable} ${barlow.variable} ${jetbrains.variable}`}>
+    <html lang="en" className={`${anton.variable} ${barlow.variable} ${jetbrains.variable} ${archivo.variable} ${spectral.variable}`}>
       <body className="min-h-dvh">
         <a
           href="#main"

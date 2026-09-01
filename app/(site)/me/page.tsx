@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { Coins, Dices, Gift, Sparkles, TrendingUp } from 'lucide-react';
+import { BadgeCheck, Dices, Gift } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { coins, dateShort, money, relativeTime } from '@/lib/format';
 import { activeClaim, discordInvite} from '@/lib/mock';
@@ -17,7 +17,6 @@ import { CoinMark, PlatformMark } from '@/components/ui/marks';
 import { Verification } from '@/components/site/Verification';
 import { Ledger } from '@/components/site/Ledger';
 import { LimitsBlock } from '@/components/site/LimitsBlock';
-import { ProfileSidebar } from '@/components/site/ProfileSidebar';
 import { ProfileMobile } from '@/components/site/ProfileMobile';
 
 export const metadata: Metadata = {
@@ -66,137 +65,177 @@ export default async function ProfilePage() {
           responsive tree would be worse than two clear ones. */}
       <ProfileMobile viewer={viewer} ledger={ledger} tier={tier} live={stream.live} />
 
-      <div className="container-page hidden py-8 lg:block lg:py-12">
-        <div className="grid gap-6 lg:grid-cols-[240px_1fr] lg:items-start">
-        <ProfileSidebar
-          username={viewer.discordUsername}
-          tier={tier}
-          discordInvite={discordInvite}
-        />
+      {/* ================================================================= */}
+      {/* Desktop. Two columns, from the supplied reference: identity and     */}
+      {/* connections on the left, the detail stack on the right.            */}
+      {/* ================================================================= */}
+      <div className="relative hidden lg:block">
+        {/* Atmospheric layers, scoped to this page. */}
+        <div className="page-grain" aria-hidden />
+        <div className="page-glow" aria-hidden />
 
-        <div className="min-w-0 space-y-6">
-          {/* ========================================================= */}
-          {/* Header card                                               */}
-          {/* ========================================================= */}
-          <section id="overview" className="scroll-mt-24">
-            <Card className="relative overflow-hidden">
-              <span
-                className="pointer-events-none absolute -right-16 -top-16 size-56 rounded-full bg-brand/10 blur-3xl"
-                aria-hidden
-              />
-              <div className="relative flex flex-col items-center gap-5 p-5 md:flex-row md:items-start lg:p-6">
-                <div className="relative shrink-0">
-                  <span className="grid size-24 place-items-center rounded-full bg-gradient-to-br from-brand to-surface p-0.5">
-                    <span className="grid size-full place-items-center rounded-full bg-bg text-[26px] font-bold uppercase text-brand">
+        <div className="container-page relative z-10 py-10 lg:py-12">
+          <div className="grid grid-cols-12 gap-5">
+            {/* ========================================================= */}
+            {/* Left: identity and connections                            */}
+            {/* ========================================================= */}
+            <div className="col-span-4 flex flex-col gap-5">
+              <section id="overview" className="scroll-mt-24">
+                <div className="glass relative flex flex-col items-center overflow-hidden p-6 text-center">
+                  <span
+                    className="pointer-events-none absolute -top-16 left-1/2 size-32 -translate-x-1/2 rounded-full bg-brand opacity-20 blur-3xl"
+                    aria-hidden
+                  />
+
+                  <div className="relative mb-4 size-24">
+                    <span className="bloom-blue absolute inset-0 rounded-full" aria-hidden />
+                    <span className="relative z-10 grid size-full place-items-center rounded-full border-2 border-brand bg-bg text-[28px] font-bold uppercase text-brand">
                       {viewer.discordUsername.slice(0, 2)}
                     </span>
-                  </span>
-                  <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 rounded-[5px] border-2 border-bg bg-gold px-2 py-0.5 font-mono text-[9.5px] font-bold uppercase tracking-[0.12em] text-brand-ink">
-                    {tier}
-                  </span>
-                </div>
+                    <span className="absolute -bottom-2 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 rounded-full border border-line bg-surface px-2 py-0.5">
+                      <BadgeCheck size={12} className="text-brand" />
+                      <span className="font-mono text-[10px] font-medium uppercase tracking-[0.16em] text-ink">
+                        {tier}
+                      </span>
+                    </span>
+                  </div>
 
-                <div className="flex-1 text-center md:pt-1 md:text-left">
-                  <Display size="s" as="p">
+                  <Display size="s" as="p" className="mb-1">
                     {viewer.discordUsername}
                   </Display>
-                  <p className="mt-2 text-[13.5px] text-muted">
-                    Member since {dateShort(viewer.memberSince)}
-                    {linked && viewer.kick ? ` · Kick as ${viewer.kick.kickUsername}` : ''}
+                  <p className="mb-6 text-[14px] text-muted">
+                    {viewer.multiplier.label} · Member since {dateShort(viewer.memberSince)}
                   </p>
-                  <div className="mt-3 flex flex-wrap justify-center gap-1.5 md:justify-start">
-                    <Tag>{viewer.multiplier.value}× multiplier</Tag>
-                    <Tag>{viewer.multiplier.label}</Tag>
-                    {viewer.frozen.frozen ? <Tag tone="danger">Earning paused</Tag> : null}
+
+                  {/* Balance, not a wallet. Gold means money; there is no
+                      deposit, no withdraw and nothing here can be cashed out. */}
+                  <div className="relative w-full overflow-hidden rounded-[10px] border border-line bg-[#0a0e17] p-4 text-left">
+                    <span className="absolute left-0 top-0 h-full w-1 bg-gold" aria-hidden />
+                    <Label className="mb-1.5">Total MC balance</Label>
+                    <div className="flex items-end gap-2">
+                      <CoinMark size={20} variant="detail" />
+                      <Num tone="gold" className="text-[34px] font-medium leading-none tracking-tight">
+                        {coins(viewer.balance)}
+                      </Num>
+                    </div>
+                    <p className="mt-3 border-t border-line pt-3 font-mono text-[10.5px] leading-relaxed text-faint">
+                      Earned by watching. Cannot be bought, sold or withdrawn.
+                    </p>
+                    <ButtonLink href="/shop" variant="outline" size="sm" full className="mt-3">
+                      Spend in the shop
+                    </ButtonLink>
                   </div>
                 </div>
+              </section>
 
-                {/* Balance, not a wallet. Nothing here can be cashed out. */}
-                <div className="w-full shrink-0 rounded-[10px] border border-line bg-bg/50 p-5 text-center md:w-auto md:min-w-[210px] md:text-right">
-                  <Label className="mb-2">Coin balance</Label>
-                  <div className="flex items-center justify-center gap-2 md:justify-end">
-                    <CoinMark size={24} variant="detail" />
-                    <Num tone="brand" className="text-[30px] font-medium leading-none">
-                      {coins(viewer.balance)}
-                    </Num>
-                  </div>
-                  <p className="mt-3 border-t border-line pt-3 font-mono text-[10.5px] leading-relaxed text-faint">
-                    Earned by watching. Cannot be bought, sold or withdrawn.
-                  </p>
-                  <ButtonLink href="/shop" variant="outline" size="sm" full className="mt-3">
-                    Spend in the shop
-                  </ButtonLink>
-                </div>
-              </div>
-            </Card>
-          </section>
+              {/* Connections and settings */}
+              <div className="glass flex flex-col gap-1 p-4">
+                <Label className="mb-2 px-2">Connections &amp; settings</Label>
 
-          {/* ========================================================= */}
-          {/* Stats bento + quick settings                              */}
-          {/* ========================================================= */}
-          <div className="grid gap-4 lg:grid-cols-12">
-            <div className="grid grid-cols-2 gap-3 lg:col-span-8">
-              <StatTile
-                Icon={Coins}
-                label="Lifetime earned"
-                value={coins(viewer.lifetimeEarned)}
-              />
-              <StatTile
-                Icon={Sparkles}
-                label="Earned this week"
-                value={coins(viewer.earnedThisWeek)}
-              />
-              <StatTile
-                Icon={TrendingUp}
-                label="Coins spent"
-                value={coins(Math.max(0, spent))}
-              />
-              <StatTile
-                Icon={Dices}
-                label="Net from games today"
-                value={`${viewer.games.netToday >= 0 ? '+' : '−'}${coins(Math.abs(viewer.games.netToday))}`}
-                tone={viewer.games.netToday < 0 ? 'danger' : 'gold'}
-                highlight
-              />
-            </div>
-
-            <Card className="lg:col-span-4">
-              <div className="border-b border-line px-5 py-3.5">
-                <Label>Quick settings</Label>
-              </div>
-              <div className="divide-y divide-line">
-                <SettingRow
-                  icon={<PlatformMark platform="discord" size={16} className="text-brand" />}
+                <ConnectionRow
+                  icon={<PlatformMark platform="discord" size={17} className="text-ink-2" />}
                   title="Discord"
                   detail={`Signed in as ${viewer.discordUsername}`}
-                  action={<Link href="/api/auth/signout" className="text-[12px] text-danger hover:underline">Sign out</Link>}
-                />
-                <SettingRow
-                  icon={<PlatformMark platform="kick" size={16} className={linked ? 'text-brand' : 'text-gold'} />}
-                  title="Kick account"
-                  detail={linked && viewer.kick ? `Verified as ${viewer.kick.kickUsername}` : 'Not linked — coins are blocked'}
                   action={
-                    <Link href="#security" className="text-[12px] text-brand hover:underline">
-                      {linked ? 'Manage' : 'Link'}
+                    <Link href="/api/auth/signout" className="font-mono text-[10px] uppercase tracking-[0.14em] text-danger hover:underline">
+                      Sign out
                     </Link>
                   }
                 />
-                <SettingRow
-                  icon={<Gift size={16} className="text-muted" />}
-                  title="Pending redemptions"
-                  detail={`${pending} awaiting a moderator`}
-                  action={<Link href="#redemptions" className="text-[12px] text-brand hover:underline">View</Link>}
+
+                {/* An unlinked account earns nothing, and that is the first
+                    thing to check when someone says coins are broken. It is
+                    the loudest row in this panel on purpose. */}
+                <ConnectionRow
+                  icon={<PlatformMark platform="kick" size={17} className={linked ? 'text-brand' : 'text-gold'} />}
+                  title="Kick verification"
+                  detail={linked && viewer.kick ? `Verified as ${viewer.kick.kickUsername}` : 'Not linked. Coins are blocked.'}
+                  accent={!linked}
+                  action={
+                    <span className={cn(
+                      'rounded px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em]',
+                      linked ? 'bg-brand/10 text-brand' : 'bg-gold-bg text-gold',
+                    )}>
+                      {linked ? 'Linked' : 'Pending'}
+                    </span>
+                  }
                 />
-                <SettingRow
-                  icon={<Dices size={16} className={viewer.games.enabled ? 'text-brand' : 'text-faint'} />}
+
+                <ConnectionRow
+                  icon={<Gift size={17} className="text-ink-2" />}
+                  title="Pending redemptions"
+                  detail={pending > 0 ? `${pending} waiting on a moderator` : 'Nothing pending'}
+                  action={
+                    pending > 0 ? (
+                      <span className="grid size-5 place-items-center rounded-full bg-surface-2 font-mono text-[10px] text-ink">
+                        {pending}
+                      </span>
+                    ) : (
+                      <Link href="#redemptions" className="font-mono text-[10px] uppercase tracking-[0.14em] text-brand hover:underline">
+                        View
+                      </Link>
+                    )
+                  }
+                />
+
+                <ConnectionRow
+                  icon={<Dices size={17} className={viewer.games.enabled ? 'text-ink-2' : 'text-faint'} />}
                   title="Games"
                   detail={viewer.games.enabled ? 'Switched on for your account' : 'Switched off'}
-                  action={<Link href="#limits" className="text-[12px] text-brand hover:underline">Settings</Link>}
+                  action={
+                    <Link href="#limits" className="font-mono text-[10px] uppercase tracking-[0.14em] text-brand hover:underline">
+                      Settings
+                    </Link>
+                  }
                 />
               </div>
-            </Card>
+            </div>
+
+            {/* ========================================================= */}
+            {/* Right: stats, verification, ledger                        */}
+            {/* ========================================================= */}
+            <div className="col-span-8 flex min-w-0 flex-col gap-5">
+              <div className="grid grid-cols-4 gap-4">
+                <StatTile label="Lifetime earned" value={coins(viewer.lifetimeEarned)} tone="gold" coin />
+                <StatTile label="Earned this week" value={coins(viewer.earnedThisWeek)} tone="gold" coin />
+                <StatTile label="Coins spent" value={coins(Math.max(0, spent))} tone="ink-2" coin />
+                <StatTile
+                  label="Net from games today"
+                  value={`${viewer.games.netToday >= 0 ? '+' : '\u2212'}${coins(Math.abs(viewer.games.netToday))}`}
+                  tone={viewer.games.netToday < 0 ? 'danger' : viewer.games.netToday > 0 ? 'gold' : 'ink-2'}
+                  coin
+                />
+              </div>
+
+              {/* The most important component on the site: the first thing a
+                  new user does, and the thing that tells them whether any of
+                  this works. It sits at the top of the detail stack. */}
+              <Verification initial={verification} live={stream.live} />
+
+              <section id="coins" className="scroll-mt-24">
+                <div className="glass overflow-hidden">
+                  <div className="flex items-center justify-between border-b border-line px-6 py-5">
+                    <Display size="s" as="h2">Coin ledger</Display>
+                    <span className="font-mono text-[11px] tabular-nums text-faint">
+                      {stream.live
+                        ? `Earning ${viewer.multiplier.value} MC every 3 min`
+                        : 'Earning resumes when Matty goes live'}
+                    </span>
+                  </div>
+                  {/* Ledger draws its own bordered box. Inside the glass
+                      panel that would double the border, so it is flattened
+                      here rather than by adding a prop to the component. */}
+                  <div className="[&>div]:rounded-none [&>div]:border-x-0 [&>div]:border-t-0">
+                    <Ledger entries={ledger} />
+                  </div>
+                  <p className="border-t border-line px-6 py-4 text-[13px] text-muted">
+                    Watch sessions are grouped rather than listed as forty separate three-minute
+                    rows. Click one to see the individual ticks behind it.
+                  </p>
+                </div>
+              </section>
+            </div>
           </div>
-        </div>
         </div>
       </div>
 
@@ -206,7 +245,7 @@ export default async function ProfilePage() {
           to be available wherever someone can play. Rendered once, for every
           viewport, rather than duplicated per layout. */}
       {/* ==================================================================== */}
-      <div className="container-page space-y-6 pb-12">
+      <div className="container-page relative z-10 space-y-6 pb-12">
           <section id="claims" className="scroll-mt-24">
             <Label className="mb-3">Prize claims</Label>
             {activeClaim ? (
@@ -241,7 +280,10 @@ export default async function ProfilePage() {
           {/* ========================================================= */}
           {/* Coin history                                              */}
           {/* ========================================================= */}
-          <section id="coins" className="scroll-mt-24">
+          {/* Desktop renders the ledger in the right-hand stack above, so only
+              the phone needs it here. Two instances would mean a duplicate
+              `coins` id and the same table rendered twice. */}
+          <section className="scroll-mt-24 lg:hidden">
             <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
               <Label>Coin history</Label>
               <span className="font-mono text-[11.5px] tabular-nums text-faint">
@@ -323,7 +365,12 @@ export default async function ProfilePage() {
           {/* ========================================================= */}
           <section id="security" className="scroll-mt-24 space-y-4">
             <Label className="mb-3 block">Account</Label>
-            <Verification initial={verification} live={stream.live} />
+            {/* Desktop renders this in the right-hand stack above, so only the
+                phone needs it here. Two live instances would mean two polling
+                loops and duplicate ids. */}
+            <div className="lg:hidden">
+              <Verification initial={verification} live={stream.live} />
+            </div>
 
             <Card tone="danger">
               <div className="flex flex-wrap items-start justify-between gap-5 px-5 py-5">
@@ -352,74 +399,69 @@ export default async function ProfilePage() {
 /* -------------------------------------------------------------------------- */
 
 function StatTile({
-  Icon,
   label,
   value,
-  tone = 'ink',
-  highlight = false,
+  tone = 'ink-2',
+  coin = false,
 }: {
-  Icon: typeof Coins;
   label: string;
   value: string;
-  tone?: 'ink' | 'gold' | 'danger';
-  highlight?: boolean;
+  tone?: 'gold' | 'ink-2' | 'danger';
+  coin?: boolean;
 }) {
-  const tones = { ink: 'text-ink', gold: 'text-gold', danger: 'text-danger' } as const;
+  const tones = { gold: 'text-gold', 'ink-2': 'text-ink-2', danger: 'text-danger' } as const;
+  const wash = {
+    gold: 'bg-gold/5',
+    'ink-2': 'bg-transparent',
+    danger: 'bg-danger/5',
+  } as const;
+
   return (
-    <div
-      className={cn(
-        'flex h-[122px] flex-col justify-between rounded-[10px] border p-4 transition-colors duration-150',
-        highlight ? 'border-brand-line bg-brand-bg' : 'border-line bg-surface hover:border-line-2',
-      )}
-    >
-      <span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.16em] text-muted">
-        <Icon size={13} strokeWidth={2} />
-        {label}
-      </span>
-      <span className={cn('font-mono text-[24px] font-medium leading-none tabular-nums', tones[tone])}>
-        {value}
+    <div className="glass glass-hover relative flex h-28 flex-col justify-between overflow-hidden p-4 transition-colors duration-150">
+      <span className={cn('pointer-events-none absolute right-0 top-0 size-16 rounded-bl-full', wash[tone])} aria-hidden />
+      <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted">{label}</span>
+      <span className="mt-auto flex items-center gap-1.5">
+        {coin ? <CoinMark size={15} className={tone === 'gold' ? undefined : 'opacity-45'} /> : null}
+        <span className={cn('font-mono text-[24px] font-medium leading-none tracking-tight tabular-nums', tones[tone])}>
+          {value}
+        </span>
       </span>
     </div>
   );
 }
 
-function SettingRow({
+function ConnectionRow({
   icon,
   title,
   detail,
   action,
+  accent = false,
 }: {
   icon: React.ReactNode;
   title: string;
   detail: string;
   action: React.ReactNode;
+  /** The unlinked-Kick row, which costs someone money if they miss it. */
+  accent?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 px-5 py-3.5">
+    <div
+      className={cn(
+        'flex items-center justify-between gap-3 rounded-[10px] border px-3 py-3 transition-colors duration-150',
+        accent
+          ? 'border-line border-l-2 border-l-gold bg-surface-2/50'
+          : 'border-transparent hover:border-line hover:bg-surface-2/50',
+      )}
+    >
       <div className="flex min-w-0 items-center gap-3">
         <span className="shrink-0">{icon}</span>
         <div className="min-w-0">
-          <p className="truncate text-[13.5px] text-ink">{title}</p>
-          <p className="truncate text-[11.5px] text-muted">{detail}</p>
+          <p className="truncate text-[14px] text-ink">{title}</p>
+          <p className="truncate text-[12px] text-muted">{detail}</p>
         </div>
       </div>
       <span className="shrink-0">{action}</span>
     </div>
-  );
-}
-
-function Tag({ children, tone = 'default' }: { children: React.ReactNode; tone?: 'default' | 'danger' }) {
-  return (
-    <span
-      className={cn(
-        'rounded-[5px] border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.12em]',
-        tone === 'danger'
-          ? 'border-danger-line bg-danger-bg text-danger'
-          : 'border-line bg-surface-2 text-muted',
-      )}
-    >
-      {children}
-    </span>
   );
 }
 

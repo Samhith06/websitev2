@@ -9,3 +9,11 @@ out
 
 *.tsbuildinfo
 next-env.d.ts
+
+# Local scratch and backups
+.scratch/
+*.pre-latenight
+build.log
+
+# Design bundle dropped in for reference (581KB self-extracting HTML)
+Blackjack Table.html

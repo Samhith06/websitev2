@@ -120,3 +120,15 @@ export function maybe(
 ): string {
   return value === null || value === undefined ? '—' : format(value);
 }
+
+/**
+ * An RTP, at the precision it actually has.
+ *
+ * `toFixed(0)` turned blackjack's 99.5% into "100% RTP", which is a claim no
+ * game can make. This rounds down to a tenth and trims a trailing zero, so 0.99
+ * reads "99%" and 0.995 reads "99.5%".
+ */
+export function rtpLabel(rtp: number): string {
+  const pct = Math.floor(rtp * 1000) / 10;
+  return `${String(pct).replace(/\.0$/, '')}%`;
+}

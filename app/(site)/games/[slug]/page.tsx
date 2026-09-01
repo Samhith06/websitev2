@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { rtpLabel } from '@/lib/format';
 import type { Metadata } from 'next';
 import { ArrowLeft } from 'lucide-react';
 import { gameConfigs } from '@/lib/mock';
@@ -10,9 +11,10 @@ import { Card } from '@/components/ui/surfaces';
 import { OptInGate } from '@/components/games/OptInGate';
 import { Keno } from '@/components/games/Keno';
 import { Dice } from '@/components/games/Dice';
+import { Blackjack } from '@/components/games/Blackjack';
 import { Limbo } from '@/components/games/Limbo';
 
-const PLAYABLE = ['keno', 'dice', 'limbo'] as const;
+const PLAYABLE = ['keno', 'dice', 'limbo', 'blackjack'] as const;
 type Playable = (typeof PLAYABLE)[number];
 
 export function generateStaticParams() {
@@ -75,18 +77,23 @@ export default async function GamePage({ params }: { params: Promise<{ slug: str
         Games
       </Link>
 
-      <div className="mt-5 mb-7">
-        <Label className="mb-3">
-          Provably fair · {(game.rtp * 100).toFixed(0)}% RTP · {game.minBet}–{game.maxBet} MC
+      {/* Blackjack carries its own header, so showing this one too would name
+          the game twice. Every other table gets the standard one. */}
+      <div className={slug === 'blackjack' ? 'mt-5 mb-4' : 'mt-5 mb-7'}>
+        <Label className={slug === 'blackjack' ? undefined : 'mb-3'}>
+          Provably fair · {rtpLabel(game.rtp)} RTP · {game.minBet}–{game.maxBet} MC
         </Label>
-        <Display size="l" as="h1">
-          {game.name}
-        </Display>
+        {slug === 'blackjack' ? null : (
+          <Display size="l" as="h1">
+            {game.name}
+          </Display>
+        )}
       </div>
 
       {slug === 'keno' ? <Keno /> : null}
       {slug === 'dice' ? <Dice /> : null}
       {slug === 'limbo' ? <Limbo /> : null}
+      {slug === 'blackjack' ? <Blackjack /> : null}
     </div>
   );
 }

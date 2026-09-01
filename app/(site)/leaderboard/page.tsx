@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { ArrowRight, TriangleAlert } from 'lucide-react';
+import { TriangleAlert } from 'lucide-react';
 import { dateRange, money, relativeTime } from '@/lib/format';
 import { razed } from '@/lib/mock';
 import {
@@ -9,7 +9,7 @@ import {
 import { fetchRazedLeaderboard, healthFrom, toBoardRows } from '@/lib/razed';
 import { Display, Label, SectionHeading } from '@/components/ui/typography';
 import { ButtonLink, Chip, ChipRow } from '@/components/ui/controls';
-import { Banner, Card, EmptyState, Hairlines, Stat } from '@/components/ui/surfaces';
+import { Banner, EmptyState, Hairlines, Stat } from '@/components/ui/surfaces';
 import { RazedWordmark, RazedZ } from '@/components/ui/marks';
 import { Countdown } from '@/components/ui/Countdown';
 import { BoardRows, Podium, ProvenanceRow } from '@/components/site/Leaderboard';
@@ -113,61 +113,6 @@ export default async function LeaderboardPage({
         : active
           ? <BoardView period={active} />
           : <NoPeriod />}
-
-      {/* ------------------------------------------------------------- */}
-      {/* Two cards below                                               */}
-      {/* ------------------------------------------------------------- */}
-      <div className="mt-10 grid gap-5 lg:grid-cols-2">
-        <Card id="how">
-          <div className="border-b border-line px-5 py-3.5">
-            <Label>How the board works</Label>
-          </div>
-          <div className="space-y-3.5 px-5 py-5 text-[14px] leading-relaxed text-ink-2">
-            <p>
-              <span className="text-ink">Qualifying.</span> Sign up to Razed under the code{' '}
-              {razed.referralCode} and wager as normal. Anything you wager counts from the moment
-              the account is created; there is a $100 minimum to appear on the board at all.
-            </p>
-            <p>
-              <span className="text-ink">Ties.</span> If two players finish on the same wagered
-              total, the one who reached it first takes the higher position. Razed’s own timestamps
-              decide it, not ours.
-            </p>
-            <p>
-              <span className="text-ink">Freezing.</span> The board closes at the end of the period
-              in UTC and freezes immediately. It then reads “verifying” for 72 hours while the final
-              snapshot is checked, after which claims open.
-            </p>
-            <p>
-              <span className="text-ink">Claiming.</span> You claim your position on this site by
-              stating your full Razed username. A moderator checks it against the frozen snapshot
-              before anything is paid. Unclaimed prizes roll into the next pot after 14 days.
-            </p>
-          </div>
-        </Card>
-
-        {/* No period has closed on this site yet. Rather than dress the space
-            with a winner nobody won, it says what will appear here. */}
-        <Card>
-          <div className="border-b border-line px-5 py-3.5">
-            <Label>Last month&rsquo;s winner</Label>
-          </div>
-          <div className="px-5 py-5">
-            <p className="text-[14px] leading-relaxed text-ink-2">
-              No period has closed yet. When the first monthly board freezes and its prize is paid,
-              the winner and their wagered total appear here, and the frozen board itself stays in
-              the archive permanently.
-            </p>
-            <Link
-              href="/leaderboard?period=archive"
-              className="mt-4 inline-flex items-center gap-1.5 text-[14px] text-brand transition-colors duration-150 hover:text-brand-dim"
-            >
-              Open the archive
-              <ArrowRight size={15} />
-            </Link>
-          </div>
-        </Card>
-      </div>
 
       <div className="mt-8 flex flex-wrap items-center justify-between gap-4 rounded-[3px] border border-line bg-surface px-5 py-4">
         <p className="text-[13.5px] text-muted">

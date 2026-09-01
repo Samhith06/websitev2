@@ -168,7 +168,7 @@ export const gameConfigs: GameConfig[] = [
   { slug: 'keno', name: 'Keno', description: 'Pick up to ten of forty. Ten are drawn. Four risk levels change the shape of the paytable, not the edge.', imageUrl: '/brand/Keno.webp', enabled: true, rtp: 0.99, minBet: 10, maxBet: 100, maxWin: 20_000 },
   { slug: 'dice', name: 'Dice', description: 'Slide a target, call over or under. The payout follows the chance exactly.', imageUrl: '/brand/Dice.webp', enabled: true, rtp: 0.99, minBet: 10, maxBet: 100, maxWin: 20_000 },
   { slug: 'limbo', name: 'Limbo', description: 'Name a multiplier and see whether the round beats it. Nothing else to decide.', imageUrl: '/brand/Limbo.webp', enabled: true, rtp: 0.99, minBet: 10, maxBet: 100, maxWin: 20_000 },
-  { slug: 'blackjack', name: 'Blackjack', description: 'Coming after fairness has run in public for a month.', enabled: false, comingSoon: true, rtp: 0.99, minBet: 10, maxBet: 100, maxWin: 20_000 },
+  { slug: 'blackjack', name: 'Blackjack', description: 'Six decks, dealer stands on all 17. Perfect pairs and 21+3 alongside, both at 99%.', enabled: true, rtp: 0.995, minBet: 10, maxBet: 100, maxWin: 20_000 },
   { slug: 'baccarat', name: 'Baccarat', description: 'Coming after fairness has run in public for a month.', enabled: false, comingSoon: true, rtp: 0.99, minBet: 10, maxBet: 100, maxWin: 20_000 },
 ];
 

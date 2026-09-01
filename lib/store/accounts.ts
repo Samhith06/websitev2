@@ -394,3 +394,324 @@ export async function recentUsers(
     lifetimeEarned: row.lifetime_earned ?? 0,
   }));
 }
+
+/* -------------------------------------------------------------------------- */
+/* Member search                                                              */
+/* -------------------------------------------------------------------------- */
+
+export type MemberFilter = 'all' | 'unlinked' | 'frozen';
+
+export type MemberRow = User & {
+  kick: KickLink | null;
+  balance: number;
+  lifetimeEarned: number;
+};
+
+/**
+ * The admin member list, searchable, filterable and paged.
+ *
+ * `recentUsers` caps at 50 with no search, which is fine for a handful of
+ * accounts and useless at two hundred: three quarters of the membership is
+ * simply unreachable. This returns a page plus the total so the screen can say
+ * honestly how many rows the filter actually matched.
+ */
+export async function searchUsers(opts: {
+  query?: string;
+  filter?: MemberFilter;
+  limit?: number;
+  offset?: number;
+} = {}): Promise<{ members: MemberRow[]; total: number }> {
+  const limit = Math.min(Math.max(opts.limit ?? 25, 1), 100);
+  const offset = Math.max(opts.offset ?? 0, 0);
+  const query = (opts.query ?? '').trim();
+  const filter = opts.filter ?? 'all';
+
+  const where: string[] = [];
+  const params: unknown[] = [];
+
+  if (query) {
+    params.push(`%${query}%`);
+    const like = `$${params.length}`;
+    params.push(query);
+    const exact = `$${params.length}`;
+    where.push(
+      `(u.discord_username ILIKE ${like}
+        OR k.kick_username ILIKE ${like}
+        OR u.discord_id = ${exact}
+        OR k.kick_user_id = ${exact})`,
+    );
+  }
+
+  if (filter === 'unlinked') where.push('k.kick_user_id IS NULL');
+  if (filter === 'frozen') where.push("u.status = 'frozen'");
+
+  const clause = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+  const totalRow = await one<{ n: string }>(
+    `SELECT count(*)::text AS n
+       FROM users u
+       LEFT JOIN kick_links k ON k.user_id = u.id
+       ${clause}`,
+    params,
+  );
+
+  params.push(limit);
+  const limitParam = `$${params.length}`;
+  params.push(offset);
+  const offsetParam = `$${params.length}`;
+
+  const found = await rows<UserRow & {
+    kick_user_id: string | null;
+    kick_username: string | null;
+    verified_at: Date | null;
+    balance: number | null;
+    lifetime_earned: number | null;
+  }>(
+    `SELECT u.id::text, u.discord_id, u.discord_username, u.avatar_url, u.status,
+            u.frozen_reason, u.frozen_until, u.created_at,
+            k.kick_user_id, k.kick_username, k.verified_at,
+            b.balance, b.lifetime_earned
+       FROM users u
+       LEFT JOIN kick_links    k ON k.user_id = u.id
+       LEFT JOIN coin_balances b ON b.user_id = u.id
+       ${clause}
+      ORDER BY u.last_seen_at DESC
+      LIMIT ${limitParam} OFFSET ${offsetParam}`,
+    params,
+  );
+
+  return {
+    total: Number(totalRow?.n ?? 0),
+    members: found.map((row) => ({
+      ...toUser(row),
+      kick: row.kick_user_id && row.kick_username && row.verified_at
+        ? toLink({ kick_user_id: row.kick_user_id, kick_username: row.kick_username, verified_at: row.verified_at })
+        : null,
+      balance: row.balance ?? 0,
+      lifetimeEarned: row.lifetime_earned ?? 0,
+    })),
+  };
+}
+
+/** One member by id, for the detail panel when they are not on the current page. */
+export async function memberById(userId: number): Promise<MemberRow | null> {
+  const row = await one<UserRow & {
+    kick_user_id: string | null;
+    kick_username: string | null;
+    verified_at: Date | null;
+    balance: number | null;
+    lifetime_earned: number | null;
+  }>(
+    `SELECT u.id::text, u.discord_id, u.discord_username, u.avatar_url, u.status,
+            u.frozen_reason, u.frozen_until, u.created_at,
+            k.kick_user_id, k.kick_username, k.verified_at,
+            b.balance, b.lifetime_earned
+       FROM users u
+       LEFT JOIN kick_links    k ON k.user_id = u.id
+       LEFT JOIN coin_balances b ON b.user_id = u.id
+      WHERE u.id = $1`,
+    [userId],
+  );
+  if (!row) return null;
+  return {
+    ...toUser(row),
+    kick: row.kick_user_id && row.kick_username && row.verified_at
+      ? toLink({ kick_user_id: row.kick_user_id, kick_username: row.kick_username, verified_at: row.verified_at })
+      : null,
+    balance: row.balance ?? 0,
+    lifetimeEarned: row.lifetime_earned ?? 0,
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Bulk targeting — resolving a lot of people at once                         */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * One row of a resolved bulk target. `matchedOn` is carried through to the
+ * screen because a moderator pasting a list needs to see *why* a line matched:
+ * "steve" hitting a Discord name and "steve" hitting somebody else's Kick name
+ * are different people, and the preview has to be able to say so.
+ */
+export type ResolvedMember = {
+  id: number;
+  discordUsername: string;
+  kickUsername: string | null;
+  balance: number;
+  frozen: boolean;
+  /** The name as it was typed, so the preview can sit next to the input. */
+  input: string;
+  matchedOn: 'discord' | 'kick';
+};
+
+export type ResolveResult = {
+  matched: ResolvedMember[];
+  /** Lines that hit nobody. Shown in full — a silent miss is a person unpaid. */
+  unmatched: string[];
+  /** Lines that hit more than one account. Never auto-picked; always surfaced. */
+  ambiguous: Array<{ input: string; candidates: ResolvedMember[] }>;
+};
+
+/** Names are matched case-insensitively and exactly — never as a prefix. */
+const normalise = (s: string) => s.trim().replace(/^@/, '').toLowerCase();
+
+/**
+ * Resolves a pasted list of names to accounts.
+ *
+ * Exact, case-insensitive, and against both the Discord and the Kick username,
+ * because a moderator copying out of Kick chat has Kick names and one copying
+ * out of Discord has Discord names, and being made to know which is which is
+ * the sort of friction that ends in the wrong person being paid.
+ *
+ * Deliberately *not* fuzzy. A near-match on a coin grant is a wrong payment,
+ * so a line that does not match exactly comes back as unmatched for a human to
+ * look at rather than being guessed at.
+ */
+export async function resolveMembersByName(names: string[]): Promise<ResolveResult> {
+  // De-duplicated, but the caller's original spelling is kept for display.
+  const wanted = new Map<string, string>();
+  for (const raw of names) {
+    const key = normalise(raw);
+    if (key && !wanted.has(key)) wanted.set(key, raw.trim());
+  }
+  if (wanted.size === 0) return { matched: [], unmatched: [], ambiguous: [] };
+
+  const keys = [...wanted.keys()];
+  const found = await rows<{
+    id: string;
+    discord_username: string;
+    kick_username: string | null;
+    status: string;
+    balance: number | null;
+    matched_on: 'discord' | 'kick';
+    key: string;
+  }>(
+    `SELECT u.id::text, u.discord_username, k.kick_username, u.status, b.balance,
+            CASE WHEN lower(u.discord_username) = ANY($1::text[]) THEN 'discord' ELSE 'kick' END AS matched_on,
+            CASE WHEN lower(u.discord_username) = ANY($1::text[])
+                 THEN lower(u.discord_username) ELSE lower(k.kick_username) END AS key
+       FROM users u
+       LEFT JOIN kick_links    k ON k.user_id = u.id
+       LEFT JOIN coin_balances b ON b.user_id = u.id
+      WHERE lower(u.discord_username) = ANY($1::text[])
+         OR lower(k.kick_username)    = ANY($1::text[])`,
+    [keys],
+  );
+
+  const byKey = new Map<string, ResolvedMember[]>();
+  for (const row of found) {
+    const input = wanted.get(row.key) ?? row.key;
+    const member: ResolvedMember = {
+      id: Number(row.id),
+      discordUsername: row.discord_username,
+      kickUsername: row.kick_username,
+      balance: row.balance ?? 0,
+      frozen: row.status === 'frozen',
+      input,
+      matchedOn: row.matched_on,
+    };
+    const list = byKey.get(row.key);
+    if (list) list.push(member);
+    else byKey.set(row.key, [member]);
+  }
+
+  const matched: ResolvedMember[] = [];
+  const unmatched: string[] = [];
+  const ambiguous: ResolveResult['ambiguous'] = [];
+
+  for (const [key, input] of wanted) {
+    const hits = byKey.get(key);
+    if (!hits || hits.length === 0) unmatched.push(input);
+    else if (hits.length === 1) matched.push(hits[0]);
+    else ambiguous.push({ input, candidates: hits });
+  }
+
+  return { matched, unmatched, ambiguous };
+}
+
+/**
+ * Everybody with an open presence window — the people actually watching right
+ * now. This is the roster behind "pay everyone who is here", and it is the same
+ * window the coin tick pays, so the two can never mean different things.
+ */
+export async function earningMemberIds(): Promise<number[]> {
+  const found = await rows<{ id: string }>(
+    `SELECT u.id::text
+       FROM presence_windows p
+       JOIN users u ON u.id = p.user_id
+      WHERE p.expires_at > now() AND u.status <> 'frozen'
+      ORDER BY u.id`,
+  );
+  return found.map((r) => Number(r.id));
+}
+
+/**
+ * Every account matching the search and filter currently on screen, ignoring
+ * the page. The list is paged at 25; the grant is not, or "everyone unlinked"
+ * would silently mean "the 25 unlinked people you can see".
+ */
+export async function memberIdsMatching(opts: {
+  query?: string;
+  filter?: MemberFilter;
+} = {}): Promise<number[]> {
+  const query = (opts.query ?? '').trim();
+  const filter = opts.filter ?? 'all';
+
+  const where: string[] = [];
+  const params: unknown[] = [];
+
+  if (query) {
+    params.push(`%${query}%`);
+    const like = `$${params.length}`;
+    params.push(query);
+    const exact = `$${params.length}`;
+    where.push(
+      `(u.discord_username ILIKE ${like}
+        OR k.kick_username ILIKE ${like}
+        OR u.discord_id = ${exact}
+        OR k.kick_user_id = ${exact})`,
+    );
+  }
+  if (filter === 'unlinked') where.push('k.kick_user_id IS NULL');
+  if (filter === 'frozen') where.push("u.status = 'frozen'");
+
+  const clause = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  const found = await rows<{ id: string }>(
+    `SELECT u.id::text
+       FROM users u
+       LEFT JOIN kick_links k ON k.user_id = u.id
+       ${clause}
+      ORDER BY u.id`,
+    params,
+  );
+  return found.map((r) => Number(r.id));
+}
+
+/** Names for a set of ids, for the confirmation step and the audit detail. */
+export async function membersByIds(ids: number[]): Promise<ResolvedMember[]> {
+  if (ids.length === 0) return [];
+  const found = await rows<{
+    id: string;
+    discord_username: string;
+    kick_username: string | null;
+    status: string;
+    balance: number | null;
+  }>(
+    `SELECT u.id::text, u.discord_username, k.kick_username, u.status, b.balance
+       FROM users u
+       LEFT JOIN kick_links    k ON k.user_id = u.id
+       LEFT JOIN coin_balances b ON b.user_id = u.id
+      WHERE u.id = ANY($1::bigint[])
+      ORDER BY u.discord_username`,
+    [ids],
+  );
+  return found.map((row) => ({
+    id: Number(row.id),
+    discordUsername: row.discord_username,
+    kickUsername: row.kick_username,
+    balance: row.balance ?? 0,
+    frozen: row.status === 'frozen',
+    input: row.discord_username,
+    matchedOn: 'discord' as const,
+  }));
+}

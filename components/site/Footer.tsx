@@ -18,7 +18,7 @@ const COLUMNS = [
     links: [
       { href: '/verify', label: 'Verify a round' },
       { href: '/official', label: 'Official accounts' },
-      { href: '/leaderboard#how', label: 'How the board works' },
+      { href: '/leaderboard', label: 'How the board works' },
       { href: '/casinos', label: 'Razed hub' },
     ],
   },

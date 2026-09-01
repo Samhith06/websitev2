@@ -4,26 +4,61 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  ClipboardList, Film, Gauge, Gift, Handshake, Menu, ScrollText, ShoppingBag, Trophy, Users, X,
+  ClipboardList, Coins as CoinsIcon, Film, Gauge, Gift, Handshake, Menu, ScrollText,
+  ShoppingBag, Trophy, Users, X,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { Label } from '@/components/ui/typography';
-import { CountBadge } from '@/components/ui/controls';
 import { LogoMark, RazedZ } from '@/components/ui/marks';
 
 type Role = 'owner' | 'mod';
 
-const NAV = [
-  { href: '/admin', label: 'Overview', Icon: Gauge, exact: true },
-  { href: '/admin/razed', label: 'Razed players', Icon: null, razed: true },
-  { href: '/admin/members', label: 'Members and coins', Icon: Users },
-  { href: '/admin/redemptions', label: 'Redemptions', Icon: ClipboardList, count: 3 },
-  { href: '/admin/giveaways', label: 'Giveaways', Icon: Gift },
-  { href: '/admin/shop', label: 'Shop items', Icon: ShoppingBag },
-  { href: '/admin/prizes', label: 'Prizes and periods', Icon: Trophy, ownerOnly: true },
-  { href: '/admin/clips', label: 'Clips', Icon: Film },
-  { href: '/admin/games', label: 'Games', Icon: Handshake, ownerOnly: true },
-  { href: '/admin/audit', label: 'Audit log', Icon: ScrollText },
+/**
+ * Grouped rather than a flat list of ten. At a glance an operator can see the
+ * shape of the system: who, what they get, what is on the site, and the record.
+ *
+ * The Redemptions badge used to be a hardcoded 3. A fake count on a work queue
+ * is worse than no count, so it is gone until it is wired to the real table.
+ */
+const NAV: Array<{
+  group: string;
+  items: Array<{
+    href: string; label: string; Icon: typeof Gauge | null;
+    exact?: boolean; razed?: boolean; ownerOnly?: boolean;
+  }>;
+}> = [
+  {
+    group: 'Today',
+    items: [{ href: '/admin', label: 'Overview', Icon: Gauge, exact: true }],
+  },
+  {
+    group: 'People',
+    items: [
+      { href: '/admin/members', label: 'Members and coins', Icon: Users },
+      { href: '/admin/bulk', label: 'Bulk coin grant', Icon: CoinsIcon },
+      { href: '/admin/razed', label: 'Razed players', Icon: null, razed: true },
+    ],
+  },
+  {
+    group: 'Queues',
+    items: [
+      { href: '/admin/redemptions', label: 'Redemptions', Icon: ClipboardList },
+      { href: '/admin/giveaways', label: 'Giveaways', Icon: Gift },
+      { href: '/admin/prizes', label: 'Prizes and periods', Icon: Trophy, ownerOnly: true },
+    ],
+  },
+  {
+    group: 'Content',
+    items: [
+      { href: '/admin/shop', label: 'Shop items', Icon: ShoppingBag },
+      { href: '/admin/clips', label: 'Clips', Icon: Film },
+      { href: '/admin/games', label: 'Games', Icon: Handshake, ownerOnly: true },
+    ],
+  },
+  {
+    group: 'Record',
+    items: [{ href: '/admin/audit', label: 'Audit log', Icon: ScrollText }],
+  },
 ];
 
 /**
@@ -53,58 +88,69 @@ export function AdminShell({
         <span className="display text-[15px] tracking-wide text-ink">ADMIN</span>
       </div>
 
-      <nav className="flex-1 overflow-y-auto p-2.5">
-        <ul className="space-y-0.5">
-          {NAV.map((item) => {
-            const active = item.exact ? pathname === item.href : pathname.startsWith(item.href);
-            const locked = item.ownerOnly && role !== 'owner';
+      <nav className="flex-1 overflow-y-auto px-2.5 py-3">
+        {NAV.map((section) => (
+          <div key={section.group} className="mb-4 last:mb-0">
+            <p className="px-3 pb-1.5 font-mono text-[9.5px] uppercase tracking-[0.18em] text-faint">
+              {section.group}
+            </p>
+            <ul className="space-y-0.5">
+              {section.items.map((item) => {
+                const active = item.exact ? pathname === item.href : pathname.startsWith(item.href);
+                const locked = item.ownerOnly && role !== 'owner';
 
-            const inner = (
-              <>
-                <span className="grid w-4 shrink-0 place-items-center">
-                  {item.razed ? <RazedZ size={15} /> : item.Icon ? <item.Icon size={15} strokeWidth={1.8} /> : null}
-                </span>
-                <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                {locked ? (
-                  <span className="shrink-0 font-mono text-[9.5px] uppercase tracking-[0.12em] text-faint">
-                    owner only
-                  </span>
-                ) : item.count ? (
-                  <CountBadge>{item.count}</CountBadge>
-                ) : null}
-              </>
-            );
+                const inner = (
+                  <>
+                    <span className="grid w-4 shrink-0 place-items-center">
+                      {item.razed ? <RazedZ size={14} /> : item.Icon ? <item.Icon size={15} strokeWidth={1.8} /> : null}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                    {locked ? (
+                      <span className="shrink-0 rounded-[2px] border border-gold-line bg-gold-bg px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.1em] text-gold">
+                        owner
+                      </span>
+                    ) : null}
+                  </>
+                );
 
-            if (locked) {
-              return (
-                <li key={item.href}>
-                  <span
-                    aria-disabled
-                    className="flex cursor-not-allowed items-center gap-2.5 rounded-[3px] px-3 py-2 text-[13.5px] text-faint"
-                  >
-                    {inner}
-                  </span>
-                </li>
-              );
-            }
+                if (locked) {
+                  return (
+                    <li key={item.href}>
+                      {/* Visible, greyed and labelled. A moderator should see
+                          what exists and know who to ask, rather than finding
+                          a hole where a feature was. */}
+                      <span
+                        aria-disabled
+                        title="Ask an owner to do this"
+                        className="flex cursor-not-allowed items-center gap-2.5 rounded-[3px] px-3 py-[7px] text-[13px] text-faint opacity-60"
+                      >
+                        {inner}
+                      </span>
+                    </li>
+                  );
+                }
 
-            return (
-              <li key={item.href}>
-                <Link
-                  href={item.href}
-                  onClick={() => setOpen(false)}
-                  aria-current={active ? 'page' : undefined}
-                  className={cn(
-                    'flex items-center gap-2.5 rounded-[3px] px-3 py-2 text-[13.5px] transition-colors duration-150',
-                    active ? 'bg-brand-bg text-brand' : 'text-ink-2 hover:bg-surface-2 hover:text-ink',
-                  )}
-                >
-                  {inner}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
+                return (
+                  <li key={item.href}>
+                    <Link
+                      href={item.href}
+                      onClick={() => setOpen(false)}
+                      aria-current={active ? 'page' : undefined}
+                      className={cn(
+                        'flex items-center gap-2.5 rounded-[3px] border-l-2 px-3 py-[7px] text-[13px] transition-colors duration-150',
+                        active
+                          ? 'border-l-brand bg-brand-bg text-brand'
+                          : 'border-l-transparent text-ink-2 hover:bg-surface-2 hover:text-ink',
+                      )}
+                    >
+                      {inner}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))}
       </nav>
 
       <div className="border-t border-line p-3">
@@ -179,10 +225,10 @@ export function AdminHeader({
   right?: React.ReactNode;
 }) {
   return (
-    <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-      <div>
-        {eyebrow ? <Label className="mb-2 flex items-center gap-2">{eyebrow}</Label> : null}
-        <h1 className="display text-[28px] leading-none text-ink lg:text-[34px]">{title}</h1>
+    <div className="mb-5 flex flex-wrap items-end justify-between gap-4 border-b border-line pb-4">
+      <div className="min-w-0">
+        {eyebrow ? <Label className="mb-1.5 flex items-center gap-2">{eyebrow}</Label> : null}
+        <h1 className="text-[21px] font-bold leading-tight tracking-[-0.01em] text-ink">{title}</h1>
       </div>
       {right ? <div className="flex flex-wrap items-center gap-2">{right}</div> : null}
     </div>

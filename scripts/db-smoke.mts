@@ -21,6 +21,8 @@ import * as clips from '../lib/store/clips';
 import * as periods from '../lib/store/periods';
 import * as shop from '../lib/store/shop';
 import * as settings from '../lib/store/settings';
+import * as blackjack from '../lib/store/blackjack';
+import { handTotal as bjTotal } from '../lib/blackjack';
 
 let failures = 0;
 function check(name: string, condition: unknown, detail = '') {
@@ -544,6 +546,112 @@ for (let i = 0; i < 3; i += 1) {
   flood.push(r.ok === false && r.error === 'rate-limited');
 }
 check('the limit is not hit by ordinary play', flood.every((x) => x === false));
+
+/* -------------------------------------------------------------------------- */
+section('blackjack');
+
+await coins.record({ userId: bob.id, delta: 4000, kind: 'adjustment', reason: 'blackjack float' });
+const bjStart = (await coins.balanceOf(bob.id)).balance;
+
+const noBet = await blackjack.openBlackjack({
+  userId: bob.id, bets: [{ main: 0, pairs: 0, plusThree: 0 }], idempotencyKey: 'bj-none',
+});
+check('a hand with no main bet is refused', 'ok' in noBet && noBet.ok === false);
+
+const sideOnly = await blackjack.openBlackjack({
+  userId: bob.id, bets: [{ main: 0, pairs: 20, plusThree: 0 }], idempotencyKey: 'bj-side',
+});
+check('a side bet without a main bet is refused', 'ok' in sideOnly && sideOnly.ok === false);
+
+const tooBig = await blackjack.openBlackjack({
+  userId: bob.id, bets: [{ main: 500, pairs: 0, plusThree: 0 }], idempotencyKey: 'bj-big',
+});
+check('a stake over the cap is refused', 'ok' in tooBig && tooBig.ok === false);
+
+const dealt = await blackjack.openBlackjack({
+  userId: bob.id, bets: [{ main: 20, pairs: 10, plusThree: 10 }], idempotencyKey: 'bj-1',
+});
+check('a hand is dealt', !('ok' in dealt), 'ok' in dealt ? dealt.detail ?? dealt.error : '');
+
+if (!('ok' in dealt)) {
+  check('the stake left the balance',
+    (await coins.balanceOf(bob.id)).balance === bjStart - 40,
+    `${bjStart} -> ${(await coins.balanceOf(bob.id)).balance}`);
+  check('the player got two cards', dealt.state.seats[0].hands[0].cards.length === 2);
+  check('the dealer got two cards', dealt.state.dealer.length === 2);
+  check('the hole card is hidden', dealt.state.holeHidden === true);
+  check('side bets resolved at the deal', dealt.state.seats[0].notes.length === 2,
+    dealt.state.seats[0].notes.join(' / '));
+
+  const replay = await blackjack.openBlackjack({
+    userId: bob.id, bets: [{ main: 20, pairs: 10, plusThree: 10 }], idempotencyKey: 'bj-1',
+  });
+  check('a repeated deal is the same hand', !('ok' in replay) && replay.roundId === dealt.roundId);
+
+  const second = await blackjack.openBlackjack({
+    userId: bob.id, bets: [{ main: 20, pairs: 0, plusThree: 0 }], idempotencyKey: 'bj-2',
+  });
+  check('a second hand is refused while one is live', 'ok' in second && second.error === 'hand-in-progress');
+}
+
+// Play a hand out to settlement, standing every time.
+let live = await blackjack.currentBlackjack(bob.id);
+let guard = 0;
+while (live && live.actions.length > 0 && guard++ < 30) {
+  const next = await blackjack.actBlackjack({ userId: bob.id, action: 'stand' });
+  if ('ok' in next) break;
+  live = next;
+}
+check('the hand settles', live !== null && live.state.phase === 'settled', live?.state.phase);
+check('the hole card is turned over', live !== null && live.state.holeHidden === false);
+check('the dealer reached 17 or more, or nobody was live',
+  live !== null && (bjTotal(live.state.dealer) >= 17 || live.state.seats.every((s) =>
+    s.hands.every((h) => h.result === 'lose'))),
+  live ? String(bjTotal(live.state.dealer)) : '');
+check('every hand has a result',
+  live !== null && live.state.seats.every((s) => s.hands.every((h) => h.result !== null)));
+check('the round is on the shared history',
+  (await play.recentRounds(bob.id, 5)).some((r) => r.game === 'blackjack'));
+
+const afterSettle = (await coins.balanceOf(bob.id)).balance;
+check('the balance moved by stake minus return',
+  afterSettle === bjStart - 40 + (live?.returned ?? 0),
+  `staked 40, returned ${live?.returned}, balance ${bjStart} -> ${afterSettle}`);
+
+const noHand = await blackjack.actBlackjack({ userId: bob.id, action: 'hit' });
+check('acting with no hand on the table is refused', 'ok' in noHand && noHand.error === 'no-hand');
+
+// The same seed and nonce must rebuild the same cards.
+const { buildShoe } = await import('../lib/fairness');
+const shoeA = buildShoe('s', 'c', 7);
+const shoeB = buildShoe('s', 'c', 7);
+check('a shoe is reproducible from its seed',
+  JSON.stringify(shoeA) === JSON.stringify(shoeB));
+check('a shoe holds 312 cards', shoeA.length === 312);
+
+// The dealer peeks. Find a shoe whose first four cards give the dealer a
+// natural, then confirm the round is over before the player can act — a
+// no-peek deal would let them double into a hand that had already lost.
+{
+  const { openRound } = await import('../lib/blackjack');
+  let peeked = false;
+  let checkedNonce = -1;
+  for (let n = 0; n < 400; n += 1) {
+    const shoe = buildShoe('peek', 'peek', n);
+    const dealerCards = [shoe[1], shoe[3]];
+    const ten = (r: string) => ['10', 'J', 'Q', 'K'].includes(r);
+    const natural =
+      (dealerCards[0].r === 'A' && ten(dealerCards[1].r)) ||
+      (dealerCards[1].r === 'A' && ten(dealerCards[0].r));
+    if (!natural) continue;
+    checkedNonce = n;
+    const state = openRound(shoe, [{ main: 10, pairs: 0, plusThree: 0 }]);
+    peeked = state.phase !== 'playing' && state.activeSeat === -1 && !state.holeHidden;
+    break;
+  }
+  check('a dealer natural ends the round before anyone acts', peeked,
+    `nonce ${checkedNonce}`);
+}
 
 /* -------------------------------------------------------------------------- */
 section('admin figures');

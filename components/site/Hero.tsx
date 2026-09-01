@@ -1,9 +1,9 @@
 import Link from 'next/link';
-import { Users, Zap } from 'lucide-react';
+import { Eye, History, Play, Timer, Zap } from 'lucide-react';
 import { coins } from '@/lib/format';
 import { Display, Label, Num } from '@/components/ui/typography';
 import { CoinMark, PlatformMark } from '@/components/ui/marks';
-import { CountdownBoxes, Uptime } from '@/components/ui/Countdown';
+import { Countdown, Uptime } from '@/components/ui/Countdown';
 import { PlayerFrame } from './PlayerFrame';
 import type { StreamState, Viewer } from '@/lib/types';
 
@@ -12,6 +12,9 @@ import type { StreamState, Viewer } from '@/lib/types';
  * §5). The site is offline more hours than it is live, and the offline state
  * has a different job: say when he is back, and give them something to do
  * until then.
+ *
+ * The split is 5/7 rather than even: the copy column is a fixed measure, and
+ * every pixel the right column gains is a pixel of picture.
  */
 export function Hero({
   stream,
@@ -23,62 +26,66 @@ export function Hero({
   schedule: Array<{ day: string; time: string; note: string; platform: string }>;
 }) {
   const live = stream.live;
+  const title = (live ? stream.title : stream.lastVodTitle) ?? 'MattySpins on Kick';
 
   return (
     <div className="hero-glow border-b border-line">
-      <div className="container-page grid gap-9 py-10 lg:grid-cols-[1.05fr_1fr] lg:items-center lg:gap-12 lg:py-16">
+      <div className="container-page grid gap-9 py-10 lg:grid-cols-12 lg:items-start lg:gap-8 lg:py-16">
         {/* ------------------------------------------------------------- */}
-        {/* Left                                                          */}
+        {/* Left — status, headline, actions, schedule                     */}
         {/* ------------------------------------------------------------- */}
-        <div>
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <div className="flex flex-col gap-6 lg:col-span-5 lg:pt-4">
+          {/* One word for the state, then the only number we actually
+              measure. Kick's webhook carries no viewer count, so when we do
+              not have one the whole element goes rather than showing a figure
+              nobody counted. */}
+          <div className="flex items-center gap-3">
             {live ? (
-              <>
-                <span className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.16em] text-online">
-                  <span className="size-1.5 animate-pulse-online rounded-full bg-online" aria-hidden />
-                  Live on Kick
-                </span>
-                {/* Kick's webhook carries no viewer count, so when we do not
-                    have one the whole element goes rather than showing a
-                    number nobody measured. */}
-                {stream.viewers !== null ? (
-                  <>
-                    <span className="text-line" aria-hidden>|</span>
-                    <span className="flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-2">
-                      <Users size={13} className="text-muted" aria-hidden />
-                      <Num tone="ink" className="text-[11px]">{coins(stream.viewers)}</Num> viewers
-                    </span>
-                  </>
-                ) : null}
-              </>
-            ) : (
-              <span className="inline-flex items-center gap-2 rounded-[5px] border border-line bg-surface-2 px-2.5 py-1.5 font-mono text-[10.5px] uppercase tracking-[0.16em] text-ink-2">
-                <span className="size-1.5 rounded-full bg-faint" aria-hidden />
-                Stream schedule
+              <span className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.18em] text-online">
+                <span className="size-1.5 animate-pulse-online rounded-full bg-online" aria-hidden />
+                Live on Kick
               </span>
+            ) : (
+              <Label className="tracking-[0.2em]">Offline</Label>
+            )}
+            {live && stream.viewers !== null ? (
+              <>
+                <span className="h-3 w-px bg-line" aria-hidden />
+                <span className="flex items-center gap-1.5 text-ink">
+                  <Eye size={14} className="text-muted" aria-hidden />
+                  <Num tone="ink" className="text-[11.5px]">{coins(stream.viewers)}</Num>
+                </span>
+              </>
+            ) : null}
+          </div>
+
+          {/* The headline, and — offline — the one figure the page exists to
+              answer: when he is back. */}
+          <div className="flex flex-col gap-3">
+            {live ? (
+              <Display size="xl" as="h1">
+                The biggest
+                <br />
+                slots battles
+                <br />
+                <span className="text-brand-dim">on the internet</span>
+              </Display>
+            ) : (
+              <>
+                <Display size="xl" as="h1">
+                  Back live
+                  <br />
+                  <span className="text-brand-dim">{nextStreamLabel(stream.nextStreamAt)}</span>
+                </Display>
+                <div className="flex items-center gap-2 text-gold">
+                  <Timer size={19} aria-hidden />
+                  <Countdown to={stream.nextStreamAt} tone="gold" className="text-[18px] font-medium" />
+                </div>
+              </>
             )}
           </div>
 
-          {live ? (
-            <Display size="xl" as="h1" className="mt-4">
-              The biggest
-              <br />
-              slots battles
-              <br />
-              <span className="text-brand-dim">on the internet</span>
-            </Display>
-          ) : (
-            <>
-              <Display size="xl" as="h1" className="mt-4">
-                Back live
-                <br />
-                <span className="text-brand-dim">{nextStreamLabel(stream.nextStreamAt)}</span>
-              </Display>
-              <CountdownBoxes to={stream.nextStreamAt} className="mt-5" />
-            </>
-          )}
-
-          <p className="mt-5 max-w-[52ch] text-[15px] leading-relaxed text-brand-dim lg:text-[16px]">
+          <p className="max-w-[46ch] text-[15px] leading-relaxed text-ink-2 lg:text-[16px]">
             {live ? (
               <>
                 Join the daily streams, rack up Matty Coins just by watching, and compete on the
@@ -86,66 +93,70 @@ export function Hero({
               </>
             ) : (
               <>
-                Last session finished on a 2,431× Gates hit — the clip is on the wall of fame. The
-                board, the shop and the giveaways all keep running while the stream is down; only
-                coin earning pauses until he is back on.
+                Missed the last session? Catch up on the last stream while the next one loads. The
+                board, the shop and the giveaways all keep running while he is offline — only coin
+                earning pauses until he is back on.
               </>
             )}
           </p>
 
-          <div className="mt-6 flex flex-wrap gap-2.5">
+          <div className="flex flex-wrap items-center gap-2.5">
             <Link
               href={live ? `https://kick.com/${stream.channel}` : '/wins'}
               {...(live ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
-              className="inline-flex h-10 items-center gap-2 rounded-[5px] bg-brand px-5 font-mono text-[11.5px] uppercase tracking-[0.14em] text-brand-ink transition-colors duration-150 hover:bg-brand-dim"
+              className="inline-flex h-12 items-center gap-2 rounded-[3px] bg-brand px-6 font-mono text-[11.5px] uppercase tracking-[0.14em] text-brand-ink transition-colors duration-150 hover:bg-brand-dim"
             >
               {live ? (
                 <>
-                  <PlatformMark platform="kick" size={14} />
-                  Watch live
+                  <PlatformMark platform="kick" size={15} />
+                  Watch the stream
                 </>
               ) : (
-                'Wall of fame'
+                <>
+                  <Play size={16} fill="currentColor" strokeWidth={0} aria-hidden />
+                  Wall of fame
+                </>
               )}
             </Link>
             <Link
               href="/leaderboard"
-              className="inline-flex h-10 items-center rounded-[5px] border border-brand/50 px-5 font-mono text-[11.5px] uppercase tracking-[0.14em] text-brand transition-colors duration-150 hover:border-brand hover:bg-brand-bg"
+              className="inline-flex h-12 items-center rounded-[3px] border border-line-2 bg-surface px-6 font-mono text-[11.5px] uppercase tracking-[0.14em] text-ink transition-colors duration-150 hover:border-brand hover:text-brand-dim"
             >
-              See board
+              See this week&rsquo;s board
             </Link>
           </div>
 
-          {/* The single most valuable element on the page — the only place the
-              viewer watches the mechanic working in real time. */}
-          <div className="mt-7">
-            {live ? <EarningStatus viewer={viewer} /> : <ScheduleStrip schedule={schedule} />}
-          </div>
+          {/* The single most valuable element on the page — live, the viewer
+              watches the mechanic working in real time; offline, the answer to
+              "when do I come back". */}
+          {live ? <EarningStatus viewer={viewer} /> : <ScheduleStrip schedule={schedule} />}
         </div>
 
         {/* ------------------------------------------------------------- */}
-        {/* Right                                                         */}
+        {/* Right — the frame                                             */}
         {/* ------------------------------------------------------------- */}
-        <div>
+        <div className="lg:col-span-7">
           <PlayerFrame
             thumbUrl={live ? stream.thumbUrl : stream.lastVodThumb}
             embedUrl={live ? `https://player.kick.com/${stream.channel}` : stream.lastVodUrl}
-            title={(live ? stream.title : stream.lastVodTitle) ?? 'MattySpins on Kick'}
+            title={title}
             liveTag={live}
-            playSize={58}
+            playSize={66}
             watching={live ? stream.viewers ?? undefined : undefined}
-            cornerLabel={live ? undefined : 'Watch last stream'}
+            cornerLabel={live ? undefined : 'Last stream'}
           />
-          <div className="mt-2.5 flex items-baseline justify-between gap-4">
-            <p className="min-w-0 truncate font-mono text-[11.5px] uppercase tracking-[0.12em] text-ink-2">
-              {(live ? stream.title : stream.lastVodTitle) ?? 'MattySpins on Kick'}
-            </p>
+          <div className="mt-2.5 flex items-baseline justify-between gap-4 px-1">
+            <p className="min-w-0 truncate text-[14px] text-ink">{title}</p>
             {live && stream.startedAt ? (
-              <span className="shrink-0 font-mono text-[11.5px] tabular-nums text-muted">
-                Uptime: <Uptime from={stream.startedAt} className="text-[11.5px] text-ink-2" />
+              <span className="flex shrink-0 items-center gap-1.5 font-mono text-[11.5px] tabular-nums text-muted">
+                <Timer size={13} aria-hidden />
+                <Uptime from={stream.startedAt} className="text-[11.5px] text-ink-2" />
               </span>
             ) : (
-              <span className="shrink-0 font-mono text-[11.5px] text-faint">Last stream</span>
+              <span className="flex shrink-0 items-center gap-1.5 font-mono text-[11.5px] uppercase tracking-[0.12em] text-faint">
+                <History size={13} aria-hidden />
+                Last stream
+              </span>
             )}
           </div>
         </div>
@@ -219,7 +230,7 @@ function StatusCard({
 
   const inner = (
     <>
-      <span className="grid size-9 shrink-0 place-items-center rounded-[5px] border border-line bg-surface-2">
+      <span className="grid size-9 shrink-0 place-items-center rounded-[3px] border border-line bg-surface-2">
         {icon}
       </span>
       <span className="min-w-0">
@@ -231,7 +242,7 @@ function StatusCard({
     </>
   );
 
-  const className = `flex w-full max-w-md items-center gap-3 rounded-[6px] border px-3.5 py-3 transition-colors duration-150 ${tones[tone]}`;
+  const className = `flex w-full max-w-md items-center gap-3 rounded-[3px] border px-3.5 py-3 transition-colors duration-150 ${tones[tone]}`;
 
   return href ? (
     <Link href={href} className={className}>{inner}</Link>
@@ -240,29 +251,32 @@ function StatusCard({
   );
 }
 
-/** The offline replacement: the week's schedule as day / time / platform. */
+/**
+ * The offline replacement: the week's nights as one strip of day-over-time
+ * cells rather than three rows to work through — it reads as a schedule at a
+ * glance, which is the only thing anyone asks of it.
+ */
 function ScheduleStrip({
   schedule,
 }: {
   schedule: Array<{ day: string; time: string; note: string; platform: string }>;
 }) {
   return (
-    <div className="w-full max-w-md rounded-[8px] border border-line bg-surface p-2">
-      <div className="grid grid-cols-[64px_1fr_auto] gap-2 border-b border-line px-3 pb-2 pt-1.5">
-        <Label className="text-[9.5px]">Day</Label>
-        <Label className="text-[9.5px]">Time</Label>
-        <Label className="text-[9.5px]">Platform</Label>
+    <div className="w-full max-w-md overflow-hidden rounded-[3px] border border-line bg-surface">
+      <div className="border-b border-line bg-surface-2 px-3 py-1.5">
+        <Label className="text-[9.5px]">Upcoming schedule · all times UK</Label>
       </div>
-      {schedule.map((slot) => (
-        <div
-          key={slot.day}
-          className="grid grid-cols-[64px_1fr_auto] items-center gap-2 rounded-[6px] px-3 py-2.5 transition-colors duration-150 hover:bg-surface-2"
-        >
-          <span className="font-mono text-[13px] text-ink">{slot.day}</span>
-          <span className="font-mono text-[13px] tabular-nums text-brand">{slot.time}</span>
-          <span className="font-mono text-[12px] text-muted">{slot.platform}</span>
-        </div>
-      ))}
+      <div className="grid grid-cols-3 gap-px bg-line [&>*]:bg-surface">
+        {schedule.map((slot) => (
+          <div key={slot.day} className="px-2 py-2.5 text-center">
+            <Label className="text-[9.5px]">{slot.day}</Label>
+            <Num tone="ink" className="mt-1 block text-[12.5px]">
+              {slot.time}
+            </Num>
+            <span className="mt-1 block truncate text-[11.5px] text-muted">{slot.note}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

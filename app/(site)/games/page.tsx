@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { cn } from '@/lib/cn';
-import { coins, mult, relativeTime } from '@/lib/format';
+import { coins, mult, relativeTime, rtpLabel } from '@/lib/format';
 import { gameConfigs } from '@/lib/mock';
 import { disabledGames, gamesAreKilled } from '@/lib/store/settings';
 import { viewerOrSignedOut } from '@/lib/viewer';
@@ -250,7 +250,7 @@ function GameCard({ game }: { game: GameConfig }) {
         <h2 className="min-w-0 truncate text-[14px] font-semibold text-ink">{game.name}</h2>
         {soon ? null : (
           <span className="shrink-0 font-mono text-[9.5px] uppercase tracking-[0.12em] text-faint">
-            {(game.rtp * 100).toFixed(0)}%
+            {rtpLabel(game.rtp)}
           </span>
         )}
       </div>

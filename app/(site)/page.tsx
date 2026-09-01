@@ -1,8 +1,8 @@
 import Link from 'next/link';
-import { ArrowRight } from 'lucide-react';
-import { coins, maybe, money, relativeTime } from '@/lib/format';
+import { ArrowRight, Award, Sparkles, Timer } from 'lucide-react';
+import { maybe, money, relativeTime } from '@/lib/format';
 import {
-  razed, schedule, socials, aboutCopy, portraitUrl,
+  razed, schedule, socials, aboutCopy, portraitUrl, discordInvite,
 } from '@/lib/mock';
 import { currentStream } from '@/lib/store/stream';
 import { currentPeriod, paidOutToDate, prizeForRank } from '@/lib/store/periods';
@@ -21,6 +21,8 @@ import { Section } from '@/components/site/Section';
 import { Podium, BoardRows } from '@/components/site/Leaderboard';
 import { ClipCarousel } from '@/components/site/ClipCard';
 import { BigWinCard } from '@/components/site/BigWinCard';
+import { WatchLive } from '@/components/site/WatchLive';
+import { Socials } from '@/components/site/Socials';
 
 export const dynamic = 'force-dynamic';
 
@@ -77,19 +79,20 @@ export default async function HomePage() {
       </div>
 
       {/* ----------------------------------------------------------------- */}
-      {/* Weekly board preview                                              */}
+      {/* Weekly board preview — podium beside the table                     */}
       {/* ----------------------------------------------------------------- */}
       <Section>
         <SectionHeading
+          className="border-b border-line pb-5"
           eyebrow={
             <>
               <RazedZ size={16} />
               Wagered on Razed under code {razed.referralCode}
             </>
           }
-          title="This week's board"
+          title="Leaderboard"
           right={
-            <ChipRow label="Board period">
+            <ChipRow label="Board period" className="rounded-[3px] border border-line bg-surface-2 p-1">
               <Chip as="link" href="/leaderboard" active>
                 Weekly
               </Chip>
@@ -101,28 +104,35 @@ export default async function HomePage() {
         />
 
         {boardRows.length === 0 ? (
-          <EmptyState className="mt-10" title="No board to show yet.">
+          <EmptyState className="mt-8" title="No board to show yet.">
             Positions come straight from Razed for accounts registered under the code{' '}
             {razed.referralCode}. Nothing appears here until that feed returns players.
           </EmptyState>
         ) : (
-          <>
-            <Podium rows={boardRows} className="mt-10" />
-            <BoardRows rows={boardRows.slice(0, 6)} from={4} className="mt-5" />
-          </>
+          <div className="mt-8 grid gap-6 lg:grid-cols-12 lg:items-start">
+            <Podium rows={boardRows} variant="compact" className="lg:col-span-5" />
+            <BoardRows
+              rows={boardRows.slice(0, 6)}
+              from={4}
+              showMovement={false}
+              className="rounded-[3px] lg:col-span-7"
+              footer={
+                <Link
+                  href="/leaderboard"
+                  className="group flex items-center justify-center gap-1.5 px-4 py-3.5 font-mono text-[11px] uppercase tracking-[0.16em] text-brand transition-colors duration-150 hover:bg-surface-2 hover:text-brand-dim"
+                >
+                  View the full board
+                  <ArrowRight size={14} className="transition-transform duration-150 group-hover:translate-x-0.5" />
+                </Link>
+              }
+            />
+          </div>
         )}
 
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="mt-4">
           <span className="font-mono text-[11.5px] tabular-nums text-faint">
             {feedHealth ? `Updated ${relativeTime(feedHealth.lastSyncAt)} · all times UTC` : 'No board is open'}
           </span>
-          <Link
-            href="/leaderboard"
-            className="inline-flex items-center gap-1.5 text-[14px] text-brand transition-colors duration-150 hover:text-brand-dim"
-          >
-            View the full board
-            <ArrowRight size={15} />
-          </Link>
         </div>
       </Section>
 
@@ -142,16 +152,19 @@ export default async function HomePage() {
 
         <Hairlines cols="md:grid-cols-3" className="mt-8">
           <CoinRule
+            icon={<Timer size={19} aria-hidden />}
             figure="1 MC"
             unit="every 3 minutes"
             body="Say anything in Matty's Kick chat and you start earning. Each message keeps you earning for the next fifteen minutes, and the bot drops a claim word every twenty so quiet viewers never have to spam."
           />
           <CoinRule
+            icon={<Sparkles size={19} aria-hidden />}
             figure="+10 MC"
             unit="for a full hour"
             body="Twenty ticks in a row with no gap pays a bonus on top. Miss a tick and the run resets — it rewards actually being here, not leaving a tab open."
           />
           <CoinRule
+            icon={<Award size={19} aria-hidden />}
             figure="2×"
             unit="everything, for subs"
             brand
@@ -171,7 +184,7 @@ export default async function HomePage() {
       {clips.length > 0 ? (
         <Section>
           <SectionHeading
-            title="Clips"
+            title="Top clips"
             right={
               <ChipRow label="Clip source">
                 <Chip active as="link" href="/clips">All</Chip>
@@ -189,40 +202,42 @@ export default async function HomePage() {
       ) : null}
 
       {/* ----------------------------------------------------------------- */}
-      {/* Biggest wins — a full-bleed band                                  */}
+      {/* Biggest wins — one panel, a featured card and two beside it        */}
       {/* ----------------------------------------------------------------- */}
       {bigWins.length > 0 ? (
-      <Section bleed>
-        <SectionHeading
-          eyebrow="Real bets, real payouts, on stream"
-          title="Biggest wins"
-          right={
-            <ChipRow label="Sort wins">
-              <Chip active as="link" href="/wins?sort=multiplier">By multiplier</Chip>
-              <Chip as="link" href="/wins?sort=win">By win</Chip>
-              <Chip as="link" href="/wins">All time</Chip>
-            </ChipRow>
-          }
-        />
+        <Section>
+          <Card className="p-5 lg:p-7">
+            <SectionHeading
+              eyebrow="Real bets, real payouts, on stream"
+              title="Biggest wins"
+              right={
+                <ChipRow label="Sort wins">
+                  <Chip active as="link" href="/wins?sort=multiplier">By multiplier</Chip>
+                  <Chip as="link" href="/wins?sort=win">By win</Chip>
+                  <Chip as="link" href="/wins">All time</Chip>
+                </ChipRow>
+              }
+            />
 
-        <div className="mt-8 grid gap-5 lg:grid-cols-3">
-          <div className="lg:col-span-2">
-            <BigWinCard win={featured} variant="featured" />
-          </div>
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-1">
-            {compactWins.map((win) => (
-              <BigWinCard key={win.id} win={win} variant="compact" />
-            ))}
-          </div>
-        </div>
+            <div className="mt-7 grid gap-5 lg:grid-cols-3">
+              <div className="lg:col-span-2">
+                <BigWinCard win={featured} variant="featured" />
+              </div>
+              <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-1">
+                {compactWins.map((win) => (
+                  <BigWinCard key={win.id} win={win} variant="compact" />
+                ))}
+              </div>
+            </div>
 
-        <div className="mt-6">
-          <ButtonLink href="/wins" variant="outline">
-            See the wall of fame
-            <ArrowRight size={15} />
-          </ButtonLink>
-        </div>
-      </Section>
+            <div className="mt-6">
+              <ButtonLink href="/wins" variant="outline">
+                See the wall of fame
+                <ArrowRight size={15} />
+              </ButtonLink>
+            </div>
+          </Card>
+        </Section>
       ) : null}
 
       {/* ----------------------------------------------------------------- */}
@@ -233,14 +248,15 @@ export default async function HomePage() {
           <div className="lg:col-span-5">
             {/* Capped at the file's own width so it is never upscaled — a
                 sharp smaller picture beats a soft larger one. Raise the cap
-                when a higher-resolution original arrives. */}
+                when a higher-resolution original arrives. The portrait sits
+                desaturated until you look at it. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={portraitUrl}
               alt="Matty"
               width={472}
               height={513}
-              className="mx-auto w-full max-w-[472px] rounded-[3px] border border-line object-cover"
+              className="mx-auto w-full max-w-[472px] rounded-[3px] border border-line object-cover grayscale transition-[filter] duration-500 hover:grayscale-0"
             />
           </div>
 
@@ -275,23 +291,27 @@ export default async function HomePage() {
                 </div>
               </Card>
 
+              {/* The platform handles are the socials band a screen below;
+                  repeating them here would be the same list twice. What is
+                  genuinely only here is Discord — the one place that is a
+                  room rather than a feed. */}
               <Card>
                 <div className="border-b border-line px-5 py-3">
-                  <Label>Where to find him</Label>
+                  <Label>Community</Label>
                 </div>
                 <div className="px-5 py-4">
-                  {socials.map((social) => (
-                    <a
-                      key={social.platform}
-                      href={social.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2.5 py-1.5 text-ink-2 transition-colors duration-150 hover:text-brand-dim"
-                    >
-                      <PlatformMark platform={social.platform} size={15} />
-                      <span className="font-mono text-[12.5px]">{social.handle}</span>
-                    </a>
-                  ))}
+                  <a
+                    href={discordInvite}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2.5 py-1.5 text-ink-2 transition-colors duration-150 hover:text-brand-dim"
+                  >
+                    <PlatformMark platform="discord" size={15} />
+                    <span className="font-mono text-[12.5px]">Join the Discord</span>
+                  </a>
+                  <p className="mt-2 text-[13px] leading-relaxed text-muted">
+                    Extra streams, giveaway draws and prize claims all get announced there first.
+                  </p>
                   <Link
                     href="/official"
                     className="mt-3 block border-t border-line pt-3 font-mono text-[11.5px] text-faint hover:text-brand-dim"
@@ -306,29 +326,69 @@ export default async function HomePage() {
       </Section>
 
       {/* ----------------------------------------------------------------- */}
+      {/* Watch live — the player and the chat, full width                  */}
+      {/* ----------------------------------------------------------------- */}
+      <Section>
+        <SectionHeading
+          eyebrow={
+            <>
+              <PlatformMark platform="kick" size={15} />
+              Catch the action as it happens
+            </>
+          }
+          title="Watch live"
+        />
+        <div className="mt-8">
+          <WatchLive stream={stream} />
+        </div>
+      </Section>
+
+      {/* ----------------------------------------------------------------- */}
       {/* Razed strip                                                       */}
       {/* ----------------------------------------------------------------- */}
       <Section>
-        <Card tone="brand" className="p-6 lg:p-8">
-          <div className="grid gap-6 lg:grid-cols-[1.6fr_1fr] lg:items-center">
+        <Card tone="inset" className="flex flex-col gap-6 p-6 md:flex-row md:items-center md:justify-between lg:p-8">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:gap-6">
+            <RazedWordmark size="lg" className="shrink-0" />
             <div>
               <Display size="s" as="h2">
                 Play on Razed under code <span className="text-brand">{razed.referralCode}</span>
               </Display>
-              <p className="mt-3 max-w-xl text-[14.5px] leading-relaxed text-ink-2">
+              <p className="mt-2 max-w-xl text-[14px] leading-relaxed text-ink-2">
                 {razed.offer}. Sign up under the code and every dollar you wager counts towards the
                 weekly board automatically — there is nothing to link and nothing to claim until the
                 period closes.
               </p>
             </div>
-            <div className="flex flex-col items-start gap-4 lg:items-end">
-              <RazedWordmark />
-              <ButtonLink href={razed.affiliateUrl} external variant="primary" size="lg">
-                Claim the bonus
-              </ButtonLink>
-            </div>
           </div>
+          <ButtonLink
+            href={razed.affiliateUrl}
+            external
+            variant="primary"
+            size="lg"
+            className="shrink-0 whitespace-nowrap"
+          >
+            Claim the bonus
+          </ButtonLink>
         </Card>
+      </Section>
+
+      {/* ----------------------------------------------------------------- */}
+      {/* Socials                                                           */}
+      {/* ----------------------------------------------------------------- */}
+      <Section>
+        <SectionHeading
+          eyebrow="Follow the action everywhere"
+          title="Socials"
+          right={
+            <ButtonLink href="/official" variant="outline">
+              Check an account is his
+            </ButtonLink>
+          }
+        />
+        <div className="mt-8">
+          <Socials socials={socials} />
+        </div>
       </Section>
     </>
   );
@@ -336,12 +396,19 @@ export default async function HomePage() {
 
 /* -------------------------------------------------------------------------- */
 
+/**
+ * One rule per tile: a marked icon, the figure and its unit as the heading,
+ * then the sentence that qualifies it. The sub incentive is the only one
+ * painted, because it is the only one that costs money.
+ */
 function CoinRule({
+  icon,
   figure,
   unit,
   body,
   brand = false,
 }: {
+  icon: React.ReactNode;
   figure: string;
   unit: string;
   body: string;
@@ -349,9 +416,17 @@ function CoinRule({
 }) {
   return (
     <div className={brand ? 'relative px-5 py-6' : 'px-5 py-6'}>
-      {/* The sub incentive is visually louder than the other two. */}
       {brand ? <span className="absolute inset-0 bg-brand-bg" aria-hidden /> : null}
       <div className="relative">
+        <span
+          className={
+            brand
+              ? 'mb-4 grid size-10 place-items-center rounded-full border border-brand-line bg-brand/10 text-brand'
+              : 'mb-4 grid size-10 place-items-center rounded-full border border-line bg-surface-2 text-ink-2'
+          }
+        >
+          {icon}
+        </span>
         <div className="flex items-baseline gap-2">
           <Num tone={brand ? 'brand' : 'ink'} className="text-[30px] font-medium leading-none lg:text-[34px]">
             {figure}

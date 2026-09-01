@@ -17,6 +17,7 @@
  * can be recomputed by anybody — that is what the /verify page does.
  */
 import { createHash, createHmac, randomBytes } from 'node:crypto';
+import { DECKS, RANKS, SHOE_SIZE, SUITS, type Card } from './blackjack';
 
 export const HOUSE_EDGE = 0.99; // 99% RTP, stated on every paytable.
 
@@ -70,6 +71,31 @@ export type DiceOutcome = { roll: number };
 export type LimboOutcome = { result: number };
 
 /** Ten distinct numbers from 1–40, by partial Fisher–Yates over the stream. */
+/**
+ * A fresh six-deck blackjack shoe, shuffled deterministically from the round's
+ * seed. Fisher-Yates over the same byte stream keno draws from, so the whole
+ * shoe is reproducible by anyone holding the three values — and by nobody
+ * beforehand, since the server seed is only revealed on rotation.
+ *
+ * It lives here rather than in `lib/blackjack.ts` because it needs `crypto`,
+ * and that module is imported by the table component: a rules file that drags
+ * `node:crypto` into the browser bundle does not build.
+ */
+export function buildShoe(serverSeed: string, clientSeed: string, nonce: number): Card[] {
+  const shoe: Card[] = [];
+  for (let d = 0; d < DECKS; d += 1) {
+    for (const s of SUITS) for (const r of RANKS) shoe.push({ r, s });
+  }
+  const swaps = floats(serverSeed, clientSeed, nonce, SHOE_SIZE - 1);
+  for (let i = shoe.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(swaps[shoe.length - 1 - i] * (i + 1));
+    const t = shoe[i];
+    shoe[i] = shoe[j];
+    shoe[j] = t;
+  }
+  return shoe;
+}
+
 export function kenoDraw(serverSeed: string, clientSeed: string, nonce: number, board = 40, draw = 10): KenoOutcome {
   const pool = Array.from({ length: board }, (_, i) => i + 1);
   const f = floats(serverSeed, clientSeed, nonce, draw);
