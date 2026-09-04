@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
-import { diceRoll, kenoDraw, limboResult } from '@/lib/fairness';
+import { diceRoll, kenoDraw, limboResult, wheelSpin } from '@/lib/fairness';
 import {
-  KENO_MAX_PICKS, KENO_RISKS, capPayout, diceChance, diceMultiplier, diceWins, kenoHits,
-  kenoPaytable,
+  KENO_MAX_PICKS, KENO_RISKS, WHEEL_RISKS, capPayout, diceChance, diceMultiplier, diceWins,
+  kenoHits, kenoPaytable, wheelSegments,
 } from '@/lib/games';
 import { playRound, type PlayFailure, type Resolution } from '@/lib/store/play';
 import { requireUser } from '@/lib/player';
 import { gameIsPlayable } from '@/lib/store/settings';
-import type { KenoRisk } from '@/lib/games';
+import type { KenoRisk, WheelRisk } from '@/lib/games';
 import type { GameSlug } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -148,6 +148,27 @@ function resolverFor(game: GameSlug, body: Record<string, unknown>): Resolver | 
           multiplier,
           payout: capPayout(Number(body.bet), multiplier),
           outcome: { result, target, won },
+        };
+      };
+    }
+
+    /* ------------------------------------------------------------------ */
+    case 'wheel': {
+      const risk = body.risk as WheelRisk;
+
+      return ({ serverSeed, clientSeed, nonce }) => {
+        if (!WHEEL_RISKS.includes(risk)) return refuse('Unknown risk level.');
+
+        // The spin picks a segment; the segment carries the multiplier. The
+        // browser is told which index came up so it can land the animation on
+        // it, but it never chooses the index and never states the payout.
+        const segments = wheelSegments(risk);
+        const { index } = wheelSpin(serverSeed, clientSeed, nonce, segments.length);
+        const multiplier = segments[index] ?? 0;
+        return {
+          multiplier,
+          payout: capPayout(Number(body.bet), multiplier),
+          outcome: { index, risk, segments, multiplier },
         };
       };
     }

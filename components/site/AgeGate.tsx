@@ -1,16 +1,16 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Button } from '@/components/ui/controls';
-import { Label } from '@/components/ui/typography';
-import { LogoMark } from '@/components/ui/marks';
 
 const KEY = 'ms.agegate.v1';
 
 /**
- * An age gate on first visit (Master Plan §12), with the persistent notice
- * living in the footer. Deliberately plain: this is the site stating what it
- * is, not a splash screen.
+ * An age gate on first visit, with the persistent notice living in the footer.
+ *
+ * The decision is kept in localStorage rather than a cookie because it is a
+ * per-device acknowledgement, not something the server needs to act on. If
+ * storage is blocked the gate simply reappears — annoying, but the honest
+ * failure mode, since the alternative is letting it through unacknowledged.
  */
 export function AgeGate() {
   const [decided, setDecided] = useState<boolean | null>(null);
@@ -19,8 +19,6 @@ export function AgeGate() {
     try {
       setDecided(window.localStorage.getItem(KEY) === 'yes');
     } catch {
-      // Storage blocked (private window, site data off). Show the gate; the
-      // page behind it still renders for anything that does not use JS.
       setDecided(false);
     }
   }, []);
@@ -39,44 +37,30 @@ export function AgeGate() {
   }
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="agegate-title"
-      className="fixed inset-0 z-[100] grid place-items-center bg-bg/95 p-5 backdrop-blur-sm"
-    >
-      <div className="w-full max-w-md rounded-[3px] border border-line bg-surface p-7">
-        <div className="mb-6 flex items-center gap-3">
-          <LogoMark size={34} />
-          <Label>MattySpins</Label>
+    <div className="modal" role="dialog" aria-modal="true" aria-labelledby="agegate-title">
+      <div className="mbox">
+        <div
+          className="age"
+          style={{ margin: '0 auto 16px', width: 46, height: 46, fontSize: 16 }}
+          aria-hidden
+        >
+          18+
         </div>
-
-        <h1 id="agegate-title" className="display text-[34px] leading-none">
-          This site is for
-          <br />
-          over-18s
-        </h1>
-
-        <div className="mt-5 space-y-3 text-[14px] leading-relaxed text-ink-2">
-          <p>
-            MattySpins covers online casino streaming and carries an affiliate link to Razed.
-            Gambling with real money carries real risk.
-          </p>
-          <p className="text-muted">
-            Matty Coins on this site are earned by watching. They cannot be bought, hold no cash
-            value, and are not a wager.
-          </p>
-        </div>
-
-        <div className="mt-7 flex flex-col gap-2.5">
-          <Button onClick={accept} size="lg" full>
-            I am 18 or over — continue
-          </Button>
-          <a
-            href="https://www.begambleaware.org"
-            className="flex h-11 items-center justify-center rounded-[3px] border border-line-2 text-[14px] text-ink-2 transition-colors duration-150 hover:border-line-2 hover:text-ink"
-          >
-            I am under 18 — leave
+        <h2 id="agegate-title">Are you over 18?</h2>
+        <p>
+          This site promotes real-money gambling on Razed and is for adults only. By continuing you
+          confirm you are of legal gambling age in your country.
+        </p>
+        <p style={{ marginTop: -8 }}>
+          Matty Coins are earned by watching. They cannot be bought, hold no cash value, and are not
+          a wager.
+        </p>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button type="button" className="btn pri wide" onClick={accept}>
+            I am 18 or over
+          </button>
+          <a className="btn ghost wide" href="https://www.begambleaware.org">
+            Leave
           </a>
         </div>
       </div>

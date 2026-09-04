@@ -56,10 +56,21 @@ export function compact(n: number): string {
   return new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(n);
 }
 
-/** Masking is applied server-side, never in the browser (§22). */
+/**
+ * Razed usernames are stored whole and masked at render time: the first four
+ * characters are shown and everything after is replaced.
+ *
+ * Four is the number the design settled on because it keeps regulars
+ * recognisable to each other on the leaderboard — "Kaid****" is obviously
+ * KaidenRolls to anyone in chat — without publishing a full casino handle
+ * next to a wager figure. The tail is padded to at least three stars so a
+ * five-character name cannot be read off its own mask.
+ *
+ * Masking is applied server-side, never in the browser.
+ */
 export function maskUsername(name: string): string {
-  if (name.length <= 3) return `${name[0]}***`;
-  return `${name.slice(0, 3)}${'*'.repeat(Math.max(3, name.length - 4))}${name.slice(-1)}`;
+  if (name.length <= 4) return name;
+  return `${name.slice(0, 4)}${'*'.repeat(Math.max(3, name.length - 4))}`;
 }
 
 const UTC: Intl.DateTimeFormatOptions = { timeZone: 'UTC' };

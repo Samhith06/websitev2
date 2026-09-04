@@ -144,3 +144,70 @@ export function capPayout(bet: number, multiplier: number): number {
 export function payoutIsCapped(bet: number, multiplier: number): boolean {
   return Math.round(bet * multiplier) > LIMITS.maxWinPerRound;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Wheel                                                                      */
+/* -------------------------------------------------------------------------- */
+
+export const WHEEL_RISKS = ['low', 'medium', 'high'] as const;
+export type WheelRisk = (typeof WHEEL_RISKS)[number];
+
+export const WHEEL_RISK_LABELS: Record<WheelRisk, string> = {
+  low: 'Low',
+  medium: 'Medium',
+  high: 'High',
+};
+
+export const WHEEL_SEGMENTS = 24;
+
+/**
+ * The three wheels.
+ *
+ * The design prototype's wheels were placeholders that paid about 145%, so
+ * these are solved rather than copied: every table sums to 23.76 across 24
+ * segments, which is exactly 99% — the same edge as every other game here, and
+ * the reason the last segment of each carries an untidy figure. That segment is
+ * the balance, not a decoration.
+ *
+ * Twenty-four segments rather than the prototype's twelve because a 20× top
+ * prize is arithmetically impossible on twelve: one winning slice in twelve
+ * would have to pay 11.88× to hold the edge, so promising 20× and holding 99%
+ * needs a bigger wheel.
+ *
+ * Risk changes the shape, never the edge — low pays often and small, high
+ * almost never and large.
+ */
+export const WHEELS: Record<WheelRisk, number[]> = {
+  low: [
+    0, 1.2, 1.5, 1.2, 0, 1.2, 1.5, 1.2, 0, 1.2, 1.5, 1.2,
+    0, 1.2, 1.5, 1.2, 0, 1.2, 1.86, 1.2, 0, 1.2, 1.5, 1.2,
+  ],
+  medium: [
+    0, 1.5, 0, 2, 0, 3, 0, 1.5, 0, 2, 0, 5.26,
+    0, 1.5, 0, 2, 0, 1.5, 0, 2, 0, 1.5, 0, 0,
+  ],
+  high: [
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 20,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3.76,
+  ],
+};
+
+export function wheelSegments(risk: WheelRisk): number[] {
+  return WHEELS[risk];
+}
+
+/** The RTP of one wheel, for the paytable panel and the independent check. */
+export function wheelRtp(risk: WheelRisk): number {
+  const segments = WHEELS[risk];
+  return segments.reduce((sum, m) => sum + m, 0) / segments.length;
+}
+
+export function wheelTopPayout(risk: WheelRisk): number {
+  return Math.max(...WHEELS[risk]);
+}
+
+/** How often a spin pays anything at all — the honest headline for "risk". */
+export function wheelHitChance(risk: WheelRisk): number {
+  const segments = WHEELS[risk];
+  return segments.filter((m) => m > 0).length / segments.length;
+}

@@ -8,7 +8,6 @@ import { Display, Label } from '@/components/ui/typography';
 const PAGES = [
   { href: '/terms', label: 'Terms' },
   { href: '/privacy', label: 'Privacy' },
-  { href: '/giveaway-rules', label: 'Giveaway rules' },
   { href: '/responsible', label: 'Responsible play' },
 ];
 

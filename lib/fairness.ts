@@ -18,6 +18,7 @@
  */
 import { createHash, createHmac, randomBytes } from 'node:crypto';
 import { DECKS, RANKS, SHOE_SIZE, SUITS, type Card } from './blackjack';
+import { WHEEL_SEGMENTS } from './games';
 
 export const HOUSE_EDGE = 0.99; // 99% RTP, stated on every paytable.
 
@@ -69,6 +70,7 @@ export function floats(serverSeed: string, clientSeed: string, nonce: number, co
 export type KenoOutcome = { drawn: number[] };
 export type DiceOutcome = { roll: number };
 export type LimboOutcome = { result: number };
+export type WheelOutcome = { index: number };
 
 /** Ten distinct numbers from 1–40, by partial Fisher–Yates over the stream. */
 /**
@@ -115,6 +117,24 @@ export function diceRoll(serverSeed: string, clientSeed: string, nonce: number):
   return { roll: Math.floor(f * 10_001) / 100 };
 }
 
+/**
+ * Which segment the pointer lands on.
+ *
+ * One float across the segment count, and nothing else — the edge lives in the
+ * paytable rather than here, so the wheel is a fair spin over an unfair set of
+ * prizes. That split is what makes it checkable: anyone can recompute the index
+ * from the seeds, then read the multiplier off a published table.
+ */
+export function wheelSpin(
+  serverSeed: string,
+  clientSeed: string,
+  nonce: number,
+  segments: number,
+): WheelOutcome {
+  const [f] = floats(serverSeed, clientSeed, nonce, 1);
+  return { index: Math.min(segments - 1, Math.floor(f * segments)) };
+}
+
 /** The unbounded multiplier, edge applied, floored to two decimals, min 1.00. */
 export function limboResult(serverSeed: string, clientSeed: string, nonce: number): LimboOutcome {
   const [f] = floats(serverSeed, clientSeed, nonce, 1);
@@ -140,7 +160,7 @@ export function giveawayWinnerIndex(serverSeed: string, giveawayId: string, entr
 /* -------------------------------------------------------------------------- */
 
 export type VerifyInput = {
-  game: 'keno' | 'dice' | 'limbo';
+  game: 'keno' | 'dice' | 'limbo' | 'wheel';
   serverSeed: string;
   clientSeed: string;
   nonce: number;
@@ -148,7 +168,7 @@ export type VerifyInput = {
 
 export type VerifyResult = {
   serverSeedHash: string;
-  outcome: KenoOutcome | DiceOutcome | LimboOutcome;
+  outcome: KenoOutcome | DiceOutcome | LimboOutcome | WheelOutcome;
   /** A human-readable rendering of the same thing, for the result panel. */
   display: string;
 };
@@ -169,6 +189,18 @@ export function verify(input: VerifyInput): VerifyResult {
     case 'limbo': {
       const outcome = limboResult(serverSeed, clientSeed, nonce);
       return { serverSeedHash, outcome, display: `${outcome.result.toFixed(2)}×` };
+    }
+    case 'wheel': {
+      // The index is what the seeds decide; the multiplier is read off the
+      // published table for whichever risk was played. Only the index can be
+      // recomputed here, so that is what is shown — inventing a multiplier
+      // would mean guessing a risk level the seeds do not carry.
+      const outcome = wheelSpin(serverSeed, clientSeed, nonce, WHEEL_SEGMENTS);
+      return {
+        serverSeedHash,
+        outcome,
+        display: `segment ${outcome.index + 1} of ${WHEEL_SEGMENTS}`,
+      };
     }
   }
 }

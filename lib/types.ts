@@ -120,7 +120,12 @@ export type Clip = {
   payout?: number;
 };
 
-export type ShopCategory = 'entries' | 'discord' | 'merch' | 'stream';
+/**
+ * `tips` is the Razed bonus-and-tip shelf the store design calls for. The
+ * column is free text with no CHECK, so adding a category is a code change
+ * rather than a migration.
+ */
+export type ShopCategory = 'entries' | 'discord' | 'merch' | 'stream' | 'tips';
 
 export type ShopItem = {
   id: string;
@@ -171,7 +176,7 @@ export type Casino = {
   offerDetail: string;
 };
 
-export type GameSlug = 'keno' | 'dice' | 'limbo' | 'blackjack' | 'baccarat';
+export type GameSlug = 'keno' | 'dice' | 'limbo' | 'wheel' | 'blackjack' | 'baccarat';
 
 export type GameConfig = {
   slug: GameSlug;

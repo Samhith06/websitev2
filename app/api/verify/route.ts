@@ -16,13 +16,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, detail: 'Malformed request.' }, { status: 400 });
   }
 
-  const game = body.game as 'keno' | 'dice' | 'limbo';
+  const game = body.game as 'keno' | 'dice' | 'limbo' | 'wheel';
   const serverSeed = String(body.serverSeed ?? '').trim();
   const clientSeed = String(body.clientSeed ?? '');
   const nonce = Number(body.nonce);
 
-  if (!['keno', 'dice', 'limbo'].includes(game)) {
-    return NextResponse.json({ ok: false, detail: 'Pick one of the three games.' }, { status: 400 });
+  if (!['keno', 'dice', 'limbo', 'wheel'].includes(game)) {
+    return NextResponse.json({ ok: false, detail: 'Pick one of the games.' }, { status: 400 });
   }
   if (!serverSeed) {
     return NextResponse.json(

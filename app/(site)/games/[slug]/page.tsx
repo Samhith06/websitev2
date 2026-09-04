@@ -1,20 +1,18 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { rtpLabel } from '@/lib/format';
 import type { Metadata } from 'next';
-import { ArrowLeft } from 'lucide-react';
 import { gameConfigs } from '@/lib/mock';
-import { gamesAreKilled } from '@/lib/store/settings';
-import { viewerOrSignedOut } from '@/lib/viewer';
-import { Display, Label } from '@/components/ui/typography';
-import { Card } from '@/components/ui/surfaces';
-import { OptInGate } from '@/components/games/OptInGate';
-import { Keno } from '@/components/games/Keno';
-import { Dice } from '@/components/games/Dice';
+import { disabledGames, gamesAreKilled } from '@/lib/store/settings';
+import { currentUser } from '@/lib/player';
+import { gamesAvailable, settingsFor } from '@/lib/store/profile';
+import { balanceOf } from '@/lib/store/coins';
+import { coins, rtpLabel } from '@/lib/format';
+import { GamesGate } from '@/components/games/GamesGate';
+import { GameTable } from '@/components/games/Table';
 import { Blackjack } from '@/components/games/Blackjack';
-import { Limbo } from '@/components/games/Limbo';
 
-const PLAYABLE = ['keno', 'dice', 'limbo', 'blackjack'] as const;
+const TABLE_GAMES = ['dice', 'limbo', 'wheel', 'keno'] as const;
+const PLAYABLE = [...TABLE_GAMES, 'blackjack'] as const;
 type Playable = (typeof PLAYABLE)[number];
 
 export function generateStaticParams() {
@@ -35,65 +33,77 @@ export async function generateMetadata({
   };
 }
 
-// The screen reads the signed-in viewer's own state, so it renders per request.
 export const dynamic = 'force-dynamic';
 
 export default async function GamePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   if (!PLAYABLE.includes(slug as Playable)) notFound();
 
-  // Every play endpoint refuses server-side too; this only hides the screen.
-  const [viewer, killed] = await Promise.all([viewerOrSignedOut(), gamesAreKilled()]);
-  if (!viewer.games.enabled || viewer.games.excludedUntil) return <OptInGate />;
+  const user = await currentUser();
+  if (!user) return <GamesGate reason="signed-out" />;
+
+  // Hiding the screen is a courtesy; every play endpoint refuses server-side
+  // too, which is the part that actually enforces this.
+  const [settings, killed, disabled, balance] = await Promise.all([
+    settingsFor(user.id),
+    gamesAreKilled(),
+    disabledGames(),
+    balanceOf(user.id),
+  ]);
+
+  if (!gamesAvailable(settings)) {
+    return (
+      <GamesGate
+        reason={settings.excludedUntil ? 'excluded' : 'opt-in'}
+        excludedUntil={settings.excludedUntil}
+      />
+    );
+  }
 
   const game = gameConfigs.find((g) => g.slug === slug)!;
 
-  if (killed || !game.enabled) {
+  if (killed || !game.enabled || disabled.includes(game.slug)) {
     return (
-      <div className="container-page py-24">
-        <Card className="mx-auto max-w-lg p-8 text-center">
-          <Display size="s" as="h1">
-            {game.name} is temporarily unavailable
-          </Display>
-          <p className="mt-4 text-[14.5px] leading-relaxed text-ink-2">
-            This game is switched off while something is checked. Any round already in progress has
-            settled normally and your balance is untouched.
-          </p>
-          <Link href="/games" className="mt-5 inline-block text-[14px] text-brand underline underline-offset-2">
-            Back to the lobby
-          </Link>
-        </Card>
+      <div className="gate">
+        <h1>{game.name} is off right now</h1>
+        <p>
+          This game is temporarily disabled. Your balance is untouched and any round already in
+          progress has settled normally.
+        </p>
+        <Link className="btn" href="/games">
+          Back to games
+        </Link>
       </div>
     );
   }
 
   return (
-    <div className="container-page py-8 lg:py-12">
-      <Link
-        href="/games"
-        className="inline-flex items-center gap-1.5 text-[13.5px] text-muted transition-colors duration-150 hover:text-ink"
-      >
-        <ArrowLeft size={15} />
-        Games
-      </Link>
-
-      {/* Blackjack carries its own header, so showing this one too would name
-          the game twice. Every other table gets the standard one. */}
-      <div className={slug === 'blackjack' ? 'mt-5 mb-4' : 'mt-5 mb-7'}>
-        <Label className={slug === 'blackjack' ? undefined : 'mb-3'}>
-          Provably fair · {rtpLabel(game.rtp)} RTP · {game.minBet}–{game.maxBet} MC
-        </Label>
-        {slug === 'blackjack' ? null : (
-          <Display size="l" as="h1">
-            {game.name}
-          </Display>
-        )}
+    <>
+      <div className="sec-head">
+        <div>
+          <Link href="/games" className="eyebrow">
+            ← All games
+          </Link>
+          <h1>{game.name}</h1>
+          <div className="sh-sub">
+            {game.description} · {rtpLabel(game.rtp)}
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+          <div className="coinpill">
+            <div className="coin" aria-hidden>
+              M
+            </div>
+            <span className="cv">{coins(balance.balance)}</span>
+          </div>
+        </div>
       </div>
 
-      {slug === 'keno' ? <Keno /> : null}
-      {slug === 'dice' ? <Dice /> : null}
-      {slug === 'limbo' ? <Limbo /> : null}
-      {slug === 'blackjack' ? <Blackjack /> : null}
-    </div>
+      {slug === 'blackjack' ? (
+        <Blackjack />
+      ) : (
+        <GameTable slug={slug as (typeof TABLE_GAMES)[number]} />
+      )}
+    </>
   );
 }

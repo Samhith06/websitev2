@@ -1,272 +1,363 @@
-# 🔧 Kick Verification Not Working - Troubleshooting
+# � Kick Verification Troubleshooting
 
-## 🎯 Problem
+## Quick Diagnosis
 
-You're typing the verification code (e.g., `MS-DWJC`) in Kick chat, but the account isn't getting verified.
-
-## 🔍 Root Cause
-
-**The Kick webhook is not configured yet**, so the website doesn't receive chat messages from Kick.
+Run through these checks in order:
 
 ---
 
-## 📊 How Verification Works
+## ✅ Check 1: Are Webhooks Configured?
 
-### Current Flow:
-
-```
-1. User clicks "Generate Code" on website
-   ↓
-2. Website creates code "MS-DWJC" in database
-   ↓
-3. User types "MS-DWJC" in Kick chat
-   ↓
-4. Kick sends webhook to your website ❌ (NOT CONFIGURED)
-   ↓
-5. Website links Kick account to Discord account
-```
-
-**Problem:** Step 4 is not happening because webhooks aren't configured.
-
----
-
-## ✅ Solution: Set Up Kick Webhooks
-
-### Step 1: Get Your Webhook URL
-
-```
-https://mattyspins-web-production-75f8.up.railway.app/api/kick/webhook
-```
-
-### Step 2: Configure in Kick Developer Portal
-
-1. **Go to Kick Developer Portal:**
-   - Visit: https://kick.com/dashboard/settings/developer
-   - Or navigate: Dashboard → Settings → Developer
-
-2. **Create a Webhook:**
-   - Click "Add Webhook" or "Create Webhook"
-   - **Webhook URL:** `https://mattyspins-web-production-75f8.up.railway.app/api/kick/webhook`
-
-3. **Subscribe to Events:**
-   ✅ `chat.message.sent` (REQUIRED for verification)
-   ✅ `livestream.status.updated` (for live/offline)
-   ✅ `channel.subscription.new` (for sub bonuses)
-   ✅ `channel.subscription.renewal` (for sub bonuses)
-   ✅ `channel.subscription.gifts` (for gifted subs)
-   ✅ `moderation.banned` (for freezing banned users)
-
-4. **Required Scopes:**
-   - `events:subscribe`
-   - `chat:write`
-   - `channel:read`
-   - `user:read`
-
-5. **Get Public Key:**
-   - Copy the webhook public key provided by Kick
-   - You'll need this for the next step
-
-### Step 3: Add Public Key to Railway
-
-```bash
-railway variables set KICK_WEBHOOK_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA...
------END PUBLIC KEY-----"
-```
-
-Or in Railway Dashboard:
-
-1. Go to mattyspins-web service
-2. Variables tab
-3. Add `KICK_WEBHOOK_PUBLIC_KEY`
-4. Paste the public key from Kick
-
-### Step 4: Test the Webhook
-
-After configuration, test it:
-
-1. **Generate a new verification code** on your site
-2. **Type the code in Kick chat** (e.g., `MS-ABCD`)
-3. **Check if it verifies** - refresh the page
-
----
-
-## 🧪 Testing Without Webhook (Temporary Solution)
-
-While you're setting up webhooks, you can manually test the verification:
-
-### Option A: Use the API Directly
-
-```bash
-# Replace with your actual values
-curl -X POST https://mattyspins-web-production-75f8.up.railway.app/api/kick/verify \
-  -H "Content-Type: application/json" \
-  -d '{
-    "code": "MS-DWJC",
-    "kickUserId": "your-kick-user-id",
-    "kickUsername": "sunny_the_indian_gambler"
-  }'
-```
-
-### Option B: Admin Manual Link (Best for Testing)
-
-I can create an admin tool to manually link accounts. Would you like me to add this?
-
----
-
-## 🔍 Debugging Steps
-
-### 1. Check if Code Was Generated
-
-Visit your database or check in admin panel:
-
-- Does the code exist in `verification_codes` table?
-- Has it expired? (codes expire after 10 minutes)
-- Was it already consumed?
-
-### 2. Check Railway Logs
-
-```bash
-railway logs --filter="kick"
-```
-
-Look for:
-
-- `[kick] refused a delivery` - means webhook is receiving but signature is wrong
-- `[kick] linked username to user` - means it worked!
-- No logs = webhook not configured
-
-### 3. Test Webhook Endpoint
-
-```bash
-# Check if endpoint is accessible
-curl https://mattyspins-web-production-75f8.up.railway.app/api/kick/webhook
-```
-
-Should return: `{"ok":false,"error":"malformed"}` (this is expected for GET request)
-
-### 4. Check if You're in the Right Chat
-
-- Make sure you're typing in **mattyspinss** Kick channel
-- Not in a different streamer's chat
-- The channel slug must match the one in `lib/mock.ts`
-
----
-
-## 📝 Quick Verification Checklist
-
-- [ ] Kick webhook URL configured in Kick Developer Portal
-- [ ] Webhook subscribed to `chat.message.sent` event
-- [ ] Public key added to Railway environment variables
-- [ ] Code generated on website (not expired)
-- [ ] Typing code in correct Kick channel (mattyspinss)
-- [ ] Code format is correct: `MS-XXXX`
-
----
-
-## 🚨 Common Issues
-
-### Issue 1: "No logs in Railway"
-
-**Cause:** Webhook not configured in Kick  
-**Solution:** Complete Step 2 above
-
-### Issue 2: "refused a delivery: invalid-signature"
-
-**Cause:** Wrong public key  
-**Solution:** Copy the exact public key from Kick Developer Portal
-
-### Issue 3: "Code expired"
-
-**Cause:** Codes expire after 10 minutes  
-**Solution:** Generate a new code
-
-### Issue 4: "Code not found"
-
-**Cause:** Code doesn't exist in database  
-**Solution:** Check database connection, generate new code
-
-### Issue 5: "Already consumed"
-
-**Cause:** Code was already used  
-**Solution:** Generate a new code (each code is single-use)
-
----
-
-## 🎯 Expected Behavior (After Setup)
-
-1. User generates code: `MS-DWJC`
-2. User types `MS-DWJC` (or `ms-dwjc` or `my code is MS-DWJC`) in Kick chat
-3. **Immediate response in chat** (via bot): "✅ Account linked! You're now earning coins."
-4. **Page auto-updates** (polling detects the link)
-5. User sees their Kick username on the profile page
-
----
-
-## 📞 Still Not Working?
-
-### Check Railway Logs:
+**Test:** Check Railway logs after typing in Kick chat
 
 ```bash
 railway logs --tail
 ```
 
-### Check Database:
+**Expected:** You should see `[kick]` messages
 
-```sql
--- Check if code exists
-SELECT * FROM verification_codes WHERE code = 'MS-DWJC';
+**Result:**
 
--- Check if user has Kick link
-SELECT k.* FROM kick_links k
-JOIN users u ON k.user_id = u.id
-WHERE u.discord_id = 'YOUR_DISCORD_ID';
+- ✅ **See logs** → Webhooks working, go to Check 2
+- ❌ **No logs** → Webhooks NOT configured, see [KICK_WEBHOOK_SETUP.md](./KICK_WEBHOOK_SETUP.md)
+
+---
+
+## ✅ Check 2: Is KICK_WEBHOOK_PUBLIC_KEY Set?
+
+**Test:** Check Railway environment variables
+
+1. Go to https://railway.app
+2. Your project → mattyspins-web → Variables
+3. Look for `KICK_WEBHOOK_PUBLIC_KEY`
+
+**Result:**
+
+- ✅ **Variable exists** → Good, go to Check 3
+- ❌ **Variable missing** → Add it from Kick Developer Portal
+
+---
+
+## ✅ Check 3: Is the Code Valid?
+
+**Test:** Check the code on `/me` page
+
+**Requirements:**
+
+- ✅ Format: `MS-XXXX` (exactly 4 characters after MS-)
+- ✅ Not expired (codes expire after 10 minutes)
+- ✅ Not already used (codes are single-use)
+
+**Solution:**
+
+- Generate a fresh code
+- Use it within 10 minutes
+- Type it exactly as shown
+
+---
+
+## ✅ Check 4: Are You Typing in the Right Chat?
+
+**Test:** Verify channel name
+
+**Must type in:** mattyspinss's Kick chat
+**Not in:** DMs, other channels, or Discord
+
+---
+
+## ✅ Check 5: Is Database Connected?
+
+**Test:** Check Railway logs for database errors
+
+```bash
+railway logs --filter="database"
 ```
 
-### Test Webhook Locally:
+**Result:**
 
-1. **Run ngrok** (to expose localhost):
+- ✅ **No errors** → Database working
+- ❌ **Connection errors** → Check DATABASE_URL in Railway variables
+
+---
+
+## � Common Issues & Fixes
+
+### Issue: "Webhook signature verification failed"
+
+**Cause:** Public key not set correctly
+
+**Fix:**
+
+1. Go to Kick Developer Portal
+2. Copy the PUBLIC KEY (entire thing including BEGIN/END)
+3. In Railway: Variables → KICK_WEBHOOK_PUBLIC_KEY → Paste
+4. Make sure no extra spaces
+5. Redeploy: Railway does this automatically
+
+**Test:**
+
+```bash
+railway logs --filter="signature"
+```
+
+---
+
+### Issue: "Code not detected in chat message"
+
+**Cause:** Code format wrong or expired
+
+**Fix:**
+
+1. Generate NEW code on `/me` page
+2. Copy it exactly (e.g., `MS-DWJC`)
+3. Type ONLY the code in Kick chat: `MS-DWJC`
+4. Do it within 10 minutes
+
+**Accepted formats:**
+
+- ✅ `MS-DWJC`
+- ✅ `my code is MS-DWJC`
+- ✅ `ms-dwjc` (case insensitive)
+- ❌ `!verify MS-DWJC` (! not needed)
+
+---
+
+### Issue: "Page not updating after typing code"
+
+**Cause:** Page needs refresh or code already used
+
+**Fix:**
+
+1. Hard refresh: Ctrl+Shift+R (Windows) or Cmd+Shift+R (Mac)
+2. Check Railway logs:
+   ```bash
+   railway logs --filter="linked"
+   ```
+3. If you see "linked mattyspinss to user X" → It worked!
+4. If you see "code already used" → Generate new code
+
+---
+
+### Issue: "User not found" or "Account not created"
+
+**Cause:** Haven't signed in with Discord yet
+
+**Fix:**
+
+1. Go to homepage
+2. Click "Sign in with Discord"
+3. Authorize the app
+4. Go back to `/me`
+5. Generate code
+6. Type in Kick chat
+
+---
+
+### Issue: "Webhook endpoint not found (404)"
+
+**Cause:** Railway deployment failed or URL wrong
+
+**Fix:**
+
+1. Check Railway status: `railway status`
+2. Check deployment: `railway logs`
+3. Verify webhook URL in Kick settings:
+   ```
+   https://mattyspins-web-production-75f8.up.railway.app/api/kick/webhook
+   ```
+4. No trailing slash!
+5. HTTPS not HTTP
+
+---
+
+## 📋 Step-by-Step Verification Test
+
+Follow this exact sequence:
+
+### 1. **Sign in with Discord**
+
+```
+Go to: https://mattyspins-web-production-75f8.up.railway.app
+Click: "Sign in with Discord"
+Authorize the app
+```
+
+### 2. **Go to Profile Page**
+
+```
+Go to: https://mattyspins-web-production-75f8.up.railway.app/me
+```
+
+### 3. **Generate Code**
+
+```
+Click: "Generate my code"
+See code appear: MS-XXXX
+Copy the code
+```
+
+### 4. **Open Kick in Another Tab**
+
+```
+Go to: https://kick.com/mattyspinss
+Open chat
+```
+
+### 5. **Type Code in Chat**
+
+```
+Type exactly: MS-XXXX (your actual code)
+Press Enter
+```
+
+### 6. **Watch Profile Page**
+
+```
+Page should auto-update within 5 seconds
+Status changes to: "Verified ✅"
+Shows your Kick username
+```
+
+### 7. **Check Logs (If Not Working)**
+
+```bash
+railway logs --tail
+```
+
+Look for:
+
+```
+[kick] chat.message.sent
+[kick] linked mattyspinss to user 123
+```
+
+---
+
+## � Advanced Debugging
+
+### Check If Webhook Endpoint Exists
+
+```bash
+curl -I https://mattyspins-web-production-75f8.up.railway.app/api/kick/webhook
+```
+
+**Expected:** `401 Unauthorized` or `503 Service Unavailable` (both are OK)
+**Bad:** `404 Not Found` (means endpoint doesn't exist)
+
+### Check Database Connection
+
+```bash
+curl https://mattyspins-web-production-75f8.up.railway.app/api/health
+```
+
+**Expected:** `{"ok": true, "database": "connected"}`
+**Bad:** `{"ok": false, "database": "disconnected"}`
+
+### Check Railway Service Status
+
+```bash
+railway status
+```
+
+**Expected:**
+
+```
+Project: miraculous-wholeness
+Environment: production
+Service: mattyspins-web
+```
+
+### View All Environment Variables
+
+```bash
+railway variables
+```
+
+**Should have:**
+
+- `DATABASE_URL`
+- `KICK_WEBHOOK_PUBLIC_KEY`
+- `AUTH_SECRET`
+- `DISCORD_CLIENT_ID`
+- `DISCORD_CLIENT_SECRET`
+
+---
+
+## 🎯 Quick Fixes Checklist
+
+- [ ] Signed in with Discord first
+- [ ] Generated fresh code (< 10 min old)
+- [ ] Typed code in mattyspinss's Kick chat
+- [ ] Code format is MS-XXXX (4 chars)
+- [ ] Webhooks configured in Kick Developer Portal
+- [ ] KICK_WEBHOOK_PUBLIC_KEY set in Railway
+- [ ] Railway service is running
+- [ ] Database is connected
+- [ ] Hard refreshed browser page
+- [ ] Checked Railway logs for errors
+
+---
+
+## 📞 Still Not Working?
+
+### Collect This Information:
+
+1. **Railway logs:**
 
    ```bash
-   ngrok http 3000
+   railway logs --tail 100 > logs.txt
    ```
 
-2. **Use ngrok URL** in Kick webhook temporarily:
+2. **Environment variables** (without revealing secrets):
 
-   ```
-   https://abc123.ngrok.io/api/kick/webhook
+   ```bash
+   railway variables | grep "KICK"
    ```
 
-3. **Test locally** with real Kick chat messages
+3. **Browser console errors:**
+   - Open DevTools (F12)
+   - Go to Console tab
+   - Copy any red errors
+
+4. **Exact steps you followed**
+
+5. **What you see vs what you expect**
 
 ---
 
-## 🔧 Want a Temporary Solution?
+## 🎉 Success Looks Like This
 
-While webhooks are being set up, I can create:
+### In Railway Logs:
 
-1. **Manual Admin Link Tool** - Admin can manually link accounts
-2. **API Key-based Verification** - Use Kick API directly to verify
-3. **Test Mode** - Bypass verification for testing
+```
+[kick] chat.message.sent received
+[kick] code MS-DWJC from mattyspinss
+[kick] linked mattyspinss to user 123
+```
 
-Let me know if you want any of these!
+### On Profile Page:
+
+```
+✅ Verified
+Kick: mattyspinss
+Linked: 2 minutes ago
+```
+
+### In Database:
+
+```sql
+SELECT * FROM kick_links WHERE user_id = 123;
+-- Shows row with kick_user_id and kick_username
+```
 
 ---
 
-## 📚 Related Documentation
+## 📚 Related Guides
 
-- `README.md` - Section "Kick webhooks"
-- `app/api/kick/webhook/route.ts` - Webhook handler code
-- `lib/kick.ts` - Verification code finder
+- **Full Webhook Setup:** [KICK_WEBHOOK_SETUP.md](./KICK_WEBHOOK_SETUP.md)
+- **Deployment Info:** [DEPLOYMENT_SUCCESS.md](./DEPLOYMENT_SUCCESS.md)
+- **Auto Stream Detection:** [AUTOMATIC_STREAM_DETECTION.md](./AUTOMATIC_STREAM_DETECTION.md)
 
 ---
 
-## ✅ Summary
-
-**The core issue:** Kick webhooks are not configured yet.
-
-**Quick fix:** Set up webhook in Kick Developer Portal (Steps 1-4 above)
-
-**Time needed:** ~10 minutes
-
-**Once done:** Verification will work automatically and instantly! 🎉
+**Remember:** The most common issue is webhooks not being configured yet. Start there! 🎯
