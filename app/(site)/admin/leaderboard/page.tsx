@@ -4,7 +4,7 @@ import { devBypass, roleFor } from '@/lib/admin';
 import { auth } from '@/auth';
 import { money } from '@/lib/format';
 import { FreezeMonthButton } from '@/components/admin/AdminButtons';
-import { OpenPeriod, PrizeEditor } from '@/components/admin/PeriodEditor';
+import { OpenPeriod, PeriodControls, PrizeEditor } from '@/components/admin/PeriodEditor';
 
 export const metadata = { title: 'Leaderboard' };
 export const dynamic = 'force-dynamic';
@@ -136,6 +136,14 @@ export default async function AdminLeaderboardPage() {
         tiers={period.tiers}
         editable={isOwner && period.frozenAt == null}
       />
+
+      {isOwner ? (
+        <PeriodControls
+          periodId={period.id}
+          month={period.startsAt.slice(0, 7)}
+          frozen={period.frozenAt != null}
+        />
+      ) : null}
 
       <p className="small muted" style={{ marginTop: 14, maxWidth: '72ch' }}>
         Freezing stores these standings permanently and queues the winners on the payouts screen.

@@ -2,7 +2,13 @@
 
 import { useState, useTransition } from 'react';
 import { money } from '@/lib/format';
-import { openMonthlyPeriod, removePrizeTier, savePrizeTier } from '@/app/(site)/admin/actions';
+import {
+  discardBoard,
+  openMonthlyPeriod,
+  removePrizeTier,
+  savePrizeTier,
+  setPeriodDates,
+} from '@/app/(site)/admin/actions';
 import type { PrizeTier } from '@/lib/types';
 
 function Note({ note }: { note: { ok: boolean; text: string } | null }) {
@@ -256,6 +262,117 @@ export function PrizeEditor({
       <div style={{ marginTop: 12 }}>
         <Note note={note} />
       </div>
+    </div>
+  );
+}
+
+/**
+ * Moving or discarding an open board.
+ *
+ * Both are correction paths rather than routine controls, so they sit below the
+ * prize table rather than beside the numbers people edit every week. Discarding
+ * asks first, because it takes the prize ladder with it.
+ */
+export function PeriodControls({
+  periodId,
+  month,
+  frozen,
+}: {
+  periodId: number;
+  month: string;
+  frozen: boolean;
+}) {
+  const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [pending, start] = useTransition();
+
+  if (frozen) {
+    return (
+      <div className="card" style={{ marginTop: 14 }}>
+        <h2 style={{ fontSize: 15, marginBottom: 4 }}>Board window</h2>
+        <p className="small muted" style={{ margin: 0 }}>
+          This board is frozen. Its dates are the question people already answered and its
+          standings are what some of them have been paid against, so neither can be changed now.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card" style={{ marginTop: 14 }}>
+      <h2 style={{ fontSize: 15, marginBottom: 4 }}>Board window</h2>
+      <p className="small muted" style={{ marginBottom: 14 }}>
+        Moving the window changes which dates are sent to Razed, so the standings re-read straight
+        away. Possible until the month is frozen.
+      </p>
+
+      <form
+        action={(formData) =>
+          start(async () => {
+            const result = await setPeriodDates(formData);
+            setNote(result.ok ? { ok: true, text: result.message } : { ok: false, text: result.error });
+          })
+        }
+        style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}
+      >
+        <input type="hidden" name="periodId" value={periodId} />
+        <div className="field" style={{ margin: 0 }}>
+          <label htmlFor="period-month">Month</label>
+          <input id="period-month" className="inp" type="month" name="month" defaultValue={month} />
+        </div>
+        <button className="btn sm" disabled={pending} style={{ marginBottom: 2 }}>
+          {pending ? 'Saving…' : 'Move window'}
+        </button>
+      </form>
+
+      <div className="divider" />
+
+      <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+        <button className="btn sm ghost" onClick={() => setConfirming(true)} disabled={pending}>
+          Discard this board
+        </button>
+        <span className="small muted" style={{ flex: 1, minWidth: 240 }}>
+          For a board opened by mistake. Only one monthly board can be open at a time, so a wrong
+          one blocks the right one.
+        </span>
+      </div>
+
+      <div style={{ marginTop: 12 }}>
+        <Note note={note} />
+      </div>
+
+      {confirming ? (
+        <div className="modal" role="dialog" aria-modal="true" aria-label="Discard this board">
+          <div className="mbox">
+            <h2>Discard this board?</h2>
+            <p>
+              The board and its prize ladder are deleted. Nothing has been paid against it yet — a
+              frozen board cannot be discarded at all — but you will have to set the prizes again on
+              whichever board replaces it.
+            </p>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button className="btn ghost wide" onClick={() => setConfirming(false)}>
+                Cancel
+              </button>
+              <button
+                className="btn danger wide"
+                disabled={pending}
+                onClick={() =>
+                  start(async () => {
+                    const result = await discardBoard(periodId);
+                    setNote(
+                      result.ok ? { ok: true, text: result.message } : { ok: false, text: result.error },
+                    );
+                    setConfirming(false);
+                  })
+                }
+              >
+                Discard it
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

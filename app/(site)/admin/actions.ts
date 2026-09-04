@@ -15,8 +15,10 @@ import {
   createPeriod,
   currentPeriod,
   deleteTier,
+  discardPeriod,
   freezeStandings,
   prizeForRank,
+  updatePeriodDates,
   upsertTier as upsertPrizeTier,
 } from '@/lib/store/periods';
 import { fetchRazedLeaderboard, toBoardRows } from '@/lib/razed';
@@ -516,4 +518,74 @@ export async function openMonthlyPeriodForm(formData: FormData): Promise<void> {
 
 export async function savePrizeTierForm(formData: FormData): Promise<void> {
   await savePrizeTier(formData);
+}
+
+/**
+ * Move an open board's window.
+ *
+ * The store refuses this once a board is frozen: at that point the dates are
+ * the question people already answered, and moving them would change what was
+ * competed for after the fact.
+ */
+export async function setPeriodDates(formData: FormData): Promise<Outcome> {
+  const who = await staff('owner');
+  if (!who) return DENIED;
+
+  const periodId = Number(formData.get('periodId'));
+  const monthValue = String(formData.get('month') ?? '').trim();
+
+  const match = /^(\d{4})-(\d{2})$/.exec(monthValue);
+  if (!Number.isInteger(periodId) || !match) return { ok: false, error: 'Pick a month.' };
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const startsAt = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0));
+  const endsAt = new Date(Date.UTC(year, month, 1, 0, 0, 0) - 1000);
+
+  try {
+    await updatePeriodDates(periodId, startsAt.toISOString(), endsAt.toISOString());
+    await record({
+      actor: who.name,
+      actorDiscordId: who.discordId,
+      action: 'leaderboard.period.moved',
+      target: String(periodId),
+      detail: { startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString() },
+    });
+
+    revalidatePath('/admin/leaderboard');
+    revalidatePath('/leaderboard');
+    revalidatePath('/');
+    return { ok: true, message: 'Window moved. The board re-reads Razed for the new dates.' };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof PeriodError ? error.message : 'Those dates could not be set.',
+    };
+  }
+}
+
+/** Discard a board opened by mistake. Refused once it is frozen. */
+export async function discardBoard(periodId: number): Promise<Outcome> {
+  const who = await staff('owner');
+  if (!who) return DENIED;
+
+  try {
+    await discardPeriod(periodId);
+    await record({
+      actor: who.name,
+      actorDiscordId: who.discordId,
+      action: 'leaderboard.period.discarded',
+      target: String(periodId),
+    });
+
+    revalidatePath('/admin/leaderboard');
+    revalidatePath('/leaderboard');
+    revalidatePath('/');
+    return { ok: true, message: 'Board discarded. You can open the right one now.' };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof PeriodError ? error.message : 'That board could not be discarded.',
+    };
+  }
 }

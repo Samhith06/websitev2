@@ -396,3 +396,26 @@ export async function freezeStandings(
   );
   return row != null;
 }
+
+/**
+ * Delete an open board.
+ *
+ * The correction path for a board opened by mistake — wrong month, wrong type
+ * — since only one of a type may be open at a time and a wrong one otherwise
+ * blocks the right one.
+ *
+ * Refused once standings are frozen. At that point the board is the record of
+ * what people competed for and what some of them have been paid against, and
+ * deleting it would erase the evidence behind a payout. Its prize tiers go with
+ * it by cascade.
+ */
+export async function discardPeriod(id: number): Promise<void> {
+  const period = await periodById(id);
+  if (!period) throw new PeriodError('That period no longer exists.');
+  if (period.frozenAt || period.status !== 'open') {
+    throw new PeriodError(
+      'Only an open board can be discarded. A frozen one is the record of a finished month.',
+    );
+  }
+  await write('DELETE FROM lb_periods WHERE id = $1', [id]);
+}
