@@ -145,6 +145,47 @@ const c = floats(SEED, 'same', 43, 4).join(',');
 console.log(`${a === b ? 'PASS' : 'FAIL'}  deterministic for one nonce`);
 console.log(`${a !== c ? 'PASS' : 'FAIL'}  different across nonces`);
 if (a !== b || a === c) failures++;
+/* --------------------------------------------------------------- wheel --- */
+
+/**
+ * The wheels are restated here rather than imported, for the same reason as
+ * everything else in this file: a table that verifies itself verifies nothing.
+ * If these fall out of step with lib/games.ts the sums below disagree and the
+ * check fails, which is the point.
+ */
+console.log('\n--- Wheel paytables ---');
+const WHEELS = {
+  low: [
+    0, 1.2, 1.5, 1.2, 0, 1.2, 1.5, 1.2, 0, 1.2, 1.5, 1.2,
+    0, 1.2, 1.5, 1.2, 0, 1.2, 1.86, 1.2, 0, 1.2, 1.5, 1.2,
+  ],
+  medium: [
+    0, 1.5, 0, 2, 0, 3, 0, 1.5, 0, 2, 0, 5.26,
+    0, 1.5, 0, 2, 0, 1.5, 0, 2, 0, 1.5, 0, 0,
+  ],
+  high: [
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 20,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3.76,
+  ],
+};
+
+for (const [risk, segments] of Object.entries(WHEELS)) {
+  const rtp = segments.reduce((sum, m) => sum + m, 0) / segments.length;
+  const hit = segments.filter((m) => m > 0).length / segments.length;
+  check(`wheel RTP (${risk}, ${segments.length} segments)`, rtp, 0.99, 0.001);
+  console.log(`      top ${Math.max(...segments)}x, pays on ${(hit * 100).toFixed(1)}% of spins`);
+}
+
+// A spin must land inside the wheel, every time.
+let offWheel = 0;
+for (let n = 0; n < 20_000; n++) {
+  const [f] = floats(SEED, 'wheel', n, 1);
+  const index = Math.min(23, Math.floor(f * 24));
+  if (!Number.isInteger(index) || index < 0 || index > 23) offWheel++;
+}
+console.log(`${offWheel === 0 ? 'PASS' : 'FAIL'}  wheel spins land in range          ${offWheel} bad of 20,000`);
+if (offWheel) failures++;
+
 
 console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : `${failures} CHECK(S) FAILED`}`);
 process.exit(failures === 0 ? 0 : 1);

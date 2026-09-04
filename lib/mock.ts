@@ -279,6 +279,18 @@ export const gameConfigs: GameConfig[] = [
     maxWin: 20_000,
   },
   {
+    slug: "wheel",
+    name: "Wheel",
+    description:
+      "Twenty-four segments, three risk levels. Low pays often and small, high almost never and large.",
+    imageUrl: "/brand/Wheel.webp",
+    enabled: true,
+    rtp: 0.99,
+    minBet: 10,
+    maxBet: 100,
+    maxWin: 20_000,
+  },
+  {
     slug: "blackjack",
     name: "Blackjack",
     description:

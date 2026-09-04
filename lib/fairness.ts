@@ -69,6 +69,7 @@ export function floats(serverSeed: string, clientSeed: string, nonce: number, co
 export type KenoOutcome = { drawn: number[] };
 export type DiceOutcome = { roll: number };
 export type LimboOutcome = { result: number };
+export type WheelOutcome = { index: number };
 
 /** Ten distinct numbers from 1–40, by partial Fisher–Yates over the stream. */
 /**
@@ -113,6 +114,24 @@ export function kenoDraw(serverSeed: string, clientSeed: string, nonce: number, 
 export function diceRoll(serverSeed: string, clientSeed: string, nonce: number): DiceOutcome {
   const [f] = floats(serverSeed, clientSeed, nonce, 1);
   return { roll: Math.floor(f * 10_001) / 100 };
+}
+
+/**
+ * Which segment the pointer lands on.
+ *
+ * One float across the segment count, and nothing else — the edge lives in the
+ * paytable rather than here, so the wheel is a fair spin over an unfair set of
+ * prizes. That split is what makes it checkable: anyone can recompute the index
+ * from the seeds, then read the multiplier off a published table.
+ */
+export function wheelSpin(
+  serverSeed: string,
+  clientSeed: string,
+  nonce: number,
+  segments: number,
+): WheelOutcome {
+  const [f] = floats(serverSeed, clientSeed, nonce, 1);
+  return { index: Math.min(segments - 1, Math.floor(f * segments)) };
 }
 
 /** The unbounded multiplier, edge applied, floored to two decimals, min 1.00. */

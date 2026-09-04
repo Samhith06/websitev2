@@ -176,7 +176,7 @@ export type Casino = {
   offerDetail: string;
 };
 
-export type GameSlug = 'keno' | 'dice' | 'limbo' | 'blackjack' | 'baccarat';
+export type GameSlug = 'keno' | 'dice' | 'limbo' | 'wheel' | 'blackjack' | 'baccarat';
 
 export type GameConfig = {
   slug: GameSlug;
