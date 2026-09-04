@@ -3,7 +3,9 @@
 import { revalidatePath } from 'next/cache';
 import { auth } from '@/auth';
 import { devBypass, roleFor, type AdminRole } from '@/lib/admin';
-import { record } from '@/lib/store/audit';
+import { record as record_ } from '@/lib/store/audit';
+import { InsufficientCoins, balanceOf, record } from '@/lib/store/coins';
+import { coins } from '@/lib/format';
 import { approveLink, rejectLink } from '@/lib/store/razed-links';
 import { markClaimPaid, rejectClaim, upsertTier } from '@/lib/store/milestones';
 import { drawRaffle, setRaffleStatus } from '@/lib/store/raffles';
@@ -69,7 +71,7 @@ export async function approveRazedLink(userId: number, username: string): Promis
   if (!who) return DENIED;
 
   await approveLink(userId, who.name);
-  await record({
+  await record_({
     actor: who.name,
     actorDiscordId: who.discordId,
     action: 'razed.link.approved',
@@ -90,7 +92,7 @@ export async function rejectRazedLink(
   if (!who) return DENIED;
 
   await rejectLink(userId, who.name, reason || 'Not approved');
-  await record({
+  await record_({
     actor: who.name,
     actorDiscordId: who.discordId,
     action: 'razed.link.rejected',
@@ -118,7 +120,7 @@ export async function markPaid(claimId: number, who_: string, amount: number): P
   if (!who) return DENIED;
 
   await markClaimPaid(claimId, who.name);
-  await record({
+  await record_({
     actor: who.name,
     actorDiscordId: who.discordId,
     action: 'milestone.paid',
@@ -136,7 +138,7 @@ export async function holdClaim(claimId: number, user: string): Promise<Outcome>
   if (!who) return DENIED;
 
   await rejectClaim(claimId, who.name);
-  await record({
+  await record_({
     actor: who.name,
     actorDiscordId: who.discordId,
     action: 'milestone.rejected',
@@ -172,7 +174,7 @@ export async function resolveOrder(
   });
   if (!result.ok) return { ok: false, error: result.error };
 
-  await record({
+  await record_({
     actor: who.name,
     actorDiscordId: who.discordId,
     action: `redemption.${status}`,
@@ -219,7 +221,7 @@ export async function closeRaffle(raffleId: number): Promise<Outcome> {
   if (!who) return DENIED;
 
   await setRaffleStatus(raffleId, 'closed');
-  await record({
+  await record_({
     actor: who.name,
     actorDiscordId: who.discordId,
     action: 'raffle.closed',
@@ -242,7 +244,7 @@ export async function syncRazed(): Promise<Outcome> {
   const result = await syncLifetime();
   if (!result.ok) return { ok: false, error: `Sync failed: ${result.detail}` };
 
-  await record({
+  await record_({
     actor: who.name,
     actorDiscordId: who.discordId,
     action: 'razed.synced',
@@ -283,7 +285,7 @@ export async function freezeMonth(): Promise<Outcome> {
   const froze = await freezeStandings(period.id, standings);
   if (!froze) return { ok: false, error: 'That period was already frozen.' };
 
-  await record({
+  await record_({
     actor: who.name,
     actorDiscordId: who.discordId,
     action: 'leaderboard.frozen',
@@ -332,7 +334,7 @@ export async function saveTier(formData: FormData): Promise<Outcome> {
   }
 
   await upsertTier({ id, name, threshold, reward, active });
-  await record({
+  await record_({
     actor: who.name,
     actorDiscordId: who.discordId,
     action: id ? 'milestone.tier.updated' : 'milestone.tier.created',
@@ -354,7 +356,7 @@ export async function grantBadge(userId: number, slug: string): Promise<Outcome>
   if (!who) return DENIED;
 
   await award(userId, slug);
-  await record({
+  await record_({
     actor: who.name,
     actorDiscordId: who.discordId,
     action: 'badge.granted',
@@ -371,7 +373,7 @@ export async function revokeBadge(userId: number, slug: string): Promise<Outcome
   if (!who) return DENIED;
 
   await revoke(userId, slug);
-  await record({
+  await record_({
     actor: who.name,
     actorDiscordId: who.discordId,
     action: 'badge.revoked',
@@ -436,7 +438,7 @@ export async function openMonthlyPeriod(formData: FormData): Promise<Outcome> {
       createdBy: who.name,
     });
 
-    await record({
+    await record_({
       actor: who.name,
       actorDiscordId: who.discordId,
       action: 'leaderboard.period.opened',
@@ -476,7 +478,7 @@ export async function savePrizeTier(formData: FormData): Promise<Outcome> {
 
   try {
     await upsertPrizeTier({ periodId, tierId, rankFrom, rankTo, amount, updatedBy: who.name });
-    await record({
+    await record_({
       actor: who.name,
       actorDiscordId: who.discordId,
       action: tierId ? 'leaderboard.prize.updated' : 'leaderboard.prize.added',
@@ -501,7 +503,7 @@ export async function removePrizeTier(tierId: number, periodId: number): Promise
   if (!who) return DENIED;
 
   await deleteTier(tierId);
-  await record({
+  await record_({
     actor: who.name,
     actorDiscordId: who.discordId,
     action: 'leaderboard.prize.removed',
@@ -547,7 +549,7 @@ export async function setPeriodDates(formData: FormData): Promise<Outcome> {
 
   try {
     await updatePeriodDates(periodId, startsAt.toISOString(), endsAt.toISOString());
-    await record({
+    await record_({
       actor: who.name,
       actorDiscordId: who.discordId,
       action: 'leaderboard.period.moved',
@@ -574,7 +576,7 @@ export async function discardBoard(periodId: number): Promise<Outcome> {
 
   try {
     await discardPeriod(periodId);
-    await record({
+    await record_({
       actor: who.name,
       actorDiscordId: who.discordId,
       action: 'leaderboard.period.discarded',
@@ -590,5 +592,85 @@ export async function discardBoard(periodId: number): Promise<Outcome> {
       ok: false,
       error: error instanceof PeriodError ? error.message : 'That board could not be discarded.',
     };
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Balances                                                                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The largest single adjustment allowed.
+ *
+ * Not a policy about generosity — a guard against a typo. An extra zero on a
+ * grant mints coins that then get spent, and unspending them across a store
+ * order and three raffle entries is far harder than refusing the keystroke.
+ */
+const MAX_ADJUSTMENT = 1_000_000;
+
+/**
+ * Add or remove coins from an account.
+ *
+ * Deliberately not an edit of the balance. It writes an ordinary ledger row
+ * through the same path every other movement uses, so the balance stays the
+ * sum of the ledger and the member can see exactly what happened and who did
+ * it — "Adjustment — compensation for the raffle bug", not a number that
+ * silently changed overnight.
+ *
+ * The reason is required because the member reads it.
+ */
+export async function adjustBalance(formData: FormData): Promise<Outcome> {
+  const who = await staff('owner');
+  if (!who) return DENIED;
+
+  const userId = Number(formData.get('userId'));
+  const delta = Number(formData.get('delta'));
+  const reason = String(formData.get('reason') ?? '').trim();
+
+  if (!Number.isInteger(userId)) return { ok: false, error: 'Unknown account.' };
+  if (!Number.isInteger(delta) || delta === 0) {
+    return { ok: false, error: 'Enter a whole number of coins, positive or negative.' };
+  }
+  if (Math.abs(delta) > MAX_ADJUSTMENT) {
+    return {
+      ok: false,
+      error: `That is over the ${coins(MAX_ADJUSTMENT)} limit for one adjustment. Check the figure.`,
+    };
+  }
+  if (!reason) {
+    return { ok: false, error: 'Give a reason — the member sees it in their coin history.' };
+  }
+
+  const before = await balanceOf(userId);
+
+  try {
+    const after = await record({
+      userId,
+      delta,
+      kind: 'adjustment',
+      reason: `Adjustment — ${reason}`,
+    });
+
+    await record_({
+      actor: who.name,
+      actorDiscordId: who.discordId,
+      action: delta > 0 ? 'balance.granted' : 'balance.deducted',
+      target: String(userId),
+      detail: { delta, reason, before: before.balance, after: after.balance },
+    });
+
+    revalidatePath('/admin/users');
+    return {
+      ok: true,
+      message: `${delta > 0 ? 'Added' : 'Removed'} ${coins(Math.abs(delta))} — balance is now ${coins(after.balance)}.`,
+    };
+  } catch (error) {
+    if (error instanceof InsufficientCoins) {
+      return {
+        ok: false,
+        error: `They only have ${coins(error.balance)}. A balance cannot go negative.`,
+      };
+    }
+    throw error;
   }
 }

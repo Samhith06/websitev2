@@ -3,6 +3,9 @@ import { rows } from '@/lib/db';
 import { searchUsers } from '@/lib/store/accounts';
 import { roleFor } from '@/lib/admin';
 import { coins, dateShort } from '@/lib/format';
+import { auth } from '@/auth';
+import { devBypass } from '@/lib/admin';
+import { AdjustBalance } from '@/components/admin/AdjustBalance';
 
 export const metadata = { title: 'Users' };
 export const dynamic = 'force-dynamic';
@@ -16,6 +19,11 @@ export default async function AdminUsersPage({
 }) {
   const { q, page } = await searchParams;
   const pageNum = Math.max(1, Number(page) || 1);
+
+  // Adjusting a balance is Matty's, not a mod's — the column is simply absent
+  // for anyone else rather than present and refusing.
+  const session = devBypass() ? null : await auth();
+  const isOwner = devBypass() || roleFor(session?.user?.discordId ?? null) === 'owner';
 
   const [{ members, total }, links] = await Promise.all([
     searchUsers({ query: q, limit: PAGE, offset: (pageNum - 1) * PAGE }),
@@ -35,7 +43,7 @@ export default async function AdminUsersPage({
           <h1>Users</h1>
           <div className="sh-sub">
             Balance adjustments write a normal ledger row with your name on it — balances are never
-            edited directly.
+            edited directly, so the total always equals the sum of the ledger.
           </div>
         </div>
       </div>
@@ -63,6 +71,7 @@ export default async function AdminUsersPage({
                 <th>Kick</th>
                 <th>Razed</th>
                 <th>Joined</th>
+                {isOwner ? <th>Balance</th> : null}
               </tr>
             </thead>
             <tbody>
@@ -99,6 +108,15 @@ export default async function AdminUsersPage({
                     <td className="n" style={{ color: 'var(--muted)' }}>
                       {dateShort(member.createdAt)}
                     </td>
+                    {isOwner ? (
+                      <td style={{ textAlign: 'right' }}>
+                        <AdjustBalance
+                          userId={member.id}
+                          username={member.discordUsername}
+                          balance={member.balance}
+                        />
+                      </td>
+                    ) : null}
                   </tr>
                 );
               })}
