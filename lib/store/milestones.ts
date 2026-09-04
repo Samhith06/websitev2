@@ -12,6 +12,8 @@ import { one, rows, tx, write } from '@/lib/db';
 
 export type Tier = {
   id: number;
+  /** Rookie, Hustler, Grinder… — how the ladder is actually talked about. */
+  name: string;
   threshold: number;
   reward: number;
   active: boolean;
@@ -47,17 +49,20 @@ export async function listTiers(includeInactive = false): Promise<Tier[]> {
    */
   const result = await rows<{
     id: string;
+    name: string | null;
     threshold_text: string;
     reward_text: string;
     active: boolean;
   }>(
-    `SELECT id::text, threshold::text AS threshold_text, reward::text AS reward_text, active
+    `SELECT id::text, name, threshold::text AS threshold_text,
+            reward::text AS reward_text, active
        FROM milestone_tiers
       ${includeInactive ? '' : 'WHERE active'}
       ORDER BY threshold ASC`,
   );
   return result.map((r) => ({
     id: Number(r.id),
+    name: r.name ?? '',
     threshold: Number(r.threshold_text),
     reward: Number(r.reward_text),
     active: r.active,
@@ -280,22 +285,26 @@ export async function rejectClaim(claimId: number, by: string): Promise<void> {
 
 export async function upsertTier(input: {
   id?: number;
+  name: string;
   threshold: number;
   reward: number;
   active: boolean;
 }): Promise<void> {
   if (input.id) {
     await write(
-      'UPDATE milestone_tiers SET threshold = $2, reward = $3, active = $4 WHERE id = $1',
-      [input.id, input.threshold, input.reward, input.active],
+      `UPDATE milestone_tiers
+          SET name = $2, threshold = $3, reward = $4, active = $5
+        WHERE id = $1`,
+      [input.id, input.name, input.threshold, input.reward, input.active],
     );
     return;
   }
   await write(
-    `INSERT INTO milestone_tiers (threshold, reward, active)
-     VALUES ($1, $2, $3)
-     ON CONFLICT (threshold) DO UPDATE SET reward = EXCLUDED.reward, active = EXCLUDED.active`,
-    [input.threshold, input.reward, input.active],
+    `INSERT INTO milestone_tiers (name, threshold, reward, active)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (threshold) DO UPDATE
+       SET name = EXCLUDED.name, reward = EXCLUDED.reward, active = EXCLUDED.active`,
+    [input.name, input.threshold, input.reward, input.active],
   );
 }
 

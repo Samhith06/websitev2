@@ -41,10 +41,16 @@ export default async function AdminMilestonesPage() {
             className="editrow"
             key={tier.id}
             action={saveTierForm}
-            style={{ gridTemplateColumns: '60px 1fr 1fr auto auto' }}
+            style={{ gridTemplateColumns: '150px 1fr 1fr auto auto' }}
           >
             <input type="hidden" name="id" value={tier.id} />
-            <div className="er">T{i + 1}</div>
+            <input
+              className="inp s"
+              name="name"
+              defaultValue={tier.name}
+              aria-label={`Tier ${i + 1} name`}
+              placeholder="Name"
+            />
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
               <span className="er">Wager $</span>
@@ -85,8 +91,9 @@ export default async function AdminMilestonesPage() {
         <form
           className="editrow"
           action={saveTierForm}
-          style={{ gridTemplateColumns: '1fr 1fr auto', borderBottom: 0 }}
+          style={{ gridTemplateColumns: '150px 1fr 1fr auto', borderBottom: 0 }}
         >
+          <input className="inp s" name="name" required aria-label="New tier name" placeholder="Name" />
           <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
             <span className="er">Wager $</span>
             <input

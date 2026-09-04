@@ -317,9 +317,12 @@ export async function saveTier(formData: FormData): Promise<Outcome> {
   if (!who) return DENIED;
 
   const id = Number(formData.get('id')) || undefined;
+  const name = String(formData.get('name') ?? '').trim();
   const threshold = Number(formData.get('threshold'));
   const reward = Number(formData.get('reward'));
   const active = formData.get('active') !== 'off';
+
+  if (!name) return { ok: false, error: 'Give the tier a name.' };
 
   if (!Number.isFinite(threshold) || threshold <= 0) {
     return { ok: false, error: 'Threshold must be a positive number.' };
@@ -328,13 +331,13 @@ export async function saveTier(formData: FormData): Promise<Outcome> {
     return { ok: false, error: 'Reward must be zero or more.' };
   }
 
-  await upsertTier({ id, threshold, reward, active });
+  await upsertTier({ id, name, threshold, reward, active });
   await record({
     actor: who.name,
     actorDiscordId: who.discordId,
     action: id ? 'milestone.tier.updated' : 'milestone.tier.created',
     target: String(id ?? threshold),
-    detail: { threshold, reward, active },
+    detail: { name, threshold, reward, active },
   });
 
   revalidatePath('/admin/milestones');

@@ -16,52 +16,60 @@ import type { StreamState } from "@/lib/types";
  * webhooks configured, by directly querying Kick's public API.
  */
 export async function currentStream(): Promise<StreamState> {
-  // Try database first (webhook-based)
-  if (hasDatabase()) {
-    const session = await one<{ started_at: Date; title: string | null }>(
-      `SELECT started_at, title FROM stream_sessions WHERE ended_at IS NULL LIMIT 1`,
-    ).catch(() => null);
+  /**
+   * An open session used to be trusted on its own, which made the site claim
+   * LIVE forever: the row is only closed by a `livestream.status.updated`
+   * webhook, and until those are subscribed nothing ever closes it. The stage
+   * then showed a LIVE badge over a player saying the channel was offline.
+   *
+   * Kick's public channel endpoint is the authority, so it is always asked. The
+   * session row is a cache and a record of when the stream began, not the
+   * answer.
+   */
+  const session = hasDatabase()
+    ? await one<{ id: number; started_at: Date; title: string | null }>(
+        `SELECT id, started_at, title FROM stream_sessions WHERE ended_at IS NULL LIMIT 1`,
+      ).catch(() => null)
+    : null;
 
-    if (session) {
-      return {
-        ...offlineStream,
-        live: true,
-        startedAt: session.started_at.toISOString(),
-        title: session.title,
-        viewers: null,
-        channel,
-      };
-    }
-  }
-
-  // Fallback to direct Kick API check (automatic!)
   const kickStatus = await fetchKickLiveStatus();
 
-  if (kickStatus.isLive) {
-    // Optionally sync to database if we have one
-    if (hasDatabase()) {
+  /*
+   * A failed check is not an offline channel. If Kick cannot be reached we keep
+   * showing whatever the session says, because ending a live stream over a
+   * network blip is worse than being a few minutes stale.
+   */
+  const reallyLive = kickStatus.checked ? kickStatus.isLive : Boolean(session);
+
+  if (session && kickStatus.checked && !kickStatus.isLive) {
+    await closeStreamSession(session.id);
+  }
+
+  if (reallyLive) {
+    if (!session && hasDatabase()) {
       try {
         await syncLiveStatusToDatabase(kickStatus.title || "Live on Kick");
       } catch (error) {
-        console.error(
-          "[stream] Failed to sync live status to database:",
-          error,
-        );
+        console.error("[stream] Failed to sync live status to database:", error);
       }
     }
 
     return {
       ...offlineStream,
       live: true,
-      startedAt: kickStatus.startTime || new Date().toISOString(),
-      title: kickStatus.title || "Live on Kick",
+      // The session knows when it actually started; Kick knows the rest.
+      startedAt:
+        session?.started_at.toISOString() ??
+        kickStatus.startTime ??
+        new Date().toISOString(),
+      title: kickStatus.title ?? session?.title ?? "Live on Kick",
       viewers: kickStatus.viewers,
       thumbUrl: kickStatus.thumbnailUrl || offlineStream.thumbUrl,
       channel,
     };
   }
 
-  // Get last VOD for offline state
+  // Offline: carry the last VOD so the stage has something to point at.
   const lastVod = await fetchLastVOD();
 
   return {
@@ -70,6 +78,25 @@ export async function currentStream(): Promise<StreamState> {
     lastVodTitle: lastVod?.title || offlineStream.lastVodTitle,
     lastVodThumb: lastVod?.thumbnail || offlineStream.lastVodThumb,
   };
+}
+
+/**
+ * Close a session Kick says has ended.
+ *
+ * Coins only accrue inside an open session, so a session left open after the
+ * stream ends would keep paying people for chatting into an empty channel.
+ */
+async function closeStreamSession(id: number): Promise<void> {
+  const { write } = await import("@/lib/db");
+  try {
+    await write(
+      `UPDATE stream_sessions SET ended_at = now() WHERE id = $1 AND ended_at IS NULL`,
+      [id],
+    );
+    console.log("[stream] Closed a session Kick reported as offline");
+  } catch (error) {
+    console.error("[stream] Failed to close stale session:", error);
+  }
 }
 
 /**

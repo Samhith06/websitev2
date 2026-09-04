@@ -146,10 +146,20 @@ export default async function MilestonesPage() {
           return (
             <div className={`tier ${state === 'paid' ? 'claimed' : state}`} key={tier.id}>
               <div className="tn">
-                {state === 'paid' ? '✓' : state === 'pending' ? '…' : state === 'claimable' ? '!' : `T${i + 1}`}
+                {state === 'paid'
+                  ? '✓'
+                  : state === 'pending'
+                    ? '…'
+                    : (tier.name.charAt(0) || `T${i + 1}`)}
               </div>
               <div>
-                <div className="tt">Wager {money(tier.threshold)}</div>
+                <div className="tt">
+                  {tier.name}
+                  <span className="muted" style={{ fontWeight: 400, fontSize: 14 }}>
+                    {' · '}
+                    {money(tier.threshold)} wagered
+                  </span>
+                </div>
                 <div className="td">
                   {state === 'paid' && claim?.paidAt
                     ? `Claimed ${dateShort(claim.paidAt)} · tipped on Razed`

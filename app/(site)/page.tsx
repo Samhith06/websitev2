@@ -125,6 +125,7 @@ export default async function HomePage() {
                 </div>
                 <div className="small muted" style={{ marginTop: 9 }}>
                   {money(next.threshold - wager.lifetime)} to go for{' '}
+                  <b style={{ color: 'var(--text)' }}>{next.name}</b> ·{' '}
                   <b style={{ color: 'var(--gold)' }}>{money(next.reward)}</b>
                 </div>
                 <Link className="btn sm wide" style={{ marginTop: 11 }} href="/milestones">

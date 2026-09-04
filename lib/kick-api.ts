@@ -71,10 +71,15 @@ interface KickChannelResponse {
 }
 
 /**
- * Fetch current live status directly from Kick's public API
- * No authentication required - this is public data
+ * Fetch current live status directly from Kick's public API.
+ * No authentication required — this is public data.
+ *
+ * `checked` says whether Kick actually answered. Without it a network blip and
+ * a genuinely offline channel are the same value, and a caller acting on
+ * "offline" would end a stream that is still running.
  */
 export async function fetchKickLiveStatus(): Promise<{
+  checked: boolean;
   isLive: boolean;
   title: string | null;
   viewers: number | null;
@@ -96,6 +101,7 @@ export async function fetchKickLiveStatus(): Promise<{
     if (!response.ok) {
       console.error(`[kick-api] Failed to fetch channel: ${response.status}`);
       return {
+        checked: false,
         isLive: false,
         title: null,
         viewers: null,
@@ -108,6 +114,7 @@ export async function fetchKickLiveStatus(): Promise<{
 
     if (data.livestream && data.livestream.is_live) {
       return {
+        checked: true,
         isLive: true,
         title: data.livestream.session_title || "Live on Kick",
         viewers:
@@ -118,6 +125,7 @@ export async function fetchKickLiveStatus(): Promise<{
     }
 
     return {
+      checked: true,
       isLive: false,
       title: null,
       viewers: null,
@@ -127,6 +135,7 @@ export async function fetchKickLiveStatus(): Promise<{
   } catch (error) {
     console.error("[kick-api] Error fetching live status:", error);
     return {
+      checked: false,
       isLive: false,
       title: null,
       viewers: null,
