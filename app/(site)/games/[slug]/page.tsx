@@ -102,7 +102,7 @@ export default async function GamePage({ params }: { params: Promise<{ slug: str
       {slug === 'blackjack' ? (
         <Blackjack />
       ) : (
-        <GameTable slug={slug as (typeof TABLE_GAMES)[number]} />
+        <GameTable slug={slug as (typeof TABLE_GAMES)[number]} soundOn={settings.gameSound} />
       )}
     </>
   );

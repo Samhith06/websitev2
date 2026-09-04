@@ -17,6 +17,7 @@ import {
   wheelHitChance,
   wheelTopPayout,
 } from '@/lib/games';
+import { SFX, initSound, setSound, soundEnabled } from '@/lib/sfx';
 import { useGame } from './shared';
 import type { KenoRisk, WheelRisk } from '@/lib/games';
 import type { GameSlug } from '@/lib/types';
@@ -29,9 +30,21 @@ import type { GameSlug } from '@/lib/types';
  * simply lands on the answer that came back — which is why each one is timed to
  * finish on a value it was given rather than one it chose.
  */
-export function GameTable({ slug }: { slug: 'dice' | 'limbo' | 'wheel' | 'keno' }) {
+export function GameTable({
+  slug,
+  soundOn = true,
+}: {
+  slug: 'dice' | 'limbo' | 'wheel' | 'keno';
+  soundOn?: boolean;
+}) {
   const { state, busy, error, signedOut, play, rotate } = useGame(slug as GameSlug);
   const [bet, setBet] = useState(10);
+  const [muted, setMuted] = useState(!soundOn);
+
+  useEffect(() => {
+    initSound(soundOn);
+    setMuted(!soundEnabled());
+  }, [soundOn]);
 
   if (signedOut) {
     return (
@@ -63,6 +76,12 @@ export function GameTable({ slug }: { slug: 'dice' | 'limbo' | 'wheel' | 'keno' 
         play={play}
         state={state}
         rotate={rotate}
+        muted={muted}
+        onToggleSound={() => {
+          const next = !muted;
+          setMuted(next);
+          setSound(!next);
+        }}
       />
       <History state={state} />
     </div>
@@ -84,6 +103,8 @@ function ControlPanel({
   play,
   state,
   rotate,
+  muted,
+  onToggleSound,
 }: {
   slug: 'dice' | 'limbo' | 'wheel' | 'keno';
   bet: number;
@@ -94,6 +115,8 @@ function ControlPanel({
   play: Play;
   state: State;
   rotate: () => void;
+  muted: boolean;
+  onToggleSound: () => void;
 }) {
   /* --- per-game control state ------------------------------------------ */
   const [target, setTarget] = useState(50);
@@ -153,34 +176,53 @@ function ControlPanel({
             ? { bet, risk: wheelRisk }
             : { bet, risk: kenoRisk, picks };
 
+    SFX.bet();
+
     const result = await play(payload);
     if (!result) return;
 
     const won = result.payout > 0;
     const big = won && result.payout >= result.bet * 4;
+    const multiple = result.bet > 0 ? result.payout / result.bet : 0;
+
+    // The result sound fires when the animation lands, not when the response
+    // arrives — hearing the win before seeing it spoils the reveal.
+    const settleSound = () => {
+      if (!won) SFX.lose();
+      else if (multiple >= 10) SFX.bigwin();
+      else SFX.win(multiple);
+    };
 
     if (slug === 'dice') {
       const roll = Number(result.outcome.roll);
       // A short tumble, then the number the server already decided.
       for (let i = 0; i < 9; i++) {
-        later(() => setDisplay((Math.random() * 100).toFixed(2)), i * 42);
+        later(() => {
+          setDisplay((Math.random() * 100).toFixed(2));
+          SFX.tick(i / 9);
+        }, i * 42);
       }
       later(() => {
         setDisplay(roll.toFixed(2));
         setTone(won ? 'win' : 'lose');
         if (big) setFlash(true);
+        settleSound();
       }, 400);
     }
 
     if (slug === 'limbo') {
       const crash = Number(result.outcome.result);
       for (let i = 1; i <= 16; i++) {
-        later(() => setDisplay((1 + ((crash - 1) * i) / 16).toFixed(2) + '×'), i * 44);
+        later(() => {
+          setDisplay((1 + ((crash - 1) * i) / 16).toFixed(2) + '×');
+          SFX.tick(i / 16);
+        }, i * 44);
       }
       later(() => {
         setDisplay(crash.toFixed(2) + '×');
         setTone(won ? 'win' : 'lose');
         if (big) setFlash(true);
+        settleSound();
       }, 16 * 44 + 40);
     }
 
@@ -194,10 +236,19 @@ function ControlPanel({
         return base + 360 * 6 + (360 - (index * step + step / 2));
       });
       setDisplay('—');
+      // Clicks that thin out as the wheel slows, so it sounds like it is
+      // losing momentum rather than stopping dead.
+      let elapsed = 0;
+      for (let k = 0; k < 34; k++) {
+        elapsed += 28 + k * k * 0.62;
+        if (elapsed > 4200) break;
+        later(() => SFX.reel(1 - k / 34), elapsed);
+      }
       later(() => {
         setDisplay(`${segments[index]}×`);
         setTone(won ? 'win' : 'lose');
         if (big) setFlash(true);
+        settleSound();
       }, 4300);
     }
 
@@ -205,8 +256,13 @@ function ControlPanel({
       const drawn = result.outcome.drawn as number[];
       const hits = result.outcome.hits as number[];
       setLabel('Drawing…');
-      drawn.forEach((_, i) => {
-        later(() => setRevealed({ drawn: drawn.slice(0, i + 1), hits }), 140 + i * 115);
+      let hitIndex = 0;
+      drawn.forEach((n, i) => {
+        later(() => {
+          setRevealed({ drawn: drawn.slice(0, i + 1), hits });
+          if (hits.includes(n)) SFX.pop(hitIndex++);
+          else SFX.tick(0.2);
+        }, 140 + i * 115);
       });
       later(
         () => {
@@ -217,6 +273,7 @@ function ControlPanel({
           );
           setTone(won ? 'win' : 'lose');
           if (big) setFlash(true);
+          settleSound();
         },
         140 + drawn.length * 115,
       );
@@ -403,14 +460,21 @@ function ControlPanel({
           </>
         ) : null}
 
-        <button
-          className="btn pri wide"
-          style={{ marginTop: 14 }}
-          onClick={submit}
-          disabled={busy || !canPlay}
-        >
-          {loading ? 'Loading…' : busy ? 'Playing…' : 'Place bet'}
-        </button>
+        <div style={{ display: 'flex', gap: 7, marginTop: 14 }}>
+          <button className="btn pri wide" onClick={submit} disabled={busy || !canPlay}>
+            {loading ? 'Loading…' : busy ? 'Playing…' : 'Place bet'}
+          </button>
+          <button
+            type="button"
+            className={`btn ${muted ? 'ghost' : ''}`}
+            onClick={onToggleSound}
+            aria-pressed={!muted}
+            title={muted ? 'Sound off' : 'Sound on'}
+            style={{ flex: 'none', paddingInline: 13 }}
+          >
+            {muted ? '🔇' : '🔊'}
+          </button>
+        </div>
 
         {error ? (
           <div className="small" style={{ color: 'var(--red)', marginTop: 10 }}>
@@ -517,13 +581,15 @@ function ControlPanel({
                     onClick={() => {
                       setRevealed(null);
                       setLabel(null);
-                      setPicks((p) =>
-                        p.includes(n)
-                          ? p.filter((x) => x !== n)
-                          : p.length >= KENO_MAX_PICKS
-                            ? p
-                            : [...p, n],
-                      );
+                      setPicks((p) => {
+                        if (p.includes(n)) {
+                          SFX.unpick();
+                          return p.filter((x) => x !== n);
+                        }
+                        if (p.length >= KENO_MAX_PICKS) return p;
+                        SFX.pick(p.length);
+                        return [...p, n];
+                      });
                     }}
                   >
                     {n}

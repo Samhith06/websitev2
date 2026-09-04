@@ -4,6 +4,7 @@ import { devBypass, roleFor } from '@/lib/admin';
 import { auth } from '@/auth';
 import { money } from '@/lib/format';
 import { FreezeMonthButton } from '@/components/admin/AdminButtons';
+import { OpenPeriod, PrizeEditor } from '@/components/admin/PeriodEditor';
 
 export const metadata = { title: 'Leaderboard' };
 export const dynamic = 'force-dynamic';
@@ -30,18 +31,25 @@ export default async function AdminLeaderboardPage() {
   const rows = feed?.ok ? toBoardRows(feed.rows, (rank) => prizeForRank(period!.tiers, rank)) : [];
 
   if (!period) {
+    const now = new Date();
+    const month = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
     return (
       <>
         <div className="sec-head">
           <div>
+            <span className="eyebrow">Nothing open</span>
             <h1>Leaderboard</h1>
-            <div className="sh-sub">No monthly period is open.</div>
+            <div className="sh-sub">
+              Open a board and it fills in from Razed automatically — the standings are read, never
+              computed here.
+            </div>
           </div>
         </div>
-        <div className="emptyq">
-          Create a monthly period and its prize tiers, and the board fills in from Razed
-          automatically.
-        </div>
+        {isOwner ? (
+          <OpenPeriod defaultMonth={month} />
+        ) : (
+          <div className="emptyq">No monthly board is open. Only Matty can open one.</div>
+        )}
       </>
     );
   }
@@ -100,10 +108,9 @@ export default async function AdminLeaderboardPage() {
       ) : null}
 
       <div className="card">
-        <h2 style={{ fontSize: 15, marginBottom: 4 }}>Standings and prizes</h2>
+        <h2 style={{ fontSize: 15, marginBottom: 4 }}>Standings</h2>
         <p className="small muted" style={{ marginBottom: 14 }}>
-          Prize amounts come from this period&rsquo;s tiers. Editing them changes the public board
-          immediately.
+          Read-only — these come from Razed and the site never computes them.
         </p>
 
         {rows.length === 0 ? (
@@ -123,6 +130,12 @@ export default async function AdminLeaderboardPage() {
           ))
         )}
       </div>
+
+      <PrizeEditor
+        periodId={period.id}
+        tiers={period.tiers}
+        editable={isOwner && period.frozenAt == null}
+      />
 
       <p className="small muted" style={{ marginTop: 14, maxWidth: '72ch' }}>
         Freezing stores these standings permanently and queues the winners on the payouts screen.

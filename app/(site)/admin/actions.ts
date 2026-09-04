@@ -10,7 +10,15 @@ import { drawRaffle, setRaffleStatus } from '@/lib/store/raffles';
 import { resolveRedemption } from '@/lib/store/shop';
 import { syncLifetime, syncPeriod } from '@/lib/store/razed-snapshots';
 import { award, revoke } from '@/lib/store/badges';
-import { currentPeriod, freezeStandings, prizeForRank } from '@/lib/store/periods';
+import {
+  PeriodError,
+  createPeriod,
+  currentPeriod,
+  deleteTier,
+  freezeStandings,
+  prizeForRank,
+  upsertTier as upsertPrizeTier,
+} from '@/lib/store/periods';
 import { fetchRazedLeaderboard, toBoardRows } from '@/lib/razed';
 
 export type Outcome = { ok: true; message: string } | { ok: false; error: string };
@@ -380,4 +388,132 @@ export async function revokeBadge(userId: number, slug: string): Promise<Outcome
  */
 export async function saveTierForm(formData: FormData): Promise<void> {
   await saveTier(formData);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Leaderboard periods and prizes                                             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Open a monthly board.
+ *
+ * The dates are the calendar month in UTC, because that is what the site tells
+ * members ("midnight UTC on the 1st") and a board whose window disagrees with
+ * the copy would pay the wrong people. `copyTiers` carries the previous
+ * month's prize ladder over, so opening September is one click rather than ten.
+ *
+ * Only one board of a type may be open at once — the store refuses a second,
+ * which is what stops two overlapping months both claiming to be "this month".
+ */
+export async function openMonthlyPeriod(formData: FormData): Promise<Outcome> {
+  const who = await staff('owner');
+  if (!who) return DENIED;
+
+  const monthValue = String(formData.get('month') ?? '').trim();
+  const copyTiers = formData.get('copyTiers') === 'on';
+
+  // <input type="month"> gives YYYY-MM.
+  const match = /^(\d{4})-(\d{2})$/.exec(monthValue);
+  if (!match) return { ok: false, error: 'Pick a month.' };
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const startsAt = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0));
+  // The last instant of the month, so the window is inclusive of its final day.
+  const endsAt = new Date(Date.UTC(year, month, 1, 0, 0, 0) - 1000);
+
+  try {
+    const period = await createPeriod({
+      type: 'monthly',
+      startsAt: startsAt.toISOString(),
+      endsAt: endsAt.toISOString(),
+      copyTiersFromLast: copyTiers,
+      createdBy: who.name,
+    });
+
+    await record({
+      actor: who.name,
+      actorDiscordId: who.discordId,
+      action: 'leaderboard.period.opened',
+      target: String(period.id),
+      detail: { startsAt: period.startsAt, endsAt: period.endsAt, tiers: period.tiers.length },
+    });
+
+    revalidatePath('/admin/leaderboard');
+    revalidatePath('/leaderboard');
+    revalidatePath('/');
+    return {
+      ok: true,
+      message: period.tiers.length
+        ? `Board open with ${period.tiers.length} prize tiers copied over.`
+        : 'Board open. Add prize tiers below.',
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof PeriodError ? error.message : 'That board could not be opened.',
+    };
+  }
+}
+
+/** Add or edit one prize tier. A tier can cover a rank range, not just one rank. */
+export async function savePrizeTier(formData: FormData): Promise<Outcome> {
+  const who = await staff('owner');
+  if (!who) return DENIED;
+
+  const periodId = Number(formData.get('periodId'));
+  const tierId = Number(formData.get('tierId')) || null;
+  const rankFrom = Number(formData.get('rankFrom'));
+  const rankTo = Number(formData.get('rankTo')) || rankFrom;
+  const amount = Number(formData.get('amount'));
+
+  if (!Number.isInteger(periodId)) return { ok: false, error: 'Unknown period.' };
+
+  try {
+    await upsertPrizeTier({ periodId, tierId, rankFrom, rankTo, amount, updatedBy: who.name });
+    await record({
+      actor: who.name,
+      actorDiscordId: who.discordId,
+      action: tierId ? 'leaderboard.prize.updated' : 'leaderboard.prize.added',
+      target: String(periodId),
+      detail: { rankFrom, rankTo, amount },
+    });
+
+    revalidatePath('/admin/leaderboard');
+    revalidatePath('/leaderboard');
+    revalidatePath('/');
+    return { ok: true, message: 'Prize saved.' };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof PeriodError ? error.message : 'That prize could not be saved.',
+    };
+  }
+}
+
+export async function removePrizeTier(tierId: number, periodId: number): Promise<Outcome> {
+  const who = await staff('owner');
+  if (!who) return DENIED;
+
+  await deleteTier(tierId);
+  await record({
+    actor: who.name,
+    actorDiscordId: who.discordId,
+    action: 'leaderboard.prize.removed',
+    target: String(periodId),
+    detail: { tierId },
+  });
+
+  revalidatePath('/admin/leaderboard');
+  revalidatePath('/leaderboard');
+  return { ok: true, message: 'Prize removed.' };
+}
+
+/** Form-action wrappers: `<form action>` wants a handler returning void. */
+export async function openMonthlyPeriodForm(formData: FormData): Promise<void> {
+  await openMonthlyPeriod(formData);
+}
+
+export async function savePrizeTierForm(formData: FormData): Promise<void> {
+  await savePrizeTier(formData);
 }

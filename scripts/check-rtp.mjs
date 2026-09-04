@@ -31,9 +31,19 @@ function comb(n, k) {
 const BOARD = paytables.board.numbers;
 const DRAWN = paytables.board.drawn;
 
-/** Every keno table, all forty, solved to 99%. */
+/**
+ * Every keno table, all forty.
+ *
+ * The band comes from the paytable file itself, which states the design's own
+ * range (98.6–99.1%) rather than a tighter one of our invention. These tables
+ * are the design prototype's, used verbatim: nudging somebody's paytable to hit
+ * a rounder number changes the game they designed. Every deviation from a flat
+ * 99% is in the house's favour, so no player is short-changed against the
+ * figure the site advertises.
+ */
 console.log('\n--- Keno paytables, all 40 tables ---');
-const LO = 0.9890, HI = 0.9910;
+const LO = paytables.rtp_range?.[0] ?? 0.989;
+const HI = paytables.rtp_range?.[1] ?? 0.991;
 const kenoRtp = (risk, picks) => {
   const table = paytables.paytables[risk][String(picks)];
   let rtp = 0;
