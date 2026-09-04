@@ -37,21 +37,29 @@ export type LadderRung = {
 };
 
 export async function listTiers(includeInactive = false): Promise<Tier[]> {
+  /**
+   * The casts are aliased away from the source column names on purpose.
+   *
+   * `SELECT threshold::text ... ORDER BY threshold` looks right and is wrong:
+   * a bare name in ORDER BY resolves to the *output* column first, so it would
+   * sort the text and put $100,000 between $10,000 and $25,000. Different
+   * names mean ORDER BY can only mean the numeric column.
+   */
   const result = await rows<{
     id: string;
-    threshold: string;
-    reward: string;
+    threshold_text: string;
+    reward_text: string;
     active: boolean;
   }>(
-    `SELECT id::text, threshold::text, reward::text, active
+    `SELECT id::text, threshold::text AS threshold_text, reward::text AS reward_text, active
        FROM milestone_tiers
       ${includeInactive ? '' : 'WHERE active'}
       ORDER BY threshold ASC`,
   );
   return result.map((r) => ({
     id: Number(r.id),
-    threshold: Number(r.threshold),
-    reward: Number(r.reward),
+    threshold: Number(r.threshold_text),
+    reward: Number(r.reward_text),
     active: r.active,
   }));
 }

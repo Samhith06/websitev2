@@ -1,6 +1,6 @@
 import 'server-only';
 import { one, rows, tx, write } from '@/lib/db';
-import type { Period, PeriodStatus, PrizeTier } from '@/lib/types';
+import type { Period, PeriodStatus, PrizeTier, LeaderboardRow } from '@/lib/types';
 
 /**
  * Leaderboard periods and their prize tiers (Master Plan §7).
@@ -30,6 +30,16 @@ export type StoredPeriod = {
   tiers: PrizeTier[];
   /** Summed from the tiers. */
   pot: number;
+  /**
+   * What the board said at the moment it locked.
+   *
+   * Razed answers a from/to window live, so re-asking about an archived month
+   * can come back different — a restated figure, a voided bet, a bonus applied
+   * late. Null until the period is frozen; after that it is the record, and the
+   * archive renders this rather than re-querying.
+   */
+  frozenStandings: LeaderboardRow[] | null;
+  frozenAt: string | null;
 };
 
 type PeriodRow = {
@@ -39,6 +49,8 @@ type PeriodRow = {
   ends_at: Date;
   status: string;
   locked_at: Date | null;
+  frozen_standings: LeaderboardRow[] | null;
+  frozen_at: Date | null;
 };
 
 type TierRow = {
@@ -75,10 +87,13 @@ function toPeriod(row: PeriodRow, tiers: PrizeTier[]): StoredPeriod {
     lockedAt: row.locked_at ? row.locked_at.toISOString() : null,
     tiers,
     pot: potOf(tiers),
+    frozenStandings: row.frozen_standings ?? null,
+    frozenAt: row.frozen_at ? row.frozen_at.toISOString() : null,
   };
 }
 
-const PERIOD_COLUMNS = 'id::text, type, starts_at, ends_at, status, locked_at';
+const PERIOD_COLUMNS =
+  'id::text, type, starts_at, ends_at, status, locked_at, frozen_standings, frozen_at';
 
 async function tiersFor(periodIds: number[]): Promise<Map<number, PrizeTier[]>> {
   const map = new Map<number, PrizeTier[]>();
@@ -352,4 +367,32 @@ export async function paidOutToDate(): Promise<number> {
       WHERE p.status IN ('paid', 'archived')`,
   );
   return Number(row?.total ?? 0);
+}
+
+/**
+ * Freeze a period's standings.
+ *
+ * This is the moment the archive stops being a query and becomes a record.
+ * After it, the board for that month renders from the stored rows and can
+ * never drift because Razed restated something later — which matters most for
+ * exactly the people who have already been paid against those figures.
+ *
+ * Writing only when `frozen_standings IS NULL` makes it idempotent: a retried
+ * rollover job finds the period already frozen and leaves the original alone
+ * rather than overwriting a record with a fresher, different one.
+ */
+export async function freezeStandings(
+  periodId: number,
+  standings: LeaderboardRow[],
+): Promise<boolean> {
+  const row = await one<{ id: string }>(
+    `UPDATE lb_periods
+        SET frozen_standings = $2::jsonb,
+            frozen_at = now(),
+            status = CASE WHEN status = 'open' THEN 'frozen' ELSE status END
+      WHERE id = $1 AND frozen_standings IS NULL
+      RETURNING id::text`,
+    [periodId, JSON.stringify(standings)],
+  );
+  return row != null;
 }
