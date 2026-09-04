@@ -52,9 +52,53 @@
   --font-mono: var(--font-plex-mono), ui-monospace, Menlo, monospace;
 
   --radius-card: 12px;
+  --radius-chip: 6px;
 
   --breakpoint-md: 768px;
   --breakpoint-lg: 1024px;
+
+  /* ------------------------------------------------------------------------
+     Retired palette, remapped.
+
+     The legal documents, the round verifier and a few reference pages were
+     written against the previous token names and have not been redesigned —
+     their content is right and only their colours were retired. Rather than
+     leave them rendering dark-on-dark until each is rewritten, the old names
+     are kept here as aliases onto the new palette, so they inherit the new
+     theme untouched.
+
+     This is a bridge, not a second design system: nothing new should use
+     these, and they come out as each page is rebuilt.
+  ------------------------------------------------------------------------ */
+  --color-bg: #050507;
+  --color-surface: #0c0d12;
+  --color-surface-2: #12141b;
+  --color-line: #1e212b;
+  --color-line-2: #2a2f3c;
+
+  --color-ink-2: #b6bec9;
+  --color-faint: #565e6b;
+
+  --color-brand: #22d3ff;
+  --color-brand-dim: #0ea5c6;
+  --color-brand-ink: #03181f;
+  --color-brand-bg: #0e1b22;
+  --color-brand-line: #1e4b5c;
+
+  --color-gold-bg: #17130a;
+  --color-gold-line: #3b3117;
+
+  --color-online: #3ddc97;
+  --color-online-bg: #07201a;
+  --color-online-line: #14452f;
+
+  --color-danger: #ff5c7a;
+  --color-danger-bg: #1c0f0b;
+  --color-danger-line: #3b1d14;
+  --color-live: #ff3b5c;
+
+  --color-silver: #c6cfdd;
+  --color-bronze: #b07a4e;
 }
 
 /* The component layer reads these as plain custom properties, which keeps the
@@ -3575,4 +3619,26 @@ footer.site a:hover {
     animation-iteration-count: 1 !important;
     transition-duration: 0.05s !important;
   }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Retired utilities
+   The same bridge as the token aliases above: two classes the not-yet-redesigned
+   pages still reach for. They now resolve to the new type scale and the new
+   page measure, so those pages sit inside the revamped shell correctly.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.container-page {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+/* The old display face was uppercase-only; the new one is not, so this is now
+   simply the display family at the weight headings use. */
+.display {
+  font-family: var(--display);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
 }

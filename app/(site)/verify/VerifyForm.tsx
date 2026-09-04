@@ -7,7 +7,7 @@ import { Button, Input } from '@/components/ui/controls';
 import { Card } from '@/components/ui/surfaces';
 import { Label, Num } from '@/components/ui/typography';
 
-type Game = 'keno' | 'dice' | 'limbo';
+type Game = 'keno' | 'dice' | 'limbo' | 'wheel';
 
 type Response = {
   ok: true;
@@ -70,8 +70,8 @@ export function VerifyForm({
         <div className="space-y-4 p-5">
           <div>
             <Label className="mb-1.5">Game</Label>
-            <div className="grid grid-cols-3 gap-1.5">
-              {(['keno', 'dice', 'limbo'] as const).map((g) => (
+            <div className="grid grid-cols-4 gap-1.5">
+              {(['keno', 'dice', 'limbo', 'wheel'] as const).map((g) => (
                 <button
                   key={g}
                   type="button"

@@ -18,6 +18,7 @@
  */
 import { createHash, createHmac, randomBytes } from 'node:crypto';
 import { DECKS, RANKS, SHOE_SIZE, SUITS, type Card } from './blackjack';
+import { WHEEL_SEGMENTS } from './games';
 
 export const HOUSE_EDGE = 0.99; // 99% RTP, stated on every paytable.
 
@@ -159,7 +160,7 @@ export function giveawayWinnerIndex(serverSeed: string, giveawayId: string, entr
 /* -------------------------------------------------------------------------- */
 
 export type VerifyInput = {
-  game: 'keno' | 'dice' | 'limbo';
+  game: 'keno' | 'dice' | 'limbo' | 'wheel';
   serverSeed: string;
   clientSeed: string;
   nonce: number;
@@ -167,7 +168,7 @@ export type VerifyInput = {
 
 export type VerifyResult = {
   serverSeedHash: string;
-  outcome: KenoOutcome | DiceOutcome | LimboOutcome;
+  outcome: KenoOutcome | DiceOutcome | LimboOutcome | WheelOutcome;
   /** A human-readable rendering of the same thing, for the result panel. */
   display: string;
 };
@@ -188,6 +189,18 @@ export function verify(input: VerifyInput): VerifyResult {
     case 'limbo': {
       const outcome = limboResult(serverSeed, clientSeed, nonce);
       return { serverSeedHash, outcome, display: `${outcome.result.toFixed(2)}×` };
+    }
+    case 'wheel': {
+      // The index is what the seeds decide; the multiplier is read off the
+      // published table for whichever risk was played. Only the index can be
+      // recomputed here, so that is what is shown — inventing a multiplier
+      // would mean guessing a risk level the seeds do not carry.
+      const outcome = wheelSpin(serverSeed, clientSeed, nonce, WHEEL_SEGMENTS);
+      return {
+        serverSeedHash,
+        outcome,
+        display: `segment ${outcome.index + 1} of ${WHEEL_SEGMENTS}`,
+      };
     }
   }
 }
