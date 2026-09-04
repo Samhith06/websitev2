@@ -13,6 +13,7 @@
     "razed:check": "node --import tsx --conditions=react-server scripts/razed-check.mts",
     "razed:sync": "node --import tsx --conditions=react-server scripts/razed-sync.mts",
     "kick:events": "node --import tsx --conditions=react-server scripts/kick-events.mts",
+    "open:month": "node --import tsx --conditions=react-server scripts/open-month.mts",
     "dev:clean": "node -e \"require('fs').rmSync('.next',{recursive:true,force:true})\" && next dev -p 3000",
     "build:clean": "node -e \"require('fs').rmSync('.next',{recursive:true,force:true})\" && next build",
     "images": "node scripts/optimise-images.mjs"
