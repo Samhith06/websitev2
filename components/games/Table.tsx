@@ -743,7 +743,7 @@ function Fairness({ state, rotate }: { state: State; rotate: () => void }) {
       ) : null}
 
       <div className="fairfoot">
-        <button className="btn sm" onClick={rotate}>
+        <button className="btn sm" onClick={() => rotate()}>
           Rotate seed &amp; reveal the old one
         </button>
         <p className="small muted" style={{ margin: 0, flex: 1, minWidth: 260 }}>

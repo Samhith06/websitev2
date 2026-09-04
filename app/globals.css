@@ -17,9 +17,14 @@
 --------------------------------------------------------------------------- */
 
 @theme {
-  /* Ground */
-  --color-ink: #050507;
-  --color-ink-2: #08090d;
+  /* Ground.
+     `ink` is deliberately NOT the ground here. Every bridged component writes
+     `text-ink` meaning "the brightest text", which is what it meant in the
+     retired palette — mapping it to the near-black ground rendered those pages
+     black-on-black. The new system's own CSS reads var(--ink) from :root
+     below, so the two never meet. */
+  --color-ground: #050507;
+  --color-ground-2: #08090d;
   --color-panel: #0c0d12;
   --color-panel-2: #12141b;
   --color-panel-3: #171a23;
@@ -76,8 +81,9 @@
   --color-line: #1e212b;
   --color-line-2: #2a2f3c;
 
+  --color-ink: #f2f5f9;
   --color-ink-2: #b6bec9;
-  --color-faint: #565e6b;
+  --color-faint: #79828f;
 
   --color-brand: #22d3ff;
   --color-brand-dim: #0ea5c6;

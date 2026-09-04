@@ -96,6 +96,13 @@ export default async function VerifyPage({
               <li>
                 <Mono>Limbo</Mono> — one float, as <Mono>max(1, floor((1 / (1 − f)) × 0.99 × 100) / 100)</Mono>.
               </li>
+              <li>
+                <Mono>Wheel</Mono> — one float, scaled to a segment index as{' '}
+                <Mono>floor(f × 24)</Mono>. The multiplier is then read off the published table
+                for the risk level played, which is why this page recomputes the segment rather
+                than the payout: the seeds decide where the wheel stops, not what that slice is
+                worth.
+              </li>
             </ul>
           </Step>
 

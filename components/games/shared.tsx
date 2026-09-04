@@ -125,7 +125,17 @@ export function useGame(game: GameSlug) {
     [busy, game],
   );
 
-  const rotate = useCallback(async (clientSeed?: string) => {
+  /**
+   * Rotate the seed pair, optionally setting a new client seed.
+   *
+   * The argument is checked rather than trusted: wiring this straight to an
+   * onClick hands it React's synthetic event, and JSON.stringify on that throws
+   * on the event's circular reference to the DOM — which fails silently and
+   * makes the button look dead. Ignoring anything that is not a string means
+   * the mistake cannot come back.
+   */
+  const rotate = useCallback(async (nextClientSeed?: unknown) => {
+    const clientSeed = typeof nextClientSeed === 'string' ? nextClientSeed : undefined;
     const response = await fetch('/api/games/seed', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
