@@ -1,35 +1,30 @@
-import { auth } from '@/auth';
-import { isAdmin } from '@/lib/admin';
-import { Nav } from '@/components/site/Nav';
-import { Footer } from '@/components/site/Footer';
-import { MobileTabBar } from '@/components/site/MobileTabBar';
+import { Ambient } from '@/components/system/Ambient';
+import { SiteHeader } from '@/components/site/SiteHeader';
+import { SiteFooter } from '@/components/site/SiteFooter';
+import { MobileNav } from '@/components/site/MobileNav';
 import { AgeGate } from '@/components/site/AgeGate';
-import { currentStream } from '@/lib/store/stream';
 import { viewerOrSignedOut } from '@/lib/viewer';
 
-/** The public site's chrome. Admin runs its own shell (UI Spec §15). */
+/**
+ * The public site's chrome. Admin runs inside it too — the staff bar sits
+ * below this header rather than replacing it, so a mod is never unsure which
+ * site they are on.
+ */
 export default async function SiteLayout({ children }: { children: React.ReactNode }) {
-  const session = await auth();
-
-  // Identity and balance both come from the database now, so the coin bar shows
-  // what the ledger says rather than a figure nobody earned.
-  const [viewer, stream] = await Promise.all([viewerOrSignedOut(), currentStream()]);
-
-  const account = session?.user
-    ? {
-        username: session.user.discordUsername ?? session.user.name ?? 'Account',
-        avatarUrl: session.user.image ?? null,
-        isAdmin: isAdmin(session.user.discordId),
-      }
-    : null;
+  const viewer = await viewerOrSignedOut();
 
   return (
-    <div className="pb-[62px] lg:pb-0">
+    <>
+      <Ambient />
       <AgeGate />
-      <Nav live={stream.live} viewer={viewer} account={account} />
-      <main id="main">{children}</main>
-      <Footer />
-      <MobileTabBar />
-    </div>
+      <div className="shell">
+        <SiteHeader viewer={viewer} />
+        <main id="main" className="sitemain">
+          <div className="wrap">{children}</div>
+        </main>
+        <SiteFooter />
+      </div>
+      <MobileNav />
+    </>
   );
 }

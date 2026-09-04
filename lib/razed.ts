@@ -1,4 +1,5 @@
 import 'server-only';
+import { maskUsername } from './format';
 import type { FeedHealth, LeaderboardRow } from './types';
 
 /**
@@ -65,12 +66,14 @@ export type RazedRow = {
   wagered: number;
 };
 
-/** Masking happens here, on the server. The browser never sees a full name. */
-export function mask(username: string): string {
-  if (username.length <= 4) return `${username.slice(0, 1)}***`;
-  const keepFront = Math.min(3, username.length - 2);
-  return `${username.slice(0, keepFront)}${'*'.repeat(Math.max(3, username.length - keepFront - 1))}${username.slice(-1)}`;
-}
+/**
+ * Masking happens here, on the server. The browser never sees a full name.
+ *
+ * There is one masking rule for the whole site and it lives in `lib/format`;
+ * this is the alias so the board and the profile can never drift into
+ * showing the same person two different ways.
+ */
+export const mask = maskUsername;
 
 /**
  * Turns Razed's payload into our own rows.
