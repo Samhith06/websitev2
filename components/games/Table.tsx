@@ -17,6 +17,7 @@ import {
   wheelHitChance,
   wheelTopPayout,
 } from '@/lib/games';
+import { publishBalance } from '@/lib/balance-bus';
 import { SFX, initSound, setSound, soundEnabled } from '@/lib/sfx';
 import { useGame } from './shared';
 import type { KenoRisk, WheelRisk } from '@/lib/games';
@@ -64,27 +65,35 @@ export function GameTable({
   // second of every page load, untrue.
   const balance = state?.balance ?? null;
 
+  // The header's coin pill is server-rendered in the layout, so it cannot see
+  // a round settle. Every balance the server hands back is republished to it.
+  useEffect(() => {
+    if (balance != null) publishBalance(balance);
+  }, [balance]);
+
   return (
-    <div className="gframe">
-      <ControlPanel
-        slug={slug}
-        bet={bet}
-        setBet={setBet}
-        balance={balance}
-        busy={busy}
-        error={error}
-        play={play}
-        state={state}
-        rotate={rotate}
-        muted={muted}
-        onToggleSound={() => {
-          const next = !muted;
-          setMuted(next);
-          setSound(!next);
-        }}
-      />
-      <History state={state} />
-    </div>
+    <>
+      <div className="gframe">
+        <ControlPanel
+          slug={slug}
+          bet={bet}
+          setBet={setBet}
+          balance={balance}
+          busy={busy}
+          error={error}
+          play={play}
+          muted={muted}
+          onToggleSound={() => {
+            const next = !muted;
+            setMuted(next);
+            setSound(!next);
+          }}
+        />
+        <History state={state} />
+      </div>
+
+      <Fairness state={state} rotate={rotate} />
+    </>
   );
 }
 
@@ -101,8 +110,6 @@ function ControlPanel({
   busy,
   error,
   play,
-  state,
-  rotate,
   muted,
   onToggleSound,
 }: {
@@ -113,8 +120,6 @@ function ControlPanel({
   busy: boolean;
   error: string | null;
   play: Play;
-  state: State;
-  rotate: () => void;
   muted: boolean;
   onToggleSound: () => void;
 }) {
@@ -432,14 +437,17 @@ function ControlPanel({
                 type="button"
                 className="btn sm wide"
                 onClick={() => {
-                  const n = picks.length || 5;
+                  // Fills the board. Picking ten is what the button is for —
+                  // anyone wanting five can clear and tap five.
                   const pool = Array.from({ length: 40 }, (_, i) => i + 1);
                   const next: number[] = [];
-                  for (let i = 0; i < n; i++) {
+                  for (let i = 0; i < KENO_MAX_PICKS; i++) {
                     next.push(...pool.splice(Math.floor(Math.random() * pool.length), 1));
                   }
                   setPicks(next);
                   setRevealed(null);
+                  setLabel(null);
+                  SFX.click();
                 }}
               >
                 Auto pick
@@ -456,7 +464,6 @@ function ControlPanel({
                 Clear
               </button>
             </div>
-            <KenoPaytable risk={kenoRisk} picks={picks.length} />
           </>
         ) : null}
 
@@ -487,7 +494,6 @@ function ControlPanel({
           </div>
         ) : null}
 
-        <Fairness state={state} rotate={rotate} />
       </div>
 
       {/* ---------------------------------------------------------------- */}
@@ -597,6 +603,10 @@ function ControlPanel({
                 );
               })}
             </div>
+
+            {/* The paytable belongs under the numbers it describes, not in a
+                side panel where the two have to be read across a gap. */}
+            <KenoPaytable risk={kenoRisk} picks={picks.length} />
           </>
         ) : null}
       </div>
@@ -663,42 +673,86 @@ function KenoPaytable({ risk, picks }: { risk: KenoRisk; picks: number }) {
  * client seed field.
  */
 function Fairness({ state, rotate }: { state: State; rotate: () => void }) {
+  const [copied, setCopied] = useState<string | null>(null);
+
   if (!state) return null;
 
+  const copy = async (label: string, value: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(label);
+      setTimeout(() => setCopied(null), 2000);
+    } catch {
+      /* the value is on screen and selectable */
+    }
+  };
+
   return (
-    <details className="fair">
-      <summary>
-        <span>Provably fair</span>
-        <span className="chev">▾</span>
-      </summary>
-      <div className="fb">
+    <div className="fairpanel">
+      <div className="fairhead">
+        <div>
+          <span className="eyebrow">Provably fair</span>
+          <h2>The three values behind every round</h2>
+        </div>
+        <a className="btn sm ghost" href="/verify">
+          Verify a round →
+        </a>
+      </div>
+
+      <div className="fairgrid">
         <div className="seed">
-          <div className="sl">Server seed (hashed)</div>
+          <div className="sl">
+            Server seed — hashed
+            <button className="seedcopy" onClick={() => copy('server', state.serverSeedHash)}>
+              {copied === 'server' ? 'copied' : 'copy'}
+            </button>
+          </div>
           <div className="sv">{state.serverSeedHash}</div>
         </div>
+
         <div className="seed">
-          <div className="sl">Client seed</div>
+          <div className="sl">
+            Client seed
+            <button className="seedcopy" onClick={() => copy('client', state.clientSeed)}>
+              {copied === 'client' ? 'copied' : 'copy'}
+            </button>
+          </div>
           <div className="sv">{state.clientSeed}</div>
         </div>
+
         <div className="seed">
           <div className="sl">Nonce</div>
           <div className="sv">{state.nonce}</div>
         </div>
-        {state.previousServerSeed ? (
-          <div className="seed">
-            <div className="sl">Previous server seed — revealed</div>
-            <div className="sv">{state.previousServerSeed}</div>
+      </div>
+
+      {state.previousServerSeed ? (
+        <div className="seed" style={{ marginTop: 14 }}>
+          <div className="sl">
+            Previous server seed — revealed
+            <button className="seedcopy" onClick={() => copy('prev', state.previousServerSeed!)}>
+              {copied === 'prev' ? 'copied' : 'copy'}
+            </button>
           </div>
-        ) : null}
-        <button className="btn sm wide" style={{ marginTop: 11 }} onClick={rotate}>
+          <div className="sv">{state.previousServerSeed}</div>
+          <p className="small muted" style={{ marginTop: 8, marginBottom: 0 }}>
+            Hash this and you get the hash that was published before those rounds were played. Every
+            one of them can now be recomputed.
+          </p>
+        </div>
+      ) : null}
+
+      <div className="fairfoot">
+        <button className="btn sm" onClick={rotate}>
           Rotate seed &amp; reveal the old one
         </button>
-        <p className="small muted" style={{ marginTop: 10, marginBottom: 0 }}>
-          Rotating retires the current server seed and publishes it, so every round played under it
-          can be recomputed. <a href="/verify">Check a round →</a>
+        <p className="small muted" style={{ margin: 0, flex: 1, minWidth: 260 }}>
+          The hash above was published before any of these rounds were played, so it cannot be
+          changed after the fact. Rotating retires the current server seed and shows it to you —
+          which is the half that makes the promise checkable rather than just stated.
         </p>
       </div>
-    </details>
+    </div>
   );
 }
 

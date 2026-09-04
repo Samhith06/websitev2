@@ -1,9 +1,11 @@
 'use client';
 
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { NAV, activeNav } from '@/lib/nav';
 import { coins } from '@/lib/format';
+import { onBalance } from '@/lib/balance-bus';
 import type { Viewer } from '@/lib/types';
 
 export function Logo() {
@@ -30,6 +32,15 @@ export function SiteHeader({ viewer }: { viewer: Viewer }) {
   const active = activeNav(pathname);
   const staff = viewer.role === 'mod' || viewer.role === 'owner';
   const initial = (viewer.discordUsername || '?').charAt(0).toUpperCase();
+
+  /**
+   * The server's figure is the starting point, and every navigation replaces
+   * it. Between renders a settled game round pushes its new balance here, so
+   * the pill stops showing what the balance was a bet ago.
+   */
+  const [balance, setBalance] = useState(viewer.balance);
+  useEffect(() => setBalance(viewer.balance), [viewer.balance]);
+  useEffect(() => onBalance(setBalance), []);
 
   return (
     <header className="site">
@@ -62,7 +73,7 @@ export function SiteHeader({ viewer }: { viewer: Viewer }) {
                   <div className="coin" aria-hidden>
                     M
                   </div>
-                  <span className="cv">{coins(viewer.balance)}</span>
+                  <span className="cv">{coins(balance)}</span>
                   {viewer.multiplier.value > 1 ? (
                     <span className="mult">{viewer.multiplier.value}×</span>
                   ) : null}

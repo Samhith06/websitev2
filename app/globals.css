@@ -2149,10 +2149,15 @@ nav.mainnav a.on::after {
   }
 }
 
+/* Under the board now, so it gets the board's width and can be read at a
+   glance rather than squinted at in a sidebar. */
 .paytable {
-  margin-top: 14px;
+  margin-top: 18px;
   border-top: 1px solid var(--edge);
-  padding-top: 12px;
+  padding-top: 14px;
+  width: 100%;
+  max-width: 620px;
+  margin-inline: auto;
 }
 
 .pthead {
@@ -2172,23 +2177,23 @@ nav.mainnav a.on::after {
 
 .ptrow {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(42px, 1fr));
-  gap: 4px;
+  grid-template-columns: repeat(auto-fit, minmax(52px, 1fr));
+  gap: 6px;
 }
 
 .pt {
   border: 1px solid var(--edge);
-  border-radius: 6px;
+  border-radius: 7px;
   background: var(--panel-2);
-  padding: 5px 2px;
+  padding: 7px 3px;
   text-align: center;
-  line-height: 1.3;
+  line-height: 1.35;
 }
 
 .pt b {
   display: block;
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 10.5px;
   color: var(--muted);
   font-weight: 400;
 }
@@ -2196,7 +2201,7 @@ nav.mainnav a.on::after {
 .pt span {
   display: block;
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12.5px;
   color: var(--text);
   font-variant-numeric: tabular-nums;
 }
@@ -3646,4 +3651,88 @@ footer.site a:hover {
   font-weight: 700;
   letter-spacing: -0.01em;
   text-wrap: balance;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Provably fair panel
+   Sits below the table rather than inside the bet controls. The three values
+   are the claim, so they get room to be read and copied instead of being
+   folded into a drawer nobody opens.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.fairpanel {
+  margin-top: 14px;
+  border: 1px solid var(--edge-hot);
+  border-radius: 14px;
+  background: linear-gradient(150deg, rgba(34, 211, 255, 0.05), var(--panel) 60%);
+  padding: 20px 22px;
+}
+
+.fairhead {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.fairhead h2 {
+  font-size: 17px;
+  margin-top: 3px;
+}
+
+.fairgrid {
+  display: grid;
+  grid-template-columns: 2fr 1fr 90px;
+  gap: 12px;
+  align-items: start;
+}
+
+.fairgrid > * {
+  min-width: 0;
+}
+
+.fairpanel .seed {
+  margin-top: 0;
+}
+
+.fairpanel .sl {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* A copy affordance that stays out of the way until the label is read. */
+.seedcopy {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--blue-deep);
+  border: 1px solid var(--edge);
+  border-radius: 4px;
+  padding: 1px 5px;
+  transition: 0.14s;
+}
+
+.seedcopy:hover {
+  color: var(--blue);
+  border-color: var(--edge-hot);
+}
+
+.fairfoot {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+  border-top: 1px solid var(--edge);
+  padding-top: 16px;
+}
+
+@media (max-width: 900px) {
+  .fairgrid {
+    grid-template-columns: 1fr;
+  }
 }

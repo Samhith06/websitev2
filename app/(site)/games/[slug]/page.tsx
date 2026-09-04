@@ -6,9 +6,10 @@ import { disabledGames, gamesAreKilled } from '@/lib/store/settings';
 import { currentUser } from '@/lib/player';
 import { gamesAvailable, settingsFor } from '@/lib/store/profile';
 import { balanceOf } from '@/lib/store/coins';
-import { coins, rtpLabel } from '@/lib/format';
+import { rtpLabel } from '@/lib/format';
 import { GamesGate } from '@/components/games/GamesGate';
 import { GameTable } from '@/components/games/Table';
+import { CoinPill } from '@/components/ui/CoinPill';
 import { Blackjack } from '@/components/games/Blackjack';
 
 const TABLE_GAMES = ['dice', 'limbo', 'wheel', 'keno'] as const;
@@ -90,12 +91,7 @@ export default async function GamePage({ params }: { params: Promise<{ slug: str
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-          <div className="coinpill">
-            <div className="coin" aria-hidden>
-              M
-            </div>
-            <span className="cv">{coins(balance.balance)}</span>
-          </div>
+          <CoinPill balance={balance.balance} />
         </div>
       </div>
 
