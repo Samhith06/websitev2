@@ -6,23 +6,42 @@ import { fetchRazedLeaderboard, type RazedResult } from '@/lib/razed';
  * Razed wager data, snapshotted.
  *
  * The blueprint left one question open: whether Razed exposes a lifetime
- * total. It does not expose one directly — the referral endpoint takes a
- * from/to window — but a window is enough, because a `from` earlier than the
- * channel existed returns everything. That is what LIFETIME_FROM is, and it
- * means the milestone ladder counts wagering done long before this site
- * launched rather than starting every existing high roller at zero.
+ * total. Verified against the live API, the answer is **no** — the referral
+ * endpoint takes a from/to window and refuses anything wider than 45 days:
+ *
+ *   422 {"errors":{"to":["The date range must not exceed 45 days."]}}
+ *
+ * But it does answer for *past* windows, which is the part that saves the
+ * feature. Lifetime is therefore reconstructed by walking backwards in 45-day
+ * chunks and summing per username, so wagering done long before this site
+ * launched still counts and no existing high roller starts the ladder at zero.
+ *
+ * The walk stops after a run of empty windows rather than at a hardcoded start
+ * date, so it discovers when the referral code began producing data instead of
+ * being told — and it cannot silently miss history if that date is wrong.
  *
  * Snapshots are appended, never overwritten. A partial or malformed sync
  * leaves the previous one intact, so the site keeps showing the last good
  * figures with a "last synced" timestamp rather than an empty leaderboard.
  */
 
-/** Earlier than the referral code existed, so the window is effectively "all". */
-const LIFETIME_FROM = '2020-01-01';
+/** Razed's hard limit on a single query. */
+const MAX_WINDOW_DAYS = 45;
+
+/** Stop once this many consecutive windows come back empty. */
+const EMPTY_RUN_TO_STOP = 3;
+
+/** A backstop so a bad clock cannot walk the API for ever. */
+const MAX_WINDOWS = 60;
+
 export const LIFETIME_PERIOD = 'lifetime';
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+function isoDay(d: Date): string {
+  return d.toISOString().slice(0, 10);
 }
 
 export type Snapshot = {
@@ -44,11 +63,25 @@ export type SyncOutcome =
  * throw that away.
  */
 export async function syncPeriod(period: string, from: string, to: string): Promise<SyncOutcome> {
-  const result: RazedResult = await fetchRazedLeaderboard({ from, to, top: 500 });
+  const result: RazedResult = await fetchRazedLeaderboard({ from, to, top: 1000 });
   if (!result.ok) {
     return { ok: false, reason: result.reason, detail: result.detail };
   }
+  return storeSnapshot(period, { from, to }, result.rows);
+}
 
+/**
+ * Append one snapshot and its flattened rows, in a single transaction.
+ *
+ * The raw window metadata is kept alongside so a bad sync can be diagnosed
+ * rather than guessed at — for the lifetime walk that is how many windows were
+ * read, which is the thing you want to know when a total looks wrong.
+ */
+async function storeSnapshot(
+  period: string,
+  meta: Record<string, unknown>,
+  rows: Array<{ username: string; wagered: number }>,
+): Promise<SyncOutcome> {
   return tx(async (client) => {
     const { rows: inserted } = await client.query<{
       id: string;
@@ -59,15 +92,15 @@ export async function syncPeriod(period: string, from: string, to: string): Prom
       `INSERT INTO razed_snapshots (period, row_count, payload)
        VALUES ($1, $2, $3)
        RETURNING id::text, period, fetched_at, row_count`,
-      [period, result.rows.length, JSON.stringify({ from, to, rows: result.rows })],
+      [period, rows.length, JSON.stringify({ ...meta, rows })],
     );
     const snapshotId = Number(inserted[0].id);
 
     // One multi-row insert rather than a loop: a busy month is several hundred
-    // usernames and this runs every ten minutes.
-    if (result.rows.length > 0) {
+    // usernames and this runs on a schedule.
+    if (rows.length > 0) {
       const values: unknown[] = [];
-      const tuples = result.rows.map((row, i) => {
+      const tuples = rows.map((row, i) => {
         values.push(snapshotId, row.username, row.wagered);
         return `($${i * 3 + 1}, $${i * 3 + 2}, $${i * 3 + 3})`;
       });
@@ -81,7 +114,7 @@ export async function syncPeriod(period: string, from: string, to: string): Prom
 
     return {
       ok: true as const,
-      rowCount: result.rows.length,
+      rowCount: rows.length,
       snapshot: {
         id: snapshotId,
         period: inserted[0].period,
@@ -92,8 +125,56 @@ export async function syncPeriod(period: string, from: string, to: string): Prom
   });
 }
 
+/**
+ * Rebuild the lifetime totals.
+ *
+ * Walks backwards in 45-day windows, summing each username's wagering, and
+ * stops once three consecutive windows come back empty — the referral code has
+ * a start date and past it there is nothing to find.
+ *
+ * A failure part-way through aborts without writing. Storing a partial walk
+ * would publish a lifetime total that is quietly too low, and someone would
+ * claim a milestone against it — the one outcome worse than not syncing.
+ */
 export async function syncLifetime(): Promise<SyncOutcome> {
-  return syncPeriod(LIFETIME_PERIOD, LIFETIME_FROM, today());
+  const totals = new Map<string, { username: string; wagered: number }>();
+  let windows = 0;
+  let emptyRun = 0;
+  let end = new Date(`${today()}T00:00:00Z`);
+
+  while (windows < MAX_WINDOWS && emptyRun < EMPTY_RUN_TO_STOP) {
+    const start = new Date(end);
+    start.setUTCDate(start.getUTCDate() - (MAX_WINDOW_DAYS - 1));
+
+    const result = await fetchRazedLeaderboard({
+      from: isoDay(start),
+      to: isoDay(end),
+      top: 1000,
+    });
+
+    if (!result.ok) {
+      // `no-key` is a configuration problem, not a transient one, so it is
+      // reported as-is rather than retried across sixty windows.
+      return { ok: false, reason: result.reason, detail: result.detail };
+    }
+
+    if (result.rows.length === 0) emptyRun += 1;
+    else emptyRun = 0;
+
+    for (const row of result.rows) {
+      const key = row.username.toLowerCase();
+      const existing = totals.get(key);
+      if (existing) existing.wagered += row.wagered;
+      else totals.set(key, { username: row.username, wagered: row.wagered });
+    }
+
+    windows += 1;
+    end = new Date(start);
+    end.setUTCDate(end.getUTCDate() - 1);
+  }
+
+  const rows = [...totals.values()].sort((a, b) => b.wagered - a.wagered);
+  return storeSnapshot(LIFETIME_PERIOD, { windows, through: today() }, rows);
 }
 
 export async function latestSnapshot(period: string): Promise<Snapshot | null> {

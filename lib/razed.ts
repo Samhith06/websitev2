@@ -40,11 +40,22 @@ const ENDPOINT = 'https://api.razed.com/player/api/v1/referrals/leaderboard';
 const REFERRAL_CODE = 'Mattyspins';
 
 /**
- * Deliberately well above the 25 the plan mentions. 25 is what the *page*
- * shows; this is what we read, so admin can see everyone who qualified and the
- * board is never truncated without us knowing.
+ * Razed's own ceiling on `top`, verified against the live API:
+ *
+ *   422 {"errors":{"top":["The top must not be greater than 100."]}}
+ *
+ * So a busy month cannot be read in one request, and asking for more is a hard
+ * failure rather than a silent truncation. `fetchRazedLeaderboard` pages
+ * instead.
  */
-const DEFAULT_TOP = 100;
+const MAX_TOP = 100;
+
+/**
+ * How many pages we are willing to walk before deciding something is wrong.
+ * Ten thousand referred accounts in one window would be a wonderful problem
+ * and is still worth refusing to loop over.
+ */
+const MAX_PAGES = 100;
 
 export type RazedResult =
   | {
@@ -112,13 +123,26 @@ function normalise(payload: unknown): { rows: RazedRow[]; total: number; pages: 
   };
 }
 
+/**
+ * Reads a whole window, paging until Razed says there is no more.
+ *
+ * `top` is capped at 100 by the API, so a busy month genuinely needs several
+ * requests. Walking the pages here rather than returning a truncated board is
+ * the difference between an accurate leaderboard and one that quietly stops at
+ * position 100 — which nobody would notice until the person in 101st place did.
+ *
+ * A failure on any page abandons the whole window rather than returning what
+ * was gathered so far. A partial board is worse than a stated failure: it looks
+ * complete, and the ranks below the break are all wrong.
+ */
 export async function fetchRazedLeaderboard({
   from,
   to,
-  top = DEFAULT_TOP,
+  top = MAX_TOP,
 }: {
   from: string;
   to: string;
+  /** Rows to read in total. Requests are still paged at 100 apiece. */
   top?: number;
 }): Promise<RazedResult> {
   const fetchedAt = new Date().toISOString();
@@ -133,45 +157,66 @@ export async function fetchRazedLeaderboard({
     };
   }
 
-  const url = new URL(ENDPOINT);
-  url.searchParams.set('referral_code', REFERRAL_CODE);
-  url.searchParams.set('from', from);
-  url.searchParams.set('to', to);
-  url.searchParams.set('top', String(top));
+  const perPage = Math.min(top, MAX_TOP);
+  const collected: Array<{ username: string; wagered: number }> = [];
+  let total = 0;
+  let page = 1;
+  let lastPage = 1;
 
   try {
-    const response = await fetch(url, {
-      headers: { 'X-Referral-Key': key, accept: 'application/json' },
-      // Poll every ten minutes (§6) rather than on every page view.
-      next: { revalidate: 600 },
-    });
+    do {
+      const url = new URL(ENDPOINT);
+      url.searchParams.set('referral_code', REFERRAL_CODE);
+      url.searchParams.set('from', from);
+      url.searchParams.set('to', to);
+      url.searchParams.set('top', String(perPage));
+      url.searchParams.set('page', String(page));
 
-    if (!response.ok) {
-      return {
-        ok: false,
-        reason: 'http',
-        detail: `Razed returned ${response.status} ${response.statusText}.`,
-        fetchedAt,
-      };
-    }
+      const response = await fetch(url, {
+        headers: { 'X-Referral-Key': key, accept: 'application/json' },
+        // Poll every ten minutes rather than on every page view.
+        next: { revalidate: 600 },
+      });
 
-    const parsed = normalise(await response.json());
-    if (!parsed) {
-      return {
-        ok: false,
-        reason: 'shape',
-        detail: 'Razed responded, but the payload did not match the shape we read.',
-        fetchedAt,
-      };
-    }
+      if (!response.ok) {
+        return {
+          ok: false,
+          reason: 'http',
+          detail: `Razed returned ${response.status} ${response.statusText}.`,
+          fetchedAt,
+        };
+      }
+
+      const parsed = normalise(await response.json());
+      if (!parsed) {
+        return {
+          ok: false,
+          reason: 'shape',
+          detail: 'Razed responded, but the payload did not match the shape we read.',
+          fetchedAt,
+        };
+      }
+
+      collected.push(...parsed.rows.map((r) => ({ username: r.username, wagered: r.wagered })));
+      total = parsed.total;
+      lastPage = parsed.pages;
+      page += 1;
+    } while (page <= lastPage && page <= MAX_PAGES && collected.length < top);
+
+    // Ranked once, over everything gathered, rather than per page — otherwise
+    // every page would restart the numbering at 1.
+    collected.sort((a, b) => b.wagered - a.wagered);
+    const rows: RazedRow[] = collected
+      .slice(0, top)
+      .map((row, index) => ({ rank: index + 1, username: row.username, wagered: row.wagered }));
 
     return {
       ok: true,
-      rows: parsed.rows,
+      rows,
       fetchedAt,
-      returned: parsed.rows.length,
-      total: parsed.total,
-      truncated: parsed.pages > 1,
+      returned: rows.length,
+      total,
+      truncated: rows.length < total,
     };
   } catch (error) {
     return {
