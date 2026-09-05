@@ -26,6 +26,9 @@ export const metadata: Metadata = {
 /** Everything here is the signed-in person's own data. */
 export const dynamic = 'force-dynamic';
 
+/** How many ledger rows the summary card shows before deferring to its page. */
+const LEDGER_PREVIEW = 5;
+
 export default async function ProfilePage() {
   const user = await currentUser();
   if (!user) return <SignedOut />;
@@ -54,6 +57,11 @@ export default async function ProfilePage() {
         : wager.link
           ? 'pending'
           : 'none';
+
+  // The card shows a glance, not an archive — the full ledger has its own page
+  // at /profile/coins. The fetch above stays at 40 because the watch-hours sum
+  // below reads it; only what is rendered is trimmed.
+  const recentLedger = ledger.slice(0, LEDGER_PREVIEW);
 
   // Watch time is the ledger's, not a separate counter: coins are minted one
   // per 180-second block, so the blocks are the hours.
@@ -213,7 +221,7 @@ export default async function ProfilePage() {
               <div className="tw" style={{ border: 0 }}>
                 <table style={{ minWidth: 420 }}>
                   <tbody>
-                    {ledger.map((entry) => (
+                    {recentLedger.map((entry) => (
                       <tr key={entry.id}>
                         <td>{entry.reason}</td>
                         <td className="n" style={{ color: 'var(--muted)' }}>
@@ -235,6 +243,18 @@ export default async function ProfilePage() {
                 </table>
               </div>
             )}
+
+            {/* Only offered when there is actually more behind it, so the link
+                never leads to the same rows the card is already showing. */}
+            {ledger.length > LEDGER_PREVIEW ? (
+              <Link
+                className="btn sm ghost"
+                href="/profile/coins"
+                style={{ marginTop: 12 }}
+              >
+                Show more
+              </Link>
+            ) : null}
           </div>
 
           {redemptions.length > 0 ? (

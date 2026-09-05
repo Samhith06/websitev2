@@ -141,7 +141,11 @@ export async function ledgerFor(userId: number, limit = 50): Promise<LedgerEntry
     [userId, limit],
   );
 
-  return found.map((row) => ({
+  return found.map(toLedgerEntry);
+}
+
+function toLedgerEntry(row: LedgerRow): LedgerEntry {
+  return {
     id: row.id,
     createdAt: row.created_at.toISOString(),
     reason: row.reason,
@@ -149,7 +153,42 @@ export async function ledgerFor(userId: number, limit = 50): Promise<LedgerEntry
     balance: row.balance_after,
     kind: (row.kind as LedgerEntry['kind']) ?? 'adjustment',
     detail: row.multiplier && Number(row.multiplier) !== 1 ? `${row.multiplier}× multiplier` : undefined,
-  }));
+  };
+}
+
+/**
+ * One page of the ledger, with the total beside it.
+ *
+ * `ledgerFor` above deliberately has no offset: it answers "the last N", which
+ * is what a summary card wants. Paging needs the count as well, so the page it
+ * lands on can say how far through it is rather than guessing from a full
+ * final page.
+ */
+export async function ledgerPageFor(
+  userId: number,
+  { limit, offset }: { limit: number; offset: number },
+): Promise<{ entries: LedgerEntry[]; total: number }> {
+  const [found, count] = await Promise.all([
+    rows<LedgerRow>(
+      `SELECT id::text, delta, kind, reason, multiplier, balance_after, created_at
+         FROM coin_ledger
+        WHERE user_id = $1
+        ORDER BY created_at DESC, id DESC
+        LIMIT $2 OFFSET $3`,
+      [userId, limit, offset],
+    ),
+    // Counted as text: a bigint comes back as a string from pg, and Number()
+    // on the count is safe where Number() on a balance sum would not be.
+    one<{ total: string }>(
+      'SELECT COUNT(*)::text AS total FROM coin_ledger WHERE user_id = $1',
+      [userId],
+    ),
+  ]);
+
+  return {
+    entries: found.map(toLedgerEntry),
+    total: Number(count?.total ?? 0),
+  };
 }
 
 /** Admin's coin-flow card: minted by watching against destroyed by the edge. */
