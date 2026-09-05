@@ -12,6 +12,16 @@ import { drawRaffle, setRaffleStatus } from '@/lib/store/raffles';
 import { resolveRedemption } from '@/lib/store/shop';
 import { syncLifetime, syncPeriod } from '@/lib/store/razed-snapshots';
 import { award, revoke } from '@/lib/store/badges';
+import { evaluateBadges } from '@/lib/store/badge-rules';
+import { disabledGames, setGameEnabled, setGamesKilled } from '@/lib/store/settings';
+import type { GameSlug } from '@/lib/types';
+import {
+  ClipError,
+  createClip,
+  deleteClip,
+  setClipPinned,
+  setClipStatus,
+} from '@/lib/store/clips';
 import {
   PeriodError,
   createPeriod,
@@ -383,6 +393,297 @@ export async function revokeBadge(userId: number, slug: string): Promise<Outcome
 
   revalidatePath('/admin/badges');
   return { ok: true, message: 'Badge revoked.' };
+}
+
+/**
+ * Re-evaluate every badge rule and award what has been earned.
+ *
+ * Safe to run as often as anybody likes: awarding a badge already held is a
+ * no-op, so the figure reported back is genuinely what was newly earned. The
+ * sweep never takes a badge away — that stays `revokeBadge`, by hand, with a
+ * name against it in the audit log.
+ */
+export async function sweepBadges(): Promise<Outcome> {
+  const who = await staff();
+  if (!who) return DENIED;
+
+  const report = await evaluateBadges();
+
+  // Only a sweep that changed something is worth a row. A five-minute cron
+  // writing "awarded 0" for ever would bury the grants that matter.
+  if (report.awarded > 0) {
+    await record_({
+      actor: who.name,
+      actorDiscordId: who.discordId,
+      action: 'badge.swept',
+      detail: {
+        awarded: report.awarded,
+        rules: report.rules.filter((r) => r.status === 'evaluated' && r.awarded > 0),
+      },
+    });
+  }
+
+  const skipped = report.rules.filter((r) => r.status === 'no-data');
+  revalidatePath('/admin/badges');
+  revalidatePath('/profile');
+
+  return {
+    ok: true,
+    message:
+      report.awarded === 0
+        ? `Nothing new to award.${skipped.length ? ` ${skipped.length} rule${skipped.length === 1 ? '' : 's'} had no data to read.` : ''}`
+        : `Awarded ${report.awarded} badge${report.awarded === 1 ? '' : 's'}.${skipped.length ? ` ${skipped.length} rule${skipped.length === 1 ? '' : 's'} had no data to read.` : ''}`,
+  };
+}
+
+/** The same rules against one account, from the member screen. */
+export async function recheckBadges(userId: number): Promise<Outcome> {
+  const who = await staff();
+  if (!who) return DENIED;
+
+  const report = await evaluateBadges([userId]);
+  if (report.awarded > 0) {
+    await record_({
+      actor: who.name,
+      actorDiscordId: who.discordId,
+      action: 'badge.rechecked',
+      target: String(userId),
+      detail: { awarded: report.awarded },
+    });
+  }
+
+  revalidatePath(`/admin/users/${userId}`);
+  return {
+    ok: true,
+    message:
+      report.awarded === 0
+        ? 'Already holds everything the rules award.'
+        : `Awarded ${report.awarded} badge${report.awarded === 1 ? '' : 's'}.`,
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Games — the kill switch                                                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The paths a game switch has to reach, so the screens that show it can be
+ * revalidated together. Missing one leaves a cached lobby offering a game the
+ * API has already started refusing, which reads to a player as the site being
+ * broken rather than the game being off.
+ */
+function revalidateGames(): void {
+  revalidatePath('/admin/settings');
+  revalidatePath('/games');
+  revalidatePath('/games/[slug]', 'page');
+  revalidatePath('/');
+}
+
+/**
+ * Stop every game at once.
+ *
+ * This is the emergency handle, and the reason it is a stored row rather than
+ * a constant: it takes effect on the next request with no deploy and no cache
+ * to wait out. `gameIsPlayable` is checked inside both play endpoints, not just
+ * the lobby, so flipping this stops bets being accepted rather than merely
+ * hiding the buttons.
+ *
+ * Rounds already in flight are untouched — a blackjack hand mid-deal settles
+ * normally. Refusing at the door is the right behaviour; voiding a hand
+ * somebody has staked into is not.
+ */
+export async function killGames(killed: boolean): Promise<Outcome> {
+  const who = await staff('owner');
+  if (!who) return DENIED;
+
+  await setGamesKilled(killed, who.name);
+  await record_({
+    actor: who.name,
+    actorDiscordId: who.discordId,
+    action: killed ? 'games.killed' : 'games.restored',
+  });
+
+  revalidateGames();
+  return {
+    ok: true,
+    message: killed
+      ? 'Every game is off. The API refuses new bets from the next request.'
+      : 'Games are back on.',
+  };
+}
+
+/**
+ * Switch one game off, leaving the rest running.
+ *
+ * The narrower handle, and the one that gets used: a paytable that looks wrong
+ * on Keno is no reason to stop Dice. The site-wide kill still overrides this —
+ * `gameIsPlayable` checks it first — so a game showing "on" here is still off
+ * while everything is killed, which the screen says rather than leaving the two
+ * switches to contradict each other.
+ */
+export async function setGameAvailable(slug: GameSlug, enabled: boolean): Promise<Outcome> {
+  const who = await staff('owner');
+  if (!who) return DENIED;
+
+  await setGameEnabled(slug, enabled, who.name);
+  await record_({
+    actor: who.name,
+    actorDiscordId: who.discordId,
+    action: enabled ? 'game.enabled' : 'game.disabled',
+    target: slug,
+  });
+
+  revalidateGames();
+
+  // Read back rather than assume: `setGameEnabled` rewrites a list, and the
+  // count is the thing worth saying out loud when several are already off.
+  const off = await disabledGames();
+  return {
+    ok: true,
+    message: enabled
+      ? `${slug} is back on.${off.length ? ` ${off.length} still off.` : ''}`
+      : `${slug} is off. Nothing staked in it is affected.`,
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Clips                                                                      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Adding a clip.
+ *
+ * Everything below was already in `lib/store/clips.ts` — the URL parsing, the
+ * pin cap, the big-win validation — and had no caller, so the carousel could
+ * only be filled by writing SQL by hand. This is the screen's half of it.
+ *
+ * New clips default to draft. Nothing reaches the public site until somebody
+ * publishes it, which is what stops the wall filling with filler inside a week.
+ */
+export async function addClip(formData: FormData): Promise<Outcome> {
+  const who = await staff();
+  if (!who) return DENIED;
+
+  const kind = formData.get('kind') === 'big_win' ? 'big_win' : 'clip';
+  const url = String(formData.get('url') ?? '').trim();
+  const title = String(formData.get('title') ?? '').trim();
+  const slotName = String(formData.get('slotName') ?? '').trim();
+  const occurredAt = String(formData.get('occurredAt') ?? '').trim();
+  const publish = formData.get('publish') === 'on';
+  const pinned = formData.get('pinned') === 'on';
+
+  if (!url) return { ok: false, error: 'Paste the clip URL.' };
+  if (!title) return { ok: false, error: 'Give it a title — it is what people read.' };
+
+  const bet = formData.get('bet') ? Number(formData.get('bet')) : null;
+  const payout = formData.get('payout') ? Number(formData.get('payout')) : null;
+
+  if (kind === 'big_win') {
+    if (!Number.isFinite(bet ?? NaN) || (bet ?? 0) <= 0) {
+      return { ok: false, error: 'A big win needs a bet above zero.' };
+    }
+    if (!Number.isFinite(payout ?? NaN) || (payout ?? 0) <= 0) {
+      return { ok: false, error: 'A big win needs a payout above zero.' };
+    }
+  }
+
+  try {
+    const clip = await createClip({
+      kind,
+      url,
+      title,
+      status: publish ? 'published' : 'draft',
+      pinned,
+      slotName: slotName || null,
+      bet: kind === 'big_win' ? bet : null,
+      payout: kind === 'big_win' ? payout : null,
+      // A date-only input is midday UTC, not midnight: midnight lands on the
+      // previous day for anyone west of Greenwich and the clip sorts wrong.
+      occurredAt: occurredAt ? new Date(`${occurredAt}T12:00:00Z`).toISOString() : undefined,
+      addedBy: who.name,
+    });
+
+    await record_({
+      actor: who.name,
+      actorDiscordId: who.discordId,
+      action: 'clip.added',
+      target: clip.id,
+      detail: { kind, url, title, status: clip.status, pinned },
+    });
+
+    revalidatePath('/admin/clips');
+    revalidatePath('/community');
+    revalidatePath('/');
+    return {
+      ok: true,
+      message: publish ? `Published "${clip.title}".` : `Saved "${clip.title}" as a draft.`,
+    };
+  } catch (error) {
+    if (error instanceof ClipError) return { ok: false, error: error.message };
+    throw error;
+  }
+}
+
+export async function publishClip(id: string, publish: boolean): Promise<Outcome> {
+  const who = await staff();
+  if (!who) return DENIED;
+
+  await setClipStatus(id, publish ? 'published' : 'draft');
+  await record_({
+    actor: who.name,
+    actorDiscordId: who.discordId,
+    action: publish ? 'clip.published' : 'clip.unpublished',
+    target: id,
+  });
+
+  revalidatePath('/admin/clips');
+  revalidatePath('/community');
+  revalidatePath('/');
+  return { ok: true, message: publish ? 'Published.' : 'Back to draft.' };
+}
+
+export async function pinClip(id: string, pinned: boolean): Promise<Outcome> {
+  const who = await staff();
+  if (!who) return DENIED;
+
+  try {
+    await setClipPinned(id, pinned);
+  } catch (error) {
+    if (error instanceof ClipError) return { ok: false, error: error.message };
+    throw error;
+  }
+
+  await record_({
+    actor: who.name,
+    actorDiscordId: who.discordId,
+    action: pinned ? 'clip.pinned' : 'clip.unpinned',
+    target: id,
+  });
+
+  revalidatePath('/admin/clips');
+  revalidatePath('/community');
+  revalidatePath('/');
+  return { ok: true, message: pinned ? 'Pinned.' : 'Unpinned.' };
+}
+
+/** Removing a clip is a delete, so it is owner-only and confirmed in the UI. */
+export async function removeClip(id: string, title: string): Promise<Outcome> {
+  const who = await staff('owner');
+  if (!who) return DENIED;
+
+  await deleteClip(id);
+  await record_({
+    actor: who.name,
+    actorDiscordId: who.discordId,
+    action: 'clip.deleted',
+    target: id,
+    detail: { title },
+  });
+
+  revalidatePath('/admin/clips');
+  revalidatePath('/community');
+  revalidatePath('/');
+  return { ok: true, message: `Deleted "${title}".` };
 }
 
 /**

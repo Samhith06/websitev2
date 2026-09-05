@@ -3,6 +3,7 @@ import { disabledGames, gamesAreKilled } from '@/lib/store/settings';
 import { LIMITS } from '@/lib/games';
 import { gameConfigs } from '@/lib/mock';
 import { coins } from '@/lib/format';
+import { GameSwitch, KillSwitch } from '@/components/admin/GameSwitches';
 
 export const metadata = { title: 'Coin settings' };
 export const dynamic = 'force-dynamic';
@@ -35,27 +36,45 @@ export default async function AdminSettingsPage() {
         </div>
       </div>
 
+      {killed ? (
+        <div className="card" style={{ marginBottom: 14, borderColor: 'rgba(255,92,122,.4)' }}>
+          <div className="small" style={{ color: 'var(--red)' }}>
+            <b>Every game is stopped.</b> The lobby explains why to players and both play endpoints
+            are refusing bets with a 503. Nothing has been staked and no balance has moved.
+          </div>
+        </div>
+      ) : null}
+
       <div className="card">
         <h2 style={{ fontSize: 15, marginBottom: 4 }}>Games</h2>
         <p className="small muted" style={{ marginBottom: 14 }}>
           The kill switch is checked inside the play route, not just the lobby — a switch that
-          leaves the API accepting bets is not a switch.
+          leaves the API accepting bets is not a switch. It takes effect on the next request:
+          nothing is cached and no deploy is needed.
         </p>
 
         <div className="linkrow" style={{ borderTop: 0 }}>
-          <span>Games available site-wide</span>
-          <span className={`tag ${killed ? 'red' : 'green'}`}>{killed ? 'Killed' : 'On'}</span>
+          <span className="lk">Every game</span>
+          <KillSwitch killed={killed} />
         </div>
+
         {gameConfigs
           .filter((g) => !g.comingSoon)
           .map((game) => (
-            <div className="linkrow" key={game.slug}>
-              <span>{game.name}</span>
-              <span className={`tag ${disabled.includes(game.slug) ? 'red' : 'green'}`}>
-                {disabled.includes(game.slug) ? 'Off' : 'On'}
-              </span>
-            </div>
+            <GameSwitch
+              key={game.slug}
+              slug={game.slug}
+              name={game.name}
+              disabled={disabled.includes(game.slug)}
+              killed={killed}
+            />
           ))}
+
+        <p className="small muted" style={{ marginTop: 12 }}>
+          Stopping a game refuses new rounds at the door. A hand already in progress settles
+          normally — voiding something a player has already staked into would be the worse of the
+          two failures.
+        </p>
       </div>
 
       <div className="card" style={{ marginTop: 14 }}>

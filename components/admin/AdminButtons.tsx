@@ -1,7 +1,14 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { closeRaffle, draw, freezeMonth, syncRazed } from '@/app/(site)/admin/actions';
+import {
+  closeRaffle,
+  draw,
+  freezeMonth,
+  recheckBadges,
+  sweepBadges,
+  syncRazed,
+} from '@/app/(site)/admin/actions';
 
 type Result = { ok: boolean; message?: string; error?: string };
 
@@ -123,6 +130,27 @@ export function DrawRaffleButton({ raffleId, title }: { raffleId: number; title:
         go: 'Draw the winner',
       }}
       run={() => draw(raffleId)}
+    />
+  );
+}
+
+/**
+ * Re-run every badge rule.
+ *
+ * No confirmation, because there is nothing to undo: the sweep only ever
+ * awards, and awarding something already held is a no-op.
+ */
+export function SweepBadgesButton() {
+  return <ActionButton label="Re-evaluate badges" running="Evaluating…" run={sweepBadges} />;
+}
+
+export function RecheckBadgesButton({ userId }: { userId: number }) {
+  return (
+    <ActionButton
+      label="Re-check badges"
+      running="Checking…"
+      className="btn sm ghost"
+      run={() => recheckBadges(userId)}
     />
   );
 }
