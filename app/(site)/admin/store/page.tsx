@@ -1,11 +1,17 @@
 import { rows } from '@/lib/db';
 import { allItems } from '@/lib/store/shop';
 import { coins } from '@/lib/format';
+import { auth } from '@/auth';
+import { devBypass, roleFor } from '@/lib/admin';
+import { ShopItemForm } from '@/components/admin/ShopItemForm';
 
 export const metadata = { title: 'Store' };
 export const dynamic = 'force-dynamic';
 
 export default async function AdminStorePage() {
+  const session = devBypass() ? null : await auth();
+  const isOwner = devBypass() || roleFor(session?.user?.discordId ?? null) === 'owner';
+
   const [items, redeemed] = await Promise.all([
     allItems(),
     rows<{ item_id: string; n: string }>(
@@ -29,6 +35,7 @@ export default async function AdminStorePage() {
             Stock decrements in the same transaction as the coin debit, so nothing oversells.
           </div>
         </div>
+        {isOwner ? <ShopItemForm /> : null}
       </div>
 
       {items.length === 0 ? (
@@ -45,6 +52,7 @@ export default async function AdminStorePage() {
                 <th>Redeemed</th>
                 <th>Review</th>
                 <th>Status</th>
+                {isOwner ? <th style={{ textAlign: 'right' }}>Edit</th> : null}
               </tr>
             </thead>
             <tbody>
@@ -74,6 +82,11 @@ export default async function AdminStorePage() {
                       {item.active ? 'live' : 'hidden'}
                     </span>
                   </td>
+                  {isOwner ? (
+                    <td style={{ textAlign: 'right' }}>
+                      <ShopItemForm item={item} />
+                    </td>
+                  ) : null}
                 </tr>
               ))}
             </tbody>

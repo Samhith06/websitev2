@@ -1,11 +1,17 @@
 import { allRaffles } from '@/lib/store/raffles';
 import { coins, dateShort, dateTime, money } from '@/lib/format';
 import { CloseRaffleButton, DrawRaffleButton } from '@/components/admin/AdminButtons';
+import { AddRaffleForm } from '@/components/admin/RaffleForm';
+import { auth } from '@/auth';
+import { devBypass, roleFor } from '@/lib/admin';
 
 export const metadata = { title: 'Raffles' };
 export const dynamic = 'force-dynamic';
 
 export default async function AdminRafflesPage() {
+  const session = devBypass() ? null : await auth();
+  const isOwner = devBypass() || roleFor(session?.user?.discordId ?? null) === 'owner';
+
   const raffles = await allRaffles();
   const open = raffles.filter((r) => r.status === 'open' || r.status === 'closed');
   const drawn = raffles.filter((r) => r.status === 'drawn');
@@ -22,6 +28,8 @@ export default async function AdminRafflesPage() {
           </div>
         </div>
       </div>
+
+      {isOwner ? <AddRaffleForm /> : null}
 
       {open.length === 0 ? (
         <div className="emptyq">No raffles are open.</div>

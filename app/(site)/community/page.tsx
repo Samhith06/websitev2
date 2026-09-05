@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { publishedBigWins, publishedClips } from '@/lib/store/clips';
-import { clipLength, coins, dateShort, formatMultiplier, relativeTime } from '@/lib/format';
+import { ClipCard } from '@/components/site/ClipCard';
 import type { Clip } from '@/lib/types';
 
 export const metadata: Metadata = {
@@ -66,7 +66,7 @@ export default async function CommunityPage({
       ) : (
         <div className="clips">
           {shown.map((item) => (
-            <ClipTile key={item.id} clip={item} showWin={active === 'fame'} />
+            <ClipCard key={item.id} clip={item} showWin={active === 'fame'} />
           ))}
         </div>
       )}
@@ -80,65 +80,3 @@ export default async function CommunityPage({
   );
 }
 
-function ClipTile({ clip, showWin }: { clip: Clip; showWin: boolean }) {
-  const hasFigures = clip.bet != null && clip.payout != null;
-
-  return (
-    <a className="clip" href={clip.url} target="_blank" rel="noreferrer noopener">
-      <div className="thumb">
-        {clip.thumbUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={clip.thumbUrl} alt="" loading="lazy" />
-        ) : null}
-        <div className="pl" aria-hidden>
-          ▶
-        </div>
-        {clip.durationSeconds ? (
-          <span className="dur">{clipLength(clip.durationSeconds)}</span>
-        ) : null}
-        {showWin && hasFigures ? (
-          <span
-            className="badge tag gold"
-            style={{ position: 'absolute', top: 8, left: 8, zIndex: 1 }}
-          >
-            {formatMultiplier(clip.bet!, clip.payout!)}
-          </span>
-        ) : null}
-      </div>
-
-      <div className="ci">
-        <div className="ct">{clip.title}</div>
-        <div className="cm">
-          {clip.source} · {relativeTime(clip.occurredAt)}
-        </div>
-
-        {showWin && hasFigures ? (
-          <div
-            className="cm"
-            style={{
-              marginTop: 8,
-              paddingTop: 8,
-              borderTop: '1px solid var(--edge)',
-              display: 'flex',
-              justifyContent: 'space-between',
-              gap: 8,
-            }}
-          >
-            <span>
-              Bet <b style={{ color: 'var(--text)' }}>{coins(clip.bet!)}</b>
-            </span>
-            <span>
-              Won <b style={{ color: 'var(--gold)' }}>{coins(clip.payout!)}</b>
-            </span>
-          </div>
-        ) : null}
-
-        {showWin && clip.slotName ? (
-          <div className="cm" style={{ marginTop: 5 }}>
-            {clip.slotName} · {dateShort(clip.occurredAt)}
-          </div>
-        ) : null}
-      </div>
-    </a>
-  );
-}

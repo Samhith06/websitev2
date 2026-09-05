@@ -7,9 +7,17 @@ import { record as record_ } from '@/lib/store/audit';
 import { InsufficientCoins, balanceOf, record } from '@/lib/store/coins';
 import { coins } from '@/lib/format';
 import { approveLink, rejectLink } from '@/lib/store/razed-links';
-import { markClaimPaid, rejectClaim, upsertTier } from '@/lib/store/milestones';
-import { drawRaffle, setRaffleStatus } from '@/lib/store/raffles';
-import { resolveRedemption } from '@/lib/store/shop';
+import {
+  TierInUse,
+  deleteTier as deleteMilestoneTier,
+  markClaimPaid,
+  rejectClaim,
+  setTierActive,
+  upsertTier,
+} from '@/lib/store/milestones';
+import { createRaffle, drawRaffle, setRaffleStatus } from '@/lib/store/raffles';
+import { ShopError, resolveRedemption, upsertItem } from '@/lib/store/shop';
+import type { ShopCategory } from '@/lib/types';
 import { syncLifetime, syncPeriod } from '@/lib/store/razed-snapshots';
 import { award, revoke } from '@/lib/store/badges';
 import { evaluateBadges } from '@/lib/store/badge-rules';
@@ -19,6 +27,7 @@ import {
   ClipError,
   createClip,
   deleteClip,
+  refreshClipMetadata,
   setClipPinned,
   setClipStatus,
 } from '@/lib/store/clips';
@@ -357,6 +366,67 @@ export async function saveTier(formData: FormData): Promise<Outcome> {
   return { ok: true, message: 'Tier saved. Existing claims are untouched.' };
 }
 
+/**
+ * Removing a tier.
+ *
+ * Refused once anybody has claimed it. At that point the row is referenced by
+ * a claim, which is the record of money that has already been sent, and
+ * deleting it would erase the evidence behind a payout. The caller is pointed
+ * at deactivating instead, which takes the tier off the ladder and leaves
+ * every claim intact — the same move migration 009 made for the tiers the
+ * current ladder replaced.
+ */
+export async function removeTier(tierId: number, name: string): Promise<Outcome> {
+  const who = await staff('owner');
+  if (!who) return DENIED;
+
+  try {
+    await deleteMilestoneTier(tierId);
+  } catch (error) {
+    if (error instanceof TierInUse) {
+      return {
+        ok: false,
+        error: `${name} has ${error.claims} claim${error.claims === 1 ? '' : 's'} against it, so it cannot be deleted. Switch it off instead — it leaves the ladder and the claims stay.`,
+      };
+    }
+    throw error;
+  }
+
+  await record_({
+    actor: who.name,
+    actorDiscordId: who.discordId,
+    action: 'milestone.tier.deleted',
+    target: String(tierId),
+    detail: { name },
+  });
+
+  revalidatePath('/admin/milestones');
+  revalidatePath('/milestones');
+  return { ok: true, message: `Deleted ${name}.` };
+}
+
+/** Take a tier off the ladder without destroying the claims against it. */
+export async function toggleTier(tierId: number, active: boolean, name: string): Promise<Outcome> {
+  const who = await staff('owner');
+  if (!who) return DENIED;
+
+  await setTierActive(tierId, active);
+  await record_({
+    actor: who.name,
+    actorDiscordId: who.discordId,
+    action: active ? 'milestone.tier.enabled' : 'milestone.tier.disabled',
+    target: String(tierId),
+    detail: { name },
+  });
+
+  revalidatePath('/admin/milestones');
+  revalidatePath('/milestones');
+  return {
+    ok: true,
+    message: active ? `${name} is back on the ladder.` : `${name} is off the ladder. Claims kept.`,
+  };
+}
+
 /* -------------------------------------------------------------------------- */
 /* Badges                                                                     */
 /* -------------------------------------------------------------------------- */
@@ -459,6 +529,196 @@ export async function recheckBadges(userId: number): Promise<Outcome> {
       report.awarded === 0
         ? 'Already holds everything the rules award.'
         : `Awarded ${report.awarded} badge${report.awarded === 1 ? '' : 's'}.`,
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Raffles — creating one                                                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A URL-safe slug from the title.
+ *
+ * Derived rather than typed, because it is the public URL and a mod should not
+ * have to think about it. A collision is reported rather than silently
+ * suffixed: two raffles called "PS5" where one quietly became "ps5-2" is how
+ * the wrong one gets linked in Discord.
+ */
+function slugify(input: string): string {
+  return input
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60);
+}
+
+/**
+ * Creating a raffle.
+ *
+ * `createRaffle` commits the draw seed and publishes its hash in the same
+ * statement that opens the raffle, so entry cannot begin before the outcome is
+ * committed to. That is the whole fairness argument, and it is the reason this
+ * is one action rather than a create-then-open pair a mod could interleave
+ * with entries.
+ *
+ * Owner-only. Everything a raffle does — take coins, pick a winner, owe
+ * somebody a prize — is Matty's to answer for, and mods keep close and draw.
+ */
+export async function addRaffle(formData: FormData): Promise<Outcome> {
+  const who = await staff('owner');
+  if (!who) return DENIED;
+
+  const title = String(formData.get('title') ?? '').trim();
+  const valueLabel = String(formData.get('valueLabel') ?? '').trim();
+  const description = String(formData.get('description') ?? '').trim();
+  const symbol = String(formData.get('symbol') ?? '').trim() || '✦';
+  const closesAt = String(formData.get('closesAt') ?? '').trim();
+  const cost = Number(formData.get('cost') ?? 0);
+  const maxEntries = Number(formData.get('maxEntries') ?? 1);
+  const slug = slugify(String(formData.get('slug') ?? '') || title);
+
+  if (!title) return { ok: false, error: 'Give the raffle a title.' };
+  if (!slug) return { ok: false, error: 'That title has no letters or numbers to make a URL from.' };
+  if (!valueLabel) {
+    return { ok: false, error: 'Say what it is worth — it is the first thing people read.' };
+  }
+  if (!Number.isInteger(cost) || cost < 0) {
+    return { ok: false, error: 'Entry cost must be a whole number of coins, or zero for free.' };
+  }
+  if (!Number.isInteger(maxEntries) || maxEntries < 1) {
+    return { ok: false, error: 'Max entries must be at least one.' };
+  }
+  if (!closesAt) return { ok: false, error: 'Set a closing time.' };
+
+  const closes = new Date(closesAt);
+  if (Number.isNaN(closes.getTime())) {
+    return { ok: false, error: 'That closing time is not a date.' };
+  }
+  // A raffle that opens already closed takes no entries and cannot be drawn,
+  // and the mistake is invisible until somebody asks why nobody has entered.
+  if (closes.getTime() <= Date.now()) {
+    return { ok: false, error: 'That closing time has already passed.' };
+  }
+
+  try {
+    const raffle = await createRaffle({
+      slug,
+      title,
+      valueLabel,
+      description,
+      symbol,
+      cost,
+      maxEntries,
+      closesAt: closes.toISOString(),
+    });
+
+    await record_({
+      actor: who.name,
+      actorDiscordId: who.discordId,
+      action: 'raffle.created',
+      target: String(raffle.id),
+      detail: { slug, title, cost, maxEntries, closesAt: closes.toISOString() },
+    });
+
+    revalidatePath('/admin/raffles');
+    revalidatePath('/raffles');
+    return {
+      ok: true,
+      message: `"${title}" is open at /raffles/${slug}. The seed hash is published; the seed stays sealed until the draw.`,
+    };
+  } catch (error) {
+    // The slug is unique in the database, which is what actually prevents a
+    // duplicate — this turns that constraint into a sentence.
+    const message = error instanceof Error ? error.message : '';
+    if (message.includes('raffles_slug_key') || message.includes('duplicate key')) {
+      return { ok: false, error: `A raffle already uses the URL "${slug}". Give this one a different title or slug.` };
+    }
+    throw error;
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Store — the catalogue                                                      */
+/* -------------------------------------------------------------------------- */
+
+const CATEGORIES: ShopCategory[] = ['entries', 'discord', 'merch', 'stream', 'tips'];
+
+/**
+ * Creating or editing a store item.
+ *
+ * Editing a price is safe by construction: `redemptions` copies the cost onto
+ * its own row at the moment of purchase, so changing an item here cannot
+ * retroactively alter what anybody paid or what their coin history says.
+ *
+ * Stock and cooldown are both "blank means unlimited", which is why they are
+ * read as empty-string rather than coerced through `Number` — `Number('')` is
+ * 0, and an item silently switching from unlimited to out of stock is the bug
+ * that shape of parsing always produces.
+ */
+export async function saveShopItem(formData: FormData): Promise<Outcome> {
+  const who = await staff('owner');
+  if (!who) return DENIED;
+
+  const rawId = String(formData.get('id') ?? '').trim();
+  const id = rawId ? Number(rawId) : null;
+  const name = String(formData.get('name') ?? '').trim();
+  const description = String(formData.get('description') ?? '').trim();
+  const cost = Number(formData.get('cost') ?? 0);
+  const category = String(formData.get('category') ?? '') as ShopCategory;
+  const rawStock = String(formData.get('stock') ?? '').trim();
+  const rawCooldown = String(formData.get('cooldownDays') ?? '').trim();
+  const needsReview = formData.get('needsReview') === 'on';
+  const active = formData.get('active') === 'on';
+
+  if (!name) return { ok: false, error: 'Give the item a name.' };
+  if (!CATEGORIES.includes(category)) return { ok: false, error: 'Pick a category.' };
+  if (!Number.isInteger(cost) || cost <= 0) {
+    return { ok: false, error: 'An item has to cost a whole number of coins, above zero.' };
+  }
+
+  const stock = rawStock === '' ? null : Number(rawStock);
+  if (stock !== null && (!Number.isInteger(stock) || stock < 0)) {
+    return { ok: false, error: 'Stock must be a whole number, or blank for unlimited.' };
+  }
+
+  const cooldownDays = rawCooldown === '' ? null : Number(rawCooldown);
+  if (cooldownDays !== null && (!Number.isInteger(cooldownDays) || cooldownDays < 1)) {
+    return { ok: false, error: 'Cooldown must be a whole number of days, or blank for none.' };
+  }
+
+  try {
+    await upsertItem({
+      id,
+      name,
+      description,
+      cost,
+      category,
+      stock,
+      cooldownDays,
+      needsReview,
+      active,
+    });
+  } catch (error) {
+    if (error instanceof ShopError) return { ok: false, error: error.message };
+    throw error;
+  }
+
+  await record_({
+    actor: who.name,
+    actorDiscordId: who.discordId,
+    action: id ? 'shop.item.updated' : 'shop.item.created',
+    target: id ? String(id) : name,
+    detail: { name, cost, category, stock, cooldownDays, needsReview, active },
+  });
+
+  revalidatePath('/admin/store');
+  revalidatePath('/store');
+  return {
+    ok: true,
+    message: id
+      ? `Saved "${name}". Existing orders keep the price they were bought at.`
+      : `Added "${name}" at ${coins(cost)}.${active ? '' : ' It is hidden until you switch it live.'}`,
   };
 }
 
@@ -622,6 +882,45 @@ export async function addClip(formData: FormData): Promise<Outcome> {
     if (error instanceof ClipError) return { ok: false, error: error.message };
     throw error;
   }
+}
+
+/**
+ * Re-fetch thumbnails and durations for the Kick clips already stored.
+ *
+ * Every clip added before the thumbnail was fetched rather than guessed holds
+ * a URL with a hardcoded shard segment in it, which 403s — that is the broken
+ * image on the home rail. Those rows cannot repair themselves, because the
+ * right URL is not derivable from anything they hold, so this asks Kick.
+ */
+export async function refreshClips(): Promise<Outcome> {
+  const who = await staff();
+  if (!who) return DENIED;
+
+  const report = await refreshClipMetadata();
+
+  if (report.fixed > 0) {
+    await record_({
+      actor: who.name,
+      actorDiscordId: who.discordId,
+      action: 'clip.metadata.refreshed',
+      detail: { checked: report.checked, fixed: report.fixed, failed: report.failed.length },
+    });
+  }
+
+  revalidatePath('/admin/clips');
+  revalidatePath('/community');
+  revalidatePath('/');
+
+  const failed = report.failed.length
+    ? ` ${report.failed.length} could not be read from Kick — they may be deleted or private.`
+    : '';
+  return {
+    ok: true,
+    message:
+      report.fixed === 0
+        ? `Checked ${report.checked}; nothing needed changing.${failed}`
+        : `Fixed ${report.fixed} of ${report.checked}.${failed}`,
+  };
 }
 
 export async function publishClip(id: string, publish: boolean): Promise<Outcome> {

@@ -185,3 +185,88 @@ export async function fetchLastVOD(): Promise<{
     return null;
   }
 }
+
+/* -------------------------------------------------------------------------- */
+/* Clips                                                                      */
+/* -------------------------------------------------------------------------- */
+
+interface KickClipResponse {
+  clip?: {
+    id: string;
+    title: string | null;
+    thumbnail_url: string | null;
+    duration: number | null;
+    views: number | null;
+    view_count: number | null;
+    created_at: string | null;
+    started_at: string | null;
+  };
+}
+
+export type ClipMetadata = {
+  thumbnailUrl: string | null;
+  durationSeconds: number | null;
+  views: number | null;
+  title: string | null;
+  occurredAt: string | null;
+};
+
+/**
+ * Real metadata for one Kick clip.
+ *
+ * This exists because the thumbnail URL cannot be derived from the clip id.
+ * `parseSourceUrl` used to build `clips.kick.com/clips/60/<id>/thumbnail.webp`
+ * from a hardcoded `60`, but that segment is a per-clip shard — the same clip
+ * that 403s under `60` returns 200 under `3d` — so every Kick clip added
+ * through the admin screen rendered a broken image. The only way to know the
+ * segment is to ask, so we ask.
+ *
+ * The duration comes back here too, which is why clips used to show 0:00: the
+ * column was inserted as a literal zero and nothing ever filled it in.
+ *
+ * Returns nulls rather than throwing. A clip whose metadata cannot be fetched
+ * is still a clip worth having — it renders with a placeholder instead of a
+ * broken image, and `refreshClipMetadata` can pick it up later.
+ */
+export async function fetchKickClip(clipId: string): Promise<ClipMetadata> {
+  const empty: ClipMetadata = {
+    thumbnailUrl: null,
+    durationSeconds: null,
+    views: null,
+    title: null,
+    occurredAt: null,
+  };
+
+  try {
+    const response = await fetch(`https://kick.com/api/v2/clips/${clipId}`, {
+      headers: {
+        Accept: "application/json",
+        // Kick answers an unadorned request with a challenge page rather than
+        // JSON, so this is required rather than decorative.
+        "User-Agent": "Mozilla/5.0 (compatible; MattySpins/1.0)",
+      },
+      next: { revalidate: 300 },
+    });
+
+    if (!response.ok) {
+      console.error(`[kick-api] Clip ${clipId} returned ${response.status}`);
+      return empty;
+    }
+
+    const data: KickClipResponse = await response.json();
+    const clip = data.clip;
+    if (!clip) return empty;
+
+    return {
+      thumbnailUrl: clip.thumbnail_url || null,
+      durationSeconds:
+        typeof clip.duration === "number" && clip.duration > 0 ? Math.round(clip.duration) : null,
+      views: clip.view_count ?? clip.views ?? null,
+      title: clip.title || null,
+      occurredAt: clip.started_at || clip.created_at || null,
+    };
+  } catch (error) {
+    console.error(`[kick-api] Error fetching clip ${clipId}:`, error);
+    return empty;
+  }
+}

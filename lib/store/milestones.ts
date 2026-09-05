@@ -297,6 +297,8 @@ export async function upsertTier(input: {
         WHERE id = $1`,
       [input.id, input.name, input.threshold, input.reward, input.active],
     );
+    // The threshold may have moved, and the ladder's order follows it.
+    await resequenceTiers();
     return;
   }
   await write(
@@ -305,6 +307,73 @@ export async function upsertTier(input: {
      ON CONFLICT (threshold) DO UPDATE
        SET name = EXCLUDED.name, reward = EXCLUDED.reward, active = EXCLUDED.active`,
     [input.name, input.threshold, input.reward, input.active],
+  );
+  await resequenceTiers();
+}
+
+/**
+ * How many claims stand against a tier.
+ *
+ * The delete guard depends on this. A claimed tier is referenced by
+ * `milestone_claims`, which is the record of a real payout, so removing it
+ * would either break the foreign key or erase the evidence behind money that
+ * has already been sent.
+ */
+export async function claimCountForTier(tierId: number): Promise<number> {
+  const row = await one<{ n: string }>(
+    'SELECT COUNT(*)::text AS n FROM milestone_claims WHERE tier_id = $1',
+    [tierId],
+  );
+  return Number(row?.n ?? 0);
+}
+
+export class TierInUse extends Error {
+  constructor(public readonly claims: number) {
+    super(`That tier has ${claims} claim${claims === 1 ? '' : 's'} against it.`);
+    this.name = 'TierInUse';
+  }
+}
+
+/**
+ * Remove a tier outright.
+ *
+ * Only ever a tier nobody has claimed. The alternative — deactivating — is
+ * what migration 009 did to the tiers the new ladder replaced, and it is the
+ * right move for anything with history: the tier stops being offered while
+ * every claim against it stays intact and explicable.
+ */
+export async function deleteTier(tierId: number): Promise<void> {
+  const claims = await claimCountForTier(tierId);
+  if (claims > 0) throw new TierInUse(claims);
+  await write('DELETE FROM milestone_tiers WHERE id = $1', [tierId]);
+  await resequenceTiers();
+}
+
+export async function setTierActive(tierId: number, active: boolean): Promise<void> {
+  await write('UPDATE milestone_tiers SET active = $2 WHERE id = $1', [tierId, active]);
+}
+
+/**
+ * Renumber `sort_order` to match threshold order.
+ *
+ * The ladder's order is not a preference — `nextTier` takes the first tier
+ * above a figure and `progressTo` takes the last one below it, so a ladder
+ * held in any order but ascending by threshold computes the wrong progress
+ * bar. `sort_order` is kept in step rather than being an independent handle,
+ * which means adding a tier in the middle slots it in rather than landing at
+ * the end.
+ *
+ * Called after every write that can change the order.
+ */
+export async function resequenceTiers(): Promise<void> {
+  await write(
+    `UPDATE milestone_tiers t
+        SET sort_order = ordered.position
+       FROM (
+         SELECT id, ROW_NUMBER() OVER (ORDER BY threshold ASC) AS position
+           FROM milestone_tiers
+       ) AS ordered
+      WHERE t.id = ordered.id AND t.sort_order IS DISTINCT FROM ordered.position`,
   );
 }
 

@@ -1,6 +1,7 @@
 import 'server-only';
 import { randomUUID } from 'node:crypto';
 import { one, rows, write } from '@/lib/db';
+import { fetchKickClip } from '@/lib/kick-api';
 import type { Clip, ClipSource } from '@/lib/types';
 
 /**
@@ -148,12 +149,35 @@ export async function createClip(input: NewClip): Promise<Clip> {
 
   const id = parsed.id ?? `clip_${randomUUID().replace(/-/g, '').slice(0, 20)}`;
 
+  /**
+   * Kick's real thumbnail and duration, asked for rather than guessed.
+   *
+   * The path segment in a Kick thumbnail URL is per-clip — `parseSourceUrl`
+   * builds a plausible one so the shape is right, but only Kick knows the
+   * actual value, and the guessed URL 403s. This overwrites it with the truth
+   * where we can get it, and leaves the thumbnail empty where we cannot, so
+   * the card falls back to a placeholder rather than a broken image.
+   *
+   * The duration arrives here too. It was previously inserted as a literal
+   * zero and never filled in, which is why every clip read 0:00.
+   */
+  const live =
+    parsed.source === 'kick' && parsed.id
+      ? await fetchKickClip(parsed.id)
+      : { thumbnailUrl: null, durationSeconds: null, views: null, title: null, occurredAt: null };
+
+  const thumbUrl = parsed.source === 'kick' ? (live.thumbnailUrl ?? '') : parsed.thumbUrl;
+
+  // Kick knows when the clip was taken better than a mod filling in a date
+  // field, but a date typed on purpose wins over one inferred.
+  const occurredAt = input.occurredAt ?? live.occurredAt ?? new Date().toISOString();
+
   const inserted = await write<ClipRow>(
     `INSERT INTO clips
        (id, kind, source, url, embed_url, thumb_url, title, aspect,
-        duration_seconds, occurred_at, pinned, status, slot_name,
+        duration_seconds, views, occurred_at, pinned, status, slot_name,
         bet_amount, payout_amount, added_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0, $9, $10, $11, $12, $13, $14, $15)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $16, $17, $9, $10, $11, $12, $13, $14, $15)
      ON CONFLICT (id) DO UPDATE
        SET title         = EXCLUDED.title,
            kind          = EXCLUDED.kind,
@@ -162,7 +186,13 @@ export async function createClip(input: NewClip): Promise<Clip> {
            slot_name     = EXCLUDED.slot_name,
            bet_amount    = EXCLUDED.bet_amount,
            payout_amount = EXCLUDED.payout_amount,
-           occurred_at   = EXCLUDED.occurred_at
+           occurred_at   = EXCLUDED.occurred_at,
+           -- Re-adding a clip is how a mod fixes one whose metadata failed the
+           -- first time, so a real thumbnail must be allowed to replace an
+           -- empty one — but never the other way round.
+           thumb_url     = COALESCE(NULLIF(EXCLUDED.thumb_url, ''), clips.thumb_url),
+           duration_seconds = GREATEST(EXCLUDED.duration_seconds, clips.duration_seconds),
+           views         = COALESCE(EXCLUDED.views, clips.views)
      RETURNING ${COLUMNS}`,
     [
       id,
@@ -170,19 +200,67 @@ export async function createClip(input: NewClip): Promise<Clip> {
       parsed.source,
       input.url.trim(),
       parsed.embedUrl,
-      parsed.thumbUrl,
+      thumbUrl,
       input.title.trim(),
       parsed.aspect,
-      input.occurredAt ?? new Date().toISOString(),
+      occurredAt,
       input.pinned ?? false,
       input.status,
       input.slotName?.trim() || null,
       input.bet ?? null,
       input.payout ?? null,
       input.addedBy ?? null,
+      live.durationSeconds ?? 0,
+      live.views,
     ],
   );
   return toClip(inserted[0]);
+}
+
+export type RefreshReport = { checked: number; fixed: number; failed: string[] };
+
+/**
+ * Re-fetch metadata for the Kick clips already stored.
+ *
+ * Every clip added before the thumbnail was fetched rather than guessed holds
+ * a URL built from a hardcoded shard segment, which 403s. Those rows cannot
+ * fix themselves — the correct URL is not derivable from anything in the row —
+ * so this asks Kick about each one and writes back what it says.
+ *
+ * Safe to run repeatedly: a clip whose metadata cannot be fetched is left
+ * exactly as it was rather than being blanked, so a Kick outage costs nothing.
+ */
+export async function refreshClipMetadata(): Promise<RefreshReport> {
+  const found = await rows<{ id: string; thumb_url: string; duration_seconds: number }>(
+    `SELECT id, thumb_url, duration_seconds
+       FROM clips
+      WHERE source = 'kick' AND id LIKE 'clip\\_%'`,
+  );
+
+  const report: RefreshReport = { checked: found.length, fixed: 0, failed: [] };
+
+  for (const row of found) {
+    const live = await fetchKickClip(row.id);
+    if (!live.thumbnailUrl && live.durationSeconds === null) {
+      report.failed.push(row.id);
+      continue;
+    }
+
+    const changed = await write<{ id: string }>(
+      `UPDATE clips
+          SET thumb_url        = COALESCE($2, thumb_url),
+              duration_seconds = COALESCE($3, duration_seconds),
+              views            = COALESCE($4, views)
+        WHERE id = $1
+          AND (thumb_url IS DISTINCT FROM COALESCE($2, thumb_url)
+               OR duration_seconds IS DISTINCT FROM COALESCE($3, duration_seconds))
+        RETURNING id`,
+      [row.id, live.thumbnailUrl, live.durationSeconds, live.views],
+    );
+    if (changed.length) report.fixed += 1;
+  }
+
+  return report;
 }
 
 export async function setClipStatus(id: string, status: 'draft' | 'published'): Promise<void> {
@@ -248,7 +326,11 @@ export function parseSourceUrl(raw: string): ParsedSource | null {
         source: 'kick',
         id,
         embedUrl: `https://player.kick.com/${channel}?clip=${id}`,
-        thumbUrl: `https://clips.kick.com/clips/60/${id}/thumbnail.webp`,
+        // Deliberately empty. The shard segment in a Kick thumbnail URL is
+        // per-clip and cannot be derived from the id — the guessed form this
+        // used to build 403'd on every clip — so the real one is fetched in
+        // `createClip` and an unfetchable clip renders a placeholder instead.
+        thumbUrl: '',
         aspect: '16:9',
       };
     }

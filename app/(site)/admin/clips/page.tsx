@@ -2,7 +2,7 @@ import { auth } from '@/auth';
 import { devBypass, roleFor } from '@/lib/admin';
 import { MAX_PINS, listClips, pinnedCount } from '@/lib/store/clips';
 import { clipLength, dateShort, formatMultiplier, money } from '@/lib/format';
-import { AddClipForm, ClipRowActions } from '@/components/admin/ClipControls';
+import { AddClipForm, ClipRowActions, RefreshClipsButton } from '@/components/admin/ClipControls';
 
 export const metadata = { title: 'Clips' };
 export const dynamic = 'force-dynamic';
@@ -41,6 +41,7 @@ export default async function AdminClipsPage() {
             used — pinned clips lead the carousel.
           </div>
         </div>
+        <RefreshClipsButton />
       </div>
 
       <AddClipForm />

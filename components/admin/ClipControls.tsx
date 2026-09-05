@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { addClip, pinClip, publishClip, removeClip } from '@/app/(site)/admin/actions';
+import { addClip, pinClip, publishClip, refreshClips, removeClip } from '@/app/(site)/admin/actions';
 
 type Result = { ok: true; message: string } | { ok: false; error: string };
 
@@ -159,6 +159,43 @@ export function AddClipForm() {
         ) : null}
       </div>
     </form>
+  );
+}
+
+/**
+ * Repair the clips already stored.
+ *
+ * Kick thumbnails were built from a guessed URL that always 403s, so every
+ * clip added before that was fixed shows a broken image. This asks Kick for
+ * the real thumbnail and duration and writes them back — safe to press twice,
+ * since a clip that cannot be read is left alone rather than blanked.
+ */
+export function RefreshClipsButton() {
+  const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
+  const [pending, start] = useTransition();
+
+  return (
+    <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+      <button
+        className="btn sm"
+        disabled={pending}
+        onClick={() =>
+          start(async () => {
+            const result: Result = await refreshClips();
+            setNote(
+              result.ok ? { ok: true, text: result.message } : { ok: false, text: result.error },
+            );
+          })
+        }
+      >
+        {pending ? 'Asking Kick…' : 'Refresh thumbnails'}
+      </button>
+      {note ? (
+        <span className="small" style={{ color: note.ok ? 'var(--green)' : 'var(--red)' }}>
+          {note.text}
+        </span>
+      ) : null}
+    </div>
   );
 }
 

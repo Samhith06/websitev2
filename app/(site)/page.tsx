@@ -8,7 +8,8 @@ import { listTiers, nextTier, progressTo } from '@/lib/store/milestones';
 import { wagerStateFor } from '@/lib/store/wager';
 import { currentUser } from '@/lib/player';
 import { razed, socials, portraitUrl, aboutCopy } from '@/lib/mock';
-import { clipLength, coins, money, relativeTime } from '@/lib/format';
+import { coins, money } from '@/lib/format';
+import { ClipCard } from '@/components/site/ClipCard';
 import { StreamStage } from '@/components/site/StreamStage';
 import { CopyCode } from '@/components/ui/CopyCode';
 
@@ -232,30 +233,7 @@ export default async function HomePage() {
           </div>
           <div className="clips">
             {clips.map((clip) => (
-              <a
-                className="clip"
-                key={clip.id}
-                href={clip.url}
-                target="_blank"
-                rel="noreferrer noopener"
-              >
-                <div className="thumb">
-                  {clip.thumbUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={clip.thumbUrl} alt="" loading="lazy" />
-                  ) : null}
-                  <div className="pl" aria-hidden>
-                    ▶
-                  </div>
-                  <span className="dur">{clipLength(clip.durationSeconds)}</span>
-                </div>
-                <div className="ci">
-                  <div className="ct">{clip.title}</div>
-                  <div className="cm">
-                    {clip.source} · {relativeTime(clip.occurredAt)}
-                  </div>
-                </div>
-              </a>
+              <ClipCard clip={clip} key={clip.id} />
             ))}
           </div>
         </div>
