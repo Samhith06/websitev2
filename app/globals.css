@@ -2848,6 +2848,38 @@ nav.mainnav a.on::after {
   border: 1px solid var(--edge);
 }
 
+/*
+ * A badge with real artwork.
+ *
+ * The SVG draws its own rounded tile, border and glow, so every piece of the
+ * placeholder's decoration is switched off rather than left to show through
+ * underneath it. The `.earned` and `.earned.gold` gradients below would
+ * otherwise paint a second tile behind the first.
+ */
+.bdg .bi.art,
+.bdg.earned .bi.art,
+.bdg.earned.gold .bi.art {
+  width: 72px;
+  height: 72px;
+  border-radius: 18px;
+  background: none;
+  border: 0;
+  box-shadow: none;
+  overflow: hidden;
+}
+
+.bdg .bi.art img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Locked badges are dimmed by `.bdg.locked`; draining the colour as well is
+   what makes "not yet" read at a glance across a grid of fourteen. */
+.bdg.locked .bi.art img {
+  filter: grayscale(0.8);
+}
+
 .bdg .bn {
   font-family: var(--display);
   font-weight: 600;

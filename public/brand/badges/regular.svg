@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <radialGradient id="regBg" cx="50%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#142338"/>
+      <stop offset="100%" stop-color="#080f1a"/>
+    </radialGradient>
+    <linearGradient id="indigoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#93C5FD"/>
+      <stop offset="50%" stop-color="#3B82F6"/>
+      <stop offset="100%" stop-color="#1D4ED8"/>
+    </linearGradient>
+    <filter id="regGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="5" flood-color="#3b82f6" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+  <rect width="120" height="120" rx="28" fill="url(#regBg)"/>
+  <rect width="118" height="118" x="1" y="1" rx="27" fill="none" stroke="#60A5FA" stroke-width="1.5" stroke-opacity="0.4"/>
+  <!-- Broadcast / Stream Screen with Antennas & Heart/Star -->
+  <g filter="url(#regGlow)" transform="translate(60,60)">
+    <!-- Monitor / Stream Screen -->
+    <rect x="-26" y="-20" width="52" height="36" rx="6" fill="#131e2e" stroke="url(#indigoGrad)" stroke-width="3"/>
+    <!-- Stand -->
+    <path d="M -8,16 L 8,16 L 12,24 L -12,24 Z" fill="url(#indigoGrad)"/>
+    <!-- Stream wave signals -->
+    <path d="M -31,-6 C -35,-2 -35,6 -31,10" fill="none" stroke="#93C5FD" stroke-width="2" stroke-linecap="round"/>
+    <path d="M 31,-6 C 35,-2 35,6 31,10" fill="none" stroke="#93C5FD" stroke-width="2" stroke-linecap="round"/>
+    <!-- Play symbol in screen -->
+    <polygon points="-5,-8 7, -2 -5,4" fill="#60A5FA"/>
+  </g>
+</svg>

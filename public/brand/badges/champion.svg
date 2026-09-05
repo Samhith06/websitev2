@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <radialGradient id="champBg" cx="50%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#3b2b0a"/>
+      <stop offset="100%" stop-color="#141108"/>
+    </radialGradient>
+    <linearGradient id="trophyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FEF08A"/>
+      <stop offset="40%" stop-color="#FACC15"/>
+      <stop offset="100%" stop-color="#CA8A04"/>
+    </linearGradient>
+    <filter id="trophyGlow" x="-25%" y="-25%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="2" stdDeviation="6" flood-color="#facc15" flood-opacity="0.5"/>
+    </filter>
+  </defs>
+  <rect width="120" height="120" rx="28" fill="url(#champBg)"/>
+  <rect width="118" height="118" x="1" y="1" rx="27" fill="none" stroke="url(#trophyGrad)" stroke-width="1.5" stroke-opacity="0.4"/>
+  <g filter="url(#trophyGlow)" transform="translate(60,60)">
+    <!-- Star behind -->
+    <polygon points="0,-32 4,-20 16,-20 6,-12 10,0 0,-7 -10,0 -6,-12 -16,-20 -4,-20" fill="#FEF9C3" opacity="0.3" transform="scale(1.4) translate(0, -6)"/>
+    <!-- Trophy cup -->
+    <path d="M -20,-20 L 20,-20 C 20,4 12,14 0,16 C -12,14 -20,4 -20,-20 Z" fill="url(#trophyGrad)"/>
+    <!-- Trophy handles -->
+    <path d="M -20,-16 C -32,-16 -32,2 -18,2" fill="none" stroke="url(#trophyGrad)" stroke-width="4" stroke-linecap="round"/>
+    <path d="M 20,-16 C 32,-16 32,2 18,2" fill="none" stroke="url(#trophyGrad)" stroke-width="4" stroke-linecap="round"/>
+    <!-- Stem & Base -->
+    <path d="M -5,16 L -7,24 L 7,24 L 5,16 Z" fill="#A16207"/>
+    <rect x="-18" y="24" width="36" height="8" rx="2" fill="url(#trophyGrad)"/>
+    <!-- Star on cup -->
+    <polygon points="0,-10 2.5,-3 10,-3 4,1.5 6,8.5 0,4.5 -6,8.5 -4,1.5 -10,-3 -2.5,-3" fill="#FFFFFF"/>
+  </g>
+</svg>

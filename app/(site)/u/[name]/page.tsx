@@ -7,6 +7,7 @@ import { settingsFor } from '@/lib/store/profile';
 import { claimsFor } from '@/lib/store/milestones';
 import { ledgerFor } from '@/lib/store/coins';
 import { dateShort } from '@/lib/format';
+import { BadgeIcon } from '@/components/site/ProfileControls';
 
 export const dynamic = 'force-dynamic';
 
@@ -119,9 +120,7 @@ export default async function PublicProfilePage({
               <div className="bgrid">
                 {earned.map((badge) => (
                   <div className={`bdg earned ${badge.gold ? 'gold' : ''}`} key={badge.id}>
-                    <div className="bi" aria-hidden>
-                      {badge.name.charAt(0)}
-                    </div>
+                    <BadgeIcon badge={badge} />
                     <div className="bn">{badge.name}</div>
                     <div className="bd">{badge.description}</div>
                   </div>

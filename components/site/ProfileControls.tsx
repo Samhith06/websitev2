@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react';
 import { excludeSelf, pinBadge, savePokerHandle, saveRazedUsername, toggleSetting } from '@/app/(site)/profile/actions';
 import type { Badge } from '@/lib/store/badges';
+import { badgeArt } from '@/lib/badge-art';
 
 /* -------------------------------------------------------------------------- */
 /* Settings                                                                   */
@@ -268,6 +269,31 @@ export function AccountForms({
 /* Badges                                                                     */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * A badge's artwork, or the letter tile it used to be.
+ *
+ * The SVG carries its own tile, border and glow, so the container drops the
+ * placeholder's gradient rather than drawing one behind it — hence the `art`
+ * class, which the stylesheet uses to switch the decoration off. Exported
+ * because the public profile draws the same grid and the two must not drift.
+ */
+export function BadgeIcon({ badge }: { badge: Badge }) {
+  const art = badgeArt(badge.slug);
+  if (!art) {
+    return (
+      <div className="bi" aria-hidden>
+        {badge.name.charAt(0)}
+      </div>
+    );
+  }
+  return (
+    <div className="bi art" aria-hidden>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={art} alt="" width={120} height={120} loading="lazy" />
+    </div>
+  );
+}
+
 export function BadgeGrid({ badges }: { badges: Badge[] }) {
   const [state, setState] = useState(badges);
   const [error, setError] = useState<string | null>(null);
@@ -325,9 +351,7 @@ export function BadgeGrid({ badges }: { badges: Badge[] }) {
                   {badge.pinned ? 'PINNED' : 'PIN'}
                 </button>
               ) : null}
-              <div className="bi" aria-hidden>
-                {badge.name.charAt(0)}
-              </div>
+              <BadgeIcon badge={badge} />
               <div className="bn">{badge.name}</div>
               <div className="bd">{badge.description}</div>
             </div>

@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <radialGradient id="verifBg" cx="50%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#0a2a1a"/>
+      <stop offset="100%" stop-color="#05140b"/>
+    </radialGradient>
+    <linearGradient id="kickGreen" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#86EFAC"/>
+      <stop offset="50%" stop-color="#22C55E"/>
+      <stop offset="100%" stop-color="#15803D"/>
+    </linearGradient>
+    <filter id="vGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="5" flood-color="#22c55e" flood-opacity="0.5"/>
+    </filter>
+  </defs>
+  <rect width="120" height="120" rx="28" fill="url(#verifBg)"/>
+  <rect width="118" height="118" x="1" y="1" rx="27" fill="none" stroke="#22C55E" stroke-width="1.5" stroke-opacity="0.4"/>
+  <!-- Verified scalloped seal -->
+  <g filter="url(#vGlow)" transform="translate(60,60)">
+    <path d="M 0,-32 L 8,-30 L 16,-34 L 22,-28 L 30,-28 L 32,-20 L 38,-16 L 36,-8 L 40,0 L 36,8 L 38,16 L 32,20 L 30,28 L 22,28 L 16,34 L 8,30 L 0,32 L -8,30 L -16,34 L -22,28 L -30,28 L -32,20 L -38,16 L -36,8 L -40,0 L -36,-8 L -38,-16 L -32,-20 L -30,-28 L -22,-28 L -16,-34 L -8,-30 Z" fill="url(#kickGreen)"/>
+    <circle cx="0" cy="0" r="24" fill="#062816"/>
+    <!-- Checkmark -->
+    <path d="M -12,0 L -4,8 L 14,-10" fill="none" stroke="#4ADE80" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

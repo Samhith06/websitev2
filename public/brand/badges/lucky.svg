@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <radialGradient id="luckyBg" cx="50%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#0e3321"/>
+      <stop offset="100%" stop-color="#06170e"/>
+    </radialGradient>
+    <linearGradient id="emeraldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6EE7B7"/>
+      <stop offset="40%" stop-color="#10B981"/>
+      <stop offset="100%" stop-color="#047857"/>
+    </linearGradient>
+    <filter id="luckyGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="5" flood-color="#10b981" flood-opacity="0.5"/>
+    </filter>
+  </defs>
+  <rect width="120" height="120" rx="28" fill="url(#luckyBg)"/>
+  <rect width="118" height="118" x="1" y="1" rx="27" fill="none" stroke="#10B981" stroke-width="1.5" stroke-opacity="0.4"/>
+  <!-- Lucky 4-leaf clover / Horseshoe / Golden ticket sparkles -->
+  <g filter="url(#luckyGlow)" transform="translate(60,58)">
+    <!-- Horseshoe -->
+    <path d="M -22,-14 C -22,-28 22,-28 22,-14 L 22,2 C 22,18 -22,18 -22,2 Z" fill="none" stroke="url(#emeraldGrad)" stroke-width="8" stroke-linecap="round"/>
+    <circle cx="-16" cy="-14" r="2.5" fill="#ECFDF5"/>
+    <circle cx="16" cy="-14" r="2.5" fill="#ECFDF5"/>
+    <circle cx="-16" cy="-2" r="2.5" fill="#ECFDF5"/>
+    <circle cx="16" cy="-2" r="2.5" fill="#ECFDF5"/>
+    <!-- Four-leaf clover in center -->
+    <g transform="scale(0.85) translate(0, -4)">
+      <!-- 4 petals -->
+      <circle cx="-7" cy="-7" r="7" fill="#34D399"/>
+      <circle cx="7" cy="-7" r="7" fill="#34D399"/>
+      <circle cx="-7" cy="7" r="7" fill="#10B981"/>
+      <circle cx="7" cy="7" r="7" fill="#10B981"/>
+      <!-- Stem -->
+      <path d="M 0,4 Q 4,20 12,24" fill="none" stroke="#059669" stroke-width="3" stroke-linecap="round"/>
+      <circle cx="0" cy="0" r="3" fill="#A7F3D0"/>
+    </g>
+    <!-- Golden sparkles -->
+    <polygon points="26,-18 28,-14 32,-12 28,-10 26,-6 24,-10 20,-12 24,-14" fill="#FDE047"/>
+    <polygon points="-28,16 -26,19 -23,20 -26,21 -28,24 -30,21 -33,20 -30,19" fill="#FDE047"/>
+  </g>
+</svg>
