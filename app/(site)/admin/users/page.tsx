@@ -42,8 +42,9 @@ export default async function AdminUsersPage({
           <span className="eyebrow">{total} accounts</span>
           <h1>Users</h1>
           <div className="sh-sub">
-            Balance adjustments write a normal ledger row with your name on it — balances are never
-            edited directly, so the total always equals the sum of the ledger.
+            Click a name for everything on that account — watch time, wager, coins, bets and every
+            staff action against it. Balance adjustments write a normal ledger row with your name on
+            it, so the total always equals the sum of the ledger.
           </div>
         </div>
       </div>
@@ -82,9 +83,11 @@ export default async function AdminUsersPage({
                 return (
                   <tr key={member.id} style={frozen ? { opacity: 0.55 } : undefined}>
                     <td>
-                      <Link href={`/u/${encodeURIComponent(member.discordUsername)}`}>
-                        {member.discordUsername}
-                      </Link>{' '}
+                      {/* The staff view, not the public profile: a mod clicking
+                          a name is asking what this account has done, and the
+                          public page is the one page that deliberately hides
+                          it. It is still one click away from there. */}
+                      <Link href={`/admin/users/${member.id}`}>{member.discordUsername}</Link>{' '}
                       {frozen ? <span className="tag red">Frozen</span> : null}
                     </td>
                     <td>
