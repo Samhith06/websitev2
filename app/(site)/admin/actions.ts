@@ -21,7 +21,12 @@ import type { ShopCategory } from '@/lib/types';
 import { syncLifetime, syncPeriod } from '@/lib/store/razed-snapshots';
 import { award, revoke } from '@/lib/store/badges';
 import { evaluateBadges } from '@/lib/store/badge-rules';
-import { disabledGames, setGameEnabled, setGamesKilled } from '@/lib/store/settings';
+import {
+  disabledGames,
+  setGameEnabled,
+  setGameLimits,
+  setGamesKilled,
+} from '@/lib/store/settings';
 import type { GameSlug } from '@/lib/types';
 import {
   ClipError,
@@ -732,6 +737,19 @@ export async function saveShopItem(formData: FormData): Promise<Outcome> {
  * API has already started refusing, which reads to a player as the site being
  * broken rather than the game being off.
  */
+/** The slugs a limit may be set for — checked so a posted slug cannot invent one. */
+const GAME_SLUGS: GameSlug[] = ['keno', 'dice', 'limbo', 'wheel', 'blackjack', 'baccarat'];
+
+/**
+ * A ceiling on the ceiling.
+ *
+ * Not a rule about how the games should play — it is a guard against a typo.
+ * A maximum bet entered as 1000000 instead of 100 is a mistake nobody would
+ * make on purpose and one that empties a balance in a single round, so the
+ * form refuses it rather than asking whether that is really meant.
+ */
+const MAX_SETTABLE_BET = 100_000;
+
 function revalidateGames(): void {
   revalidatePath('/admin/settings');
   revalidatePath('/games');
@@ -803,6 +821,72 @@ export async function setGameAvailable(slug: GameSlug, enabled: boolean): Promis
     message: enabled
       ? `${slug} is back on.${off.length ? ` ${off.length} still off.` : ''}`
       : `${slug} is off. Nothing staked in it is affected.`,
+  };
+}
+
+/**
+ * One game's bet limits.
+ *
+ * Blank restores the shipped default rather than storing a copy of it, so a
+ * game that has never been tuned keeps following the figure in `lib/games.ts`
+ * when that changes.
+ *
+ * Enforced in `playRound` and in blackjack's own deal, both of which re-read
+ * this every round — so lowering a maximum mid-stream binds the next bet
+ * rather than waiting out a cache. The bet rail in the browser is told the
+ * same numbers, but that is a courtesy: the server refuses regardless.
+ *
+ * What this deliberately does not touch is the maths. RTP and paytables stay
+ * in code under `npm run check:rtp`, because a hand-edited row there would
+ * silently make the advertised 99% untrue — limits are an operational lever,
+ * the edge is not.
+ */
+export async function saveGameLimits(formData: FormData): Promise<Outcome> {
+  const who = await staff('owner');
+  if (!who) return DENIED;
+
+  const slug = String(formData.get('slug') ?? '') as GameSlug;
+  if (!GAME_SLUGS.includes(slug)) return { ok: false, error: 'Unknown game.' };
+
+  const raw = (key: string) => String(formData.get(key) ?? '').trim();
+  const parse = (value: string, label: string): number | null | 'bad' => {
+    if (value === '') return null;
+    const n = Number(value);
+    if (!Number.isInteger(n) || n <= 0) return 'bad';
+    if (n > MAX_SETTABLE_BET) return 'bad';
+    void label;
+    return n;
+  };
+
+  const minBet = parse(raw('minBet'), 'minimum');
+  const maxBet = parse(raw('maxBet'), 'maximum');
+
+  if (minBet === 'bad' || maxBet === 'bad') {
+    return {
+      ok: false,
+      error: `Limits must be whole numbers of coins between 1 and ${coins(MAX_SETTABLE_BET)}, or blank for the default.`,
+    };
+  }
+  if (minBet != null && maxBet != null && maxBet < minBet) {
+    return { ok: false, error: 'The maximum cannot be below the minimum.' };
+  }
+
+  await setGameLimits(slug, { minBet, maxBet }, who.name);
+  await record_({
+    actor: who.name,
+    actorDiscordId: who.discordId,
+    action: 'game.limits.set',
+    target: slug,
+    detail: { minBet, maxBet },
+  });
+
+  revalidateGames();
+  const cleared = minBet == null && maxBet == null;
+  return {
+    ok: true,
+    message: cleared
+      ? `${slug} is back on the default limits.`
+      : `${slug}: ${minBet ?? 'default'}–${maxBet ?? 'default'} MC per round.`,
   };
 }
 

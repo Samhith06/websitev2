@@ -2,11 +2,13 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { gameConfigs } from '@/lib/mock';
-import { disabledGames, gamesAreKilled } from '@/lib/store/settings';
+import { disabledGames, gamesAreKilled, limitsFor } from '@/lib/store/settings';
 import { currentUser } from '@/lib/player';
 import { gamesAvailable, settingsFor } from '@/lib/store/profile';
 import { balanceOf } from '@/lib/store/coins';
 import { rtpLabel } from '@/lib/format';
+import { LIMITS } from '@/lib/games';
+import type { GameSlug } from '@/lib/types';
 import { GamesGate } from '@/components/games/GamesGate';
 import { GameTable } from '@/components/games/Table';
 import { CoinPill } from '@/components/ui/CoinPill';
@@ -52,6 +54,14 @@ export default async function GamePage({ params }: { params: Promise<{ slug: str
     balanceOf(user.id),
   ]);
 
+  const config = gameConfigs.find((g) => g.slug === slug);
+  // The rail is told the same figures the server will check the round against,
+  // so a player is stopped at the input rather than by a refusal after staking.
+  const limits = await limitsFor(slug as GameSlug, {
+    minBet: config?.minBet ?? LIMITS.minBet,
+    maxBet: config?.maxBet ?? LIMITS.maxBet,
+  });
+
   if (!gamesAvailable(settings)) {
     return (
       <GamesGate
@@ -96,9 +106,13 @@ export default async function GamePage({ params }: { params: Promise<{ slug: str
       </div>
 
       {slug === 'blackjack' ? (
-        <Blackjack />
+        <Blackjack limits={limits} />
       ) : (
-        <GameTable slug={slug as (typeof TABLE_GAMES)[number]} soundOn={settings.gameSound} />
+        <GameTable
+          slug={slug as (typeof TABLE_GAMES)[number]}
+          soundOn={settings.gameSound}
+          limits={limits}
+        />
       )}
     </>
   );

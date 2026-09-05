@@ -1,5 +1,5 @@
 import { rows } from '@/lib/db';
-import { disabledGames, gamesAreKilled } from '@/lib/store/settings';
+import { allGameLimits, disabledGames, gamesAreKilled } from '@/lib/store/settings';
 import { LIMITS } from '@/lib/games';
 import { gameConfigs } from '@/lib/mock';
 import { coins } from '@/lib/format';
@@ -18,9 +18,16 @@ export const dynamic = 'force-dynamic';
  * answer "where did my coins go".
  */
 export default async function AdminSettingsPage() {
-  const [killed, disabled, stored] = await Promise.all([
+  const live = gameConfigs.filter((g) => !g.comingSoon);
+  const defaultsFor = (slug: string) => {
+    const config = gameConfigs.find((g) => g.slug === slug);
+    return { minBet: config?.minBet ?? LIMITS.minBet, maxBet: config?.maxBet ?? LIMITS.maxBet };
+  };
+
+  const [killed, disabled, limits, stored] = await Promise.all([
     gamesAreKilled(),
     disabledGames(),
+    allGameLimits(defaultsFor, live.map((g) => g.slug)),
     rows<{ key: string; value: unknown }>('SELECT key, value FROM settings ORDER BY key'),
   ]);
 
@@ -58,17 +65,17 @@ export default async function AdminSettingsPage() {
           <KillSwitch killed={killed} />
         </div>
 
-        {gameConfigs
-          .filter((g) => !g.comingSoon)
-          .map((game) => (
-            <GameSwitch
-              key={game.slug}
-              slug={game.slug}
-              name={game.name}
-              disabled={disabled.includes(game.slug)}
-              killed={killed}
-            />
-          ))}
+        {live.map((game) => (
+          <GameSwitch
+            key={game.slug}
+            slug={game.slug}
+            name={game.name}
+            disabled={disabled.includes(game.slug)}
+            killed={killed}
+            limits={limits[game.slug]}
+            defaults={defaultsFor(game.slug)}
+          />
+        ))}
 
         <p className="small muted" style={{ marginTop: 12 }}>
           Stopping a game refuses new rounds at the door. A hand already in progress settles
@@ -80,15 +87,16 @@ export default async function AdminSettingsPage() {
       <div className="card" style={{ marginTop: 14 }}>
         <h2 style={{ fontSize: 15, marginBottom: 4 }}>Limits</h2>
         <p className="small muted" style={{ marginBottom: 14 }}>
-          A maximum bet and a maximum win per round mean a mistake in a paytable cannot mint a
+          The defaults every game falls back to when it has no limits of its own, and the win cap,
+          which is not per-game: it is the backstop that stops a mistake in a paytable minting a
           million coins before anyone notices.
         </p>
         <div className="linkrow" style={{ borderTop: 0 }}>
-          <span>Minimum bet</span>
+          <span>Default minimum bet</span>
           <span className="lv">{coins(LIMITS.minBet)}</span>
         </div>
         <div className="linkrow">
-          <span>Maximum bet</span>
+          <span>Default maximum bet</span>
           <span className="lv">{coins(LIMITS.maxBet)}</span>
         </div>
         <div className="linkrow">

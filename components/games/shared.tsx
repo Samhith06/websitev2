@@ -193,6 +193,7 @@ export function BetRail({
   children,
   skipAnimation,
   setSkipAnimation,
+  limits = LIMITS,
 }: {
   bet: number;
   setBet: (n: number) => void;
@@ -204,8 +205,16 @@ export function BetRail({
   children?: React.ReactNode;
   skipAnimation?: boolean;
   setSkipAnimation?: (v: boolean) => void;
+  /**
+   * This game's limits, which the admin can change per game. Defaulted to the
+   * shipped figures so a caller that has not been given them still renders a
+   * usable rail — the server is what actually enforces this, and it re-reads
+   * the limits every round.
+   */
+  limits?: { minBet: number; maxBet: number };
 }) {
   const balance = state?.balance ?? 0;
+  const clamp = (n: number) => clampTo(n, limits);
   const short = Boolean(state) && bet > balance;
   const blocked = disabled || short || busy || !state;
 
@@ -228,18 +237,18 @@ export function BetRail({
             <div className="flex gap-1.5">
               <Input
                 type="number"
-                min={LIMITS.minBet}
-                max={LIMITS.maxBet}
+                min={limits.minBet}
+                max={limits.maxBet}
                 value={bet}
                 onChange={(e) => setBet(clamp(Number(e.target.value)))}
                 className="flex-1"
               />
               <RailButton onClick={() => setBet(clamp(Math.floor(bet / 2)))}>½</RailButton>
               <RailButton onClick={() => setBet(clamp(bet * 2))}>2×</RailButton>
-              <RailButton onClick={() => setBet(clamp(Math.min(LIMITS.maxBet, balance)))}>Max</RailButton>
+              <RailButton onClick={() => setBet(clamp(Math.min(limits.maxBet, balance)))}>Max</RailButton>
             </div>
             <p className="mt-1.5 font-mono text-[11px] text-faint">
-              {LIMITS.minBet}–{LIMITS.maxBet} MC per round · max win {coins(LIMITS.maxWinPerRound)} MC
+              {limits.minBet}–{limits.maxBet} MC per round · max win {coins(LIMITS.maxWinPerRound)} MC
             </p>
           </div>
 
@@ -278,9 +287,9 @@ function RailButton({ children, onClick }: { children: React.ReactNode; onClick:
   );
 }
 
-function clamp(n: number) {
-  if (!Number.isFinite(n)) return LIMITS.minBet;
-  return Math.max(LIMITS.minBet, Math.min(LIMITS.maxBet, Math.floor(n)));
+function clampTo(n: number, limits: { minBet: number; maxBet: number }) {
+  if (!Number.isFinite(n)) return limits.minBet;
+  return Math.max(limits.minBet, Math.min(limits.maxBet, Math.floor(n)));
 }
 
 /* -------------------------------------------------------------------------- */

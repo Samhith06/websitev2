@@ -34,12 +34,15 @@ import type { GameSlug } from '@/lib/types';
 export function GameTable({
   slug,
   soundOn = true,
+  limits,
 }: {
   slug: 'dice' | 'limbo' | 'wheel' | 'keno';
   soundOn?: boolean;
+  /** This game's bet limits, which the admin can change per game. */
+  limits: { minBet: number; maxBet: number };
 }) {
   const { state, busy, error, signedOut, play, rotate } = useGame(slug as GameSlug);
-  const [bet, setBet] = useState(10);
+  const [bet, setBet] = useState(limits.minBet);
   const [muted, setMuted] = useState(!soundOn);
 
   // A round settles on the server the instant the response lands, but the
@@ -95,6 +98,7 @@ export function GameTable({
       <div className="gframe">
         <ControlPanel
           slug={slug}
+          limits={limits}
           bet={bet}
           setBet={setBet}
           balance={balance}
@@ -126,6 +130,7 @@ type Round = NonNullable<State>['rounds'][number];
 
 function ControlPanel({
   slug,
+  limits,
   bet,
   setBet,
   balance,
@@ -138,6 +143,8 @@ function ControlPanel({
   onRevealed,
 }: {
   slug: 'dice' | 'limbo' | 'wheel' | 'keno';
+  /** Set per game in admin, and re-read by the server on every round. */
+  limits: { minBet: number; maxBet: number };
   bet: number;
   setBet: (n: number) => void;
   balance: number | null;
@@ -192,11 +199,24 @@ function ControlPanel({
   const limboNum = Math.max(1.01, Number(limboTarget) || 1.01);
   const kenoRow = picks.length ? kenoPaytable(kenoRisk, picks.length) : null;
 
+  // The rail never respected the limits at all — min was 1 and "Max" was
+  // whatever the balance happened to be — so a player could stake past the
+  // maximum and only find out when the server refused the round. It clamps to
+  // the game's own limits now, and to the balance on top of them.
+  const clamp = (n: number) => {
+    if (!Number.isFinite(n)) return limits.minBet;
+    const cap = Math.min(limits.maxBet, balance ?? limits.maxBet);
+    return Math.max(limits.minBet, Math.min(Math.floor(n), Math.max(cap, limits.minBet)));
+  };
+
   function adjust(op: 'half' | 'double' | 'max' | 'min') {
-    const cap = balance ?? bet;
+    const cap = Math.min(limits.maxBet, balance ?? limits.maxBet);
     const next =
-      op === 'max' ? cap : op === 'min' ? 10 : op === 'half' ? Math.floor(bet / 2) : bet * 2;
-    setBet(Math.max(1, Math.min(next, Math.max(cap, 1))));
+      op === 'max' ? cap
+      : op === 'min' ? limits.minBet
+      : op === 'half' ? Math.floor(bet / 2)
+      : bet * 2;
+    setBet(clamp(next));
   }
 
   async function submit() {
@@ -332,7 +352,12 @@ function ControlPanel({
 
   const loading = balance === null;
   const overBalance = balance !== null && bet > balance;
-  const canPlay = !loading && bet >= 1 && !overBalance && (slug !== 'keno' || picks.length > 0);
+  const canPlay =
+    !loading &&
+    bet >= limits.minBet &&
+    bet <= limits.maxBet &&
+    !overBalance &&
+    (slug !== 'keno' || picks.length > 0);
 
   return (
     <>
@@ -346,10 +371,14 @@ function ControlPanel({
             id="bet"
             className="inp"
             type="number"
-            min={1}
+            min={limits.minBet}
+            max={limits.maxBet}
             value={bet}
-            onChange={(e) => setBet(Math.max(1, Number(e.target.value) || 1))}
+            onChange={(e) => setBet(clamp(Number(e.target.value)))}
           />
+          <p className="small muted" style={{ marginTop: 6, fontFamily: 'var(--mono)' }}>
+            {limits.minBet}–{limits.maxBet} MC per round
+          </p>
           <div className="betrow">
             <button type="button" onClick={() => adjust('half')}>
               ½

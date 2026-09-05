@@ -47,7 +47,7 @@ const emptyBets = (n: number): Bet[] =>
  * page promises 99%; priced fairly it is exactly neutral and only adds a
  * decision. The paytable says so rather than leaving people wondering.
  */
-export function Blackjack() {
+export function Blackjack({ limits = LIMITS }: { limits?: { minBet: number; maxBet: number } }) {
   const [view, setView] = useState<View | null>(null);
   const [signedOut, setSignedOut] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -146,7 +146,7 @@ export function Blackjack() {
   }
 
   async function deal() {
-    if (staged < LIMITS.minBet || staged > balance) return;
+    if (staged < limits.minBet || staged > balance) return;
     keyRef.current = keyRef.current ?? `bj-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const placed = bets.slice(0, seatCount).map((b) => ({ ...b }));
 
@@ -229,12 +229,12 @@ export function Blackjack() {
     busy ? 'Dealing…'
     : staged === 0 ? 'Place a bet'
     : staged > balance ? 'Not enough coins'
-    : staged > LIMITS.maxBet ? `Max ${LIMITS.maxBet}`
-    : staged < LIMITS.minBet ? `Min ${LIMITS.minBet}`
+    : staged > limits.maxBet ? `Max ${limits.maxBet}`
+    : staged < limits.minBet ? `Min ${limits.minBet}`
     : `Deal · ${coins(staged)}`;
 
   const dealBlocked =
-    busy || staged < LIMITS.minBet || staged > balance || staged > LIMITS.maxBet;
+    busy || staged < limits.minBet || staged > balance || staged > limits.maxBet;
 
   return (
     <div className="bj" style={FELT}>

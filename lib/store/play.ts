@@ -3,6 +3,7 @@ import type { PoolClient } from 'pg';
 import { one, rows, tx } from '@/lib/db';
 import { generateServerSeed, hashServerSeed } from '@/lib/fairness';
 import { LIMITS } from '@/lib/games';
+import { limitsFor } from './settings';
 import { maskUsername } from '@/lib/format';
 import { InsufficientCoins, apply, balanceOf } from './coins';
 import { ROUNDS_PER_MINUTE, roundsInLastMinute, tooManyRounds } from './limits';
@@ -143,11 +144,15 @@ export async function playRound(input: {
   if (!Number.isFinite(input.bet) || Math.floor(input.bet) !== input.bet) {
     return { ok: false, error: 'invalid-request', detail: 'Bet must be a whole number of coins.' };
   }
-  if (input.bet < LIMITS.minBet) {
-    return { ok: false, error: 'bet-below-minimum', limit: LIMITS.minBet };
+  // Per-game, and read on every round rather than cached. A maximum lowered
+  // mid-stream because somebody is spiralling has to bind their next bet, not
+  // wait out a cache.
+  const limits = await limitsFor(input.game, LIMITS);
+  if (input.bet < limits.minBet) {
+    return { ok: false, error: 'bet-below-minimum', limit: limits.minBet };
   }
-  if (input.bet > LIMITS.maxBet) {
-    return { ok: false, error: 'bet-above-maximum', limit: LIMITS.maxBet };
+  if (input.bet > limits.maxBet) {
+    return { ok: false, error: 'bet-above-maximum', limit: limits.maxBet };
   }
 
   try {

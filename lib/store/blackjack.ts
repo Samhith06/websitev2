@@ -3,6 +3,7 @@ import type { PoolClient } from 'pg';
 import { one, tx } from '@/lib/db';
 import { buildShoe, generateServerSeed, hashServerSeed } from '@/lib/fairness';
 import { LIMITS } from '@/lib/games';
+import { limitsFor } from './settings';
 import {
   MAX_SEATS, type Action, type RoundState, type SeatBet,
   actionsFor, applyAction, handTotal, openRound, settle,
@@ -128,13 +129,17 @@ export async function openBlackjack(input: {
   }
 
   const staked = bets.reduce((sum, b) => sum + b.main + b.pairs + b.plusThree, 0);
-  if (staked < LIMITS.minBet) {
-    return { ok: false, error: 'bet-below-minimum', detail: `Minimum total stake is ${LIMITS.minBet} MC.` };
+  // Blackjack's own limits, which are separate from the other games' — a table
+  // where the stake is the sum of several seats plus side bets wants a
+  // different ceiling from a single-stake game.
+  const limits = await limitsFor('blackjack', LIMITS);
+  if (staked < limits.minBet) {
+    return { ok: false, error: 'bet-below-minimum', detail: `Minimum total stake is ${limits.minBet} MC.` };
   }
   // The cap is on what goes down at the deal. Doubling and splitting can take
   // it past this, which is how a table works.
-  if (staked > LIMITS.maxBet) {
-    return { ok: false, error: 'bet-above-maximum', detail: `Maximum total stake is ${LIMITS.maxBet} MC.` };
+  if (staked > limits.maxBet) {
+    return { ok: false, error: 'bet-above-maximum', detail: `Maximum total stake is ${limits.maxBet} MC.` };
   }
 
   try {
