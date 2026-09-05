@@ -2,6 +2,7 @@ import { rows } from '@/lib/db';
 import { listTiers } from '@/lib/store/milestones';
 import { money } from '@/lib/format';
 import { saveTierForm } from '@/app/(site)/admin/actions';
+import { TierControls } from '@/components/admin/TierControls';
 
 export const metadata = { title: 'Milestone tiers' };
 export const dynamic = 'force-dynamic';
@@ -31,19 +32,27 @@ export default async function AdminMilestonesPage() {
           <h1>Milestone tiers</h1>
           <div className="sh-sub">
             Stored as data — editing a tier needs no deploy. Existing claims are never affected.
+            The ladder always sorts by threshold, so changing one moves the tier into place.
           </div>
         </div>
       </div>
 
       <div className="card">
         {tiers.map((tier, i) => (
-          <form
+          <div
             className="editrow"
             key={tier.id}
-            action={saveTierForm}
-            style={{ gridTemplateColumns: '150px 1fr 1fr auto auto' }}
+            style={{ gridTemplateColumns: '28px 150px 1fr 1fr auto auto auto' }}
           >
-            <input type="hidden" name="id" value={tier.id} />
+            <span className="er" title="Position on the ladder">
+              {i + 1}
+            </span>
+            {/* `display: contents` lets the form's fields sit directly in the
+                row's grid, so the controls beside it are not inside the form —
+                a client component nested in a server-action form does not
+                hydrate, and its buttons come out inert. */}
+            <form action={saveTierForm} style={{ display: 'contents' }}>
+              <input type="hidden" name="id" value={tier.id} />
             <input
               className="inp s"
               name="name"
@@ -80,9 +89,19 @@ export default async function AdminMilestonesPage() {
               />
             </div>
 
-            <div className="er">{claimed.get(tier.id) ?? 0} claimed</div>
-            <button className="btn sm">Save</button>
-          </form>
+              <div className="er">
+                {claimed.get(tier.id) ?? 0} claimed
+                {tier.active ? null : <span className="tag" style={{ marginLeft: 6 }}>off</span>}
+              </div>
+              <button className="btn sm">Save</button>
+            </form>
+            <TierControls
+              tierId={tier.id}
+              name={tier.name || String(tier.threshold)}
+              active={tier.active}
+              claims={claimed.get(tier.id) ?? 0}
+            />
+          </div>
         ))}
       </div>
 
@@ -123,8 +142,10 @@ export default async function AdminMilestonesPage() {
       </div>
 
       <p className="small muted" style={{ marginTop: 14, maxWidth: '72ch' }}>
-        Total on the ladder as it stands: {money(tiers.reduce((sum, t) => sum + t.reward, 0))} per
-        member who eventually reaches the top.
+        Total on the ladder as it stands:{' '}
+        {money(tiers.filter((t) => t.active).reduce((sum, t) => sum + t.reward, 0))} per member who
+        eventually reaches the top. A tier with claims against it cannot be deleted — switching it
+        off takes it off the ladder and keeps the record of what was paid.
       </p>
     </>
   );
