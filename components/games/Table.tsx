@@ -42,11 +42,42 @@ export function GameTable({
   const [bet, setBet] = useState(10);
   const [muted, setMuted] = useState(!soundOn);
 
+  // A round settles on the server the instant the response lands, but the
+  // player is still watching the dice tumble or the wheel slow down. Until the
+  // animation reaches the same answer the settled round is held back, because
+  // otherwise the history row and the coin pill both announce the result
+  // early — by four seconds on the wheel, which is the whole of the suspense.
+  const [heldRoundId, setHeldRoundId] = useState<string | null>(null);
+
   useEffect(() => {
     initSound(soundOn);
     setMuted(!soundEnabled());
   }, [soundOn]);
 
+  const rounds = state?.rounds ?? [];
+  const heldRound = heldRoundId ? (rounds.find((r) => r.id === heldRoundId) ?? null) : null;
+
+  // Null until the seed request lands. It is passed through as null rather
+  // than coerced to 0, because "we don't know yet" and "you have nothing" want
+  // different words on screen — the second is alarming and, for the first
+  // second of every page load, untrue.
+  //
+  // While a round is held, the settlement is subtracted back out: the server
+  // moved the balance by `payout - bet`, so undoing that gives exactly the
+  // figure the player had before they pressed the button. No snapshot to keep
+  // in sync, and it lands on the real number the moment the hold lifts.
+  const balance =
+    state == null ? null : state.balance - (heldRound ? heldRound.payout - heldRound.bet : 0);
+
+  // The header's coin pill is server-rendered in the layout, so it cannot see
+  // a round settle. Every balance the server hands back is republished to it —
+  // held rounds included, so the pill waits for the reveal along with the rest.
+  useEffect(() => {
+    if (balance != null) publishBalance(balance);
+  }, [balance]);
+
+  // Kept below the hooks: flipping to signed out mid-session must not change
+  // how many run, or React tears the component down mid-render.
   if (signedOut) {
     return (
       <div className="gate">
@@ -58,18 +89,6 @@ export function GameTable({
       </div>
     );
   }
-
-  // Null until the seed request lands. It is passed through as null rather
-  // than coerced to 0, because "we don't know yet" and "you have nothing" want
-  // different words on screen — the second is alarming and, for the first
-  // second of every page load, untrue.
-  const balance = state?.balance ?? null;
-
-  // The header's coin pill is server-rendered in the layout, so it cannot see
-  // a round settle. Every balance the server hands back is republished to it.
-  useEffect(() => {
-    if (balance != null) publishBalance(balance);
-  }, [balance]);
 
   return (
     <>
@@ -88,8 +107,10 @@ export function GameTable({
             setMuted(next);
             setSound(!next);
           }}
+          onSettled={setHeldRoundId}
+          onRevealed={() => setHeldRoundId(null)}
         />
-        <History state={state} />
+        <History rounds={rounds.filter((r) => r.id !== heldRoundId)} loaded={state != null} />
       </div>
 
       <Fairness state={state} rotate={rotate} />
@@ -101,6 +122,7 @@ export function GameTable({
 
 type Play = ReturnType<typeof useGame>['play'];
 type State = ReturnType<typeof useGame>['state'];
+type Round = NonNullable<State>['rounds'][number];
 
 function ControlPanel({
   slug,
@@ -112,6 +134,8 @@ function ControlPanel({
   play,
   muted,
   onToggleSound,
+  onSettled,
+  onRevealed,
 }: {
   slug: 'dice' | 'limbo' | 'wheel' | 'keno';
   bet: number;
@@ -122,6 +146,10 @@ function ControlPanel({
   play: Play;
   muted: boolean;
   onToggleSound: () => void;
+  /** The round has settled on the server and is now being animated. */
+  onSettled: (roundId: string) => void;
+  /** The animation has landed on it, so it may be shown. */
+  onRevealed: () => void;
 }) {
   /* --- per-game control state ------------------------------------------ */
   const [target, setTarget] = useState(50);
@@ -138,6 +166,11 @@ function ControlPanel({
   const [revealed, setRevealed] = useState<{ drawn: number[]; hits: number[] } | null>(null);
   const [flash, setFlash] = useState(false);
   const [label, setLabel] = useState<string | null>(null);
+  // True from the moment the bet is sent until the animation lands. `busy`
+  // only covers the request, and the seconds after it are exactly the ones
+  // that need guarding: the table must not accept a second bet against a
+  // balance it is deliberately still showing as stale.
+  const [animating, setAnimating] = useState(false);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   // Every animation is a pile of timeouts. Leaving them running after the
@@ -167,10 +200,11 @@ function ControlPanel({
   }
 
   async function submit() {
-    if (busy) return;
+    if (busy || animating) return;
     setTone('idle');
     setRevealed(null);
     setLabel(null);
+    setAnimating(true);
 
     const payload =
       slug === 'dice'
@@ -184,18 +218,31 @@ function ControlPanel({
     SFX.bet();
 
     const result = await play(payload);
-    if (!result) return;
+    if (!result) {
+      setAnimating(false);
+      return;
+    }
 
     const won = result.payout > 0;
     const big = won && result.payout >= result.bet * 4;
     const multiple = result.bet > 0 ? result.payout / result.bet : 0;
 
-    // The result sound fires when the animation lands, not when the response
-    // arrives — hearing the win before seeing it spoils the reveal.
-    const settleSound = () => {
+    // The round is real and paid from here on, so the panel above is told to
+    // hold it out of the history list and the balance until the reveal.
+    onSettled(result.id);
+
+    // Everything that gives the answer away happens here and nowhere else:
+    // the colour, the flash, the sound, and the release of the history row
+    // and the coin pill. Each game below lands its own animation and then
+    // calls this, so no branch can leak the result early on its own.
+    const settle = () => {
+      setTone(won ? 'win' : 'lose');
+      if (big) setFlash(true);
       if (!won) SFX.lose();
       else if (multiple >= 10) SFX.bigwin();
       else SFX.win(multiple);
+      onRevealed();
+      setAnimating(false);
     };
 
     if (slug === 'dice') {
@@ -209,9 +256,7 @@ function ControlPanel({
       }
       later(() => {
         setDisplay(roll.toFixed(2));
-        setTone(won ? 'win' : 'lose');
-        if (big) setFlash(true);
-        settleSound();
+        settle();
       }, 400);
     }
 
@@ -225,9 +270,7 @@ function ControlPanel({
       }
       later(() => {
         setDisplay(crash.toFixed(2) + '×');
-        setTone(won ? 'win' : 'lose');
-        if (big) setFlash(true);
-        settleSound();
+        settle();
       }, 16 * 44 + 40);
     }
 
@@ -251,9 +294,7 @@ function ControlPanel({
       }
       later(() => {
         setDisplay(`${segments[index]}×`);
-        setTone(won ? 'win' : 'lose');
-        if (big) setFlash(true);
-        settleSound();
+        settle();
       }, 4300);
     }
 
@@ -276,9 +317,7 @@ function ControlPanel({
               result.multiplier ? `${result.multiplier}×` : 'no win'
             }`,
           );
-          setTone(won ? 'win' : 'lose');
-          if (big) setFlash(true);
-          settleSound();
+          settle();
         },
         140 + drawn.length * 115,
       );
@@ -436,6 +475,7 @@ function ControlPanel({
               <button
                 type="button"
                 className="btn sm wide"
+                disabled={busy || animating}
                 onClick={() => {
                   // Fills the board. Picking ten is what the button is for —
                   // anyone wanting five can clear and tap five.
@@ -455,6 +495,7 @@ function ControlPanel({
               <button
                 type="button"
                 className="btn sm wide ghost"
+                disabled={busy || animating}
                 onClick={() => {
                   setPicks([]);
                   setRevealed(null);
@@ -468,8 +509,12 @@ function ControlPanel({
         ) : null}
 
         <div style={{ display: 'flex', gap: 7, marginTop: 14 }}>
-          <button className="btn pri wide" onClick={submit} disabled={busy || !canPlay}>
-            {loading ? 'Loading…' : busy ? 'Playing…' : 'Place bet'}
+          <button
+            className="btn pri wide"
+            onClick={submit}
+            disabled={busy || animating || !canPlay}
+          >
+            {loading ? 'Loading…' : busy || animating ? 'Playing…' : 'Place bet'}
           </button>
           <button
             type="button"
@@ -583,7 +628,7 @@ function ControlPanel({
                   <button
                     key={n}
                     className={`kn ${cls}`}
-                    disabled={busy}
+                    disabled={busy || animating}
                     onClick={() => {
                       setRevealed(null);
                       setLabel(null);
@@ -756,14 +801,20 @@ function Fairness({ state, rotate }: { state: State; rotate: () => void }) {
   );
 }
 
-function History({ state }: { state: State }) {
-  const rounds = state?.rounds ?? [];
+/**
+ * Settled rounds only. The round currently being animated is filtered out
+ * upstream, so this panel can never be the thing that tells a player how their
+ * spin went before the spin does.
+ */
+function History({ rounds, loaded }: { rounds: Round[]; loaded: boolean }) {
   return (
     <div className="gpanel">
       <h3 style={{ fontSize: 14, marginBottom: 11 }}>Your bets</h3>
       <div className="hist">
         {rounds.length === 0 ? (
-          <div className="small muted">No bets yet this session.</div>
+          <div className="small muted">
+            {loaded ? 'No bets yet this session.' : 'Loading…'}
+          </div>
         ) : (
           rounds.map((round) => {
             const net = round.payout - round.bet;

@@ -33,6 +33,9 @@ export type GameState = {
 };
 
 export type PlayResult = {
+  // The round's own id, so a caller animating the result can say which
+  // settled round it is still holding back from the history panel.
+  id: string;
   multiplier: number;
   payout: number;
   bet: number;
@@ -104,6 +107,7 @@ export function useGame(game: GameSlug) {
         } : prev));
 
         const settled: PlayResult = {
+          id: data.round.id,
           multiplier: data.round.multiplier,
           payout: data.round.payout,
           bet: data.round.bet,
