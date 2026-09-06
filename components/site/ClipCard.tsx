@@ -45,7 +45,17 @@ export function ClipCard({
   const [unplayable, setUnplayable] = useState(false);
   const hasFigures = clip.bet != null && clip.payout != null;
 
-  const canPlayHere = clip.videoUrl ? !unplayable : Boolean(clip.embedUrl);
+  /**
+   * Kick's iframe is never used, whatever a row happens to hold.
+   *
+   * Clips added before the player stopped serving clips still carry the old
+   * `player.kick.com/<channel>?clip=<id>` in the database. A migration blanks
+   * those, but trusting the column would mean one unmigrated or re-added row
+   * bringing the "MattySpinss is offline" card back — so the refusal lives
+   * here as well, where it cannot be undone by data.
+   */
+  const iframeUrl = clip.source === 'kick' ? '' : clip.embedUrl;
+  const canPlayHere = clip.videoUrl ? !unplayable : Boolean(iframeUrl);
   const onFail = useCallback(() => setUnplayable(true), []);
 
   // Escape closes it, and the page behind it stops scrolling while it is open.
@@ -176,7 +186,7 @@ export function ClipCard({
                     />
                   ) : canPlayHere ? (
                     <iframe
-                      src={clip.embedUrl}
+                      src={iframeUrl}
                       title={clip.title}
                       allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
                       allowFullScreen
