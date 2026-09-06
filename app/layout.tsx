@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import { Archivo, Chakra_Petch, IBM_Plex_Mono, IBM_Plex_Sans, Spectral } from 'next/font/google';
+import { Chakra_Petch, IBM_Plex_Mono, IBM_Plex_Sans } from 'next/font/google';
 import './globals.css';
 
 /** Three faces carry the whole site: a squared display for headings and
@@ -22,11 +22,6 @@ const plexMono = IBM_Plex_Mono({
   variable: '--font-plex-mono',
   display: 'swap',
 });
-
-/** Two more, used only by the blackjack table, which follows its own design:
- *  Archivo for its chrome and Spectral for every figure on the felt. */
-const archivo = Archivo({ subsets: ['latin'], weight: ['400', '500', '600', '700'], variable: '--font-archivo', display: 'swap' });
-const spectral = Spectral({ subsets: ['latin'], weight: ['400', '500', '600'], variable: '--font-spectral', display: 'swap' });
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://mattyspins.com'),
@@ -59,7 +54,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html
       lang="en"
-      className={`${chakra.variable} ${plexSans.variable} ${plexMono.variable} ${archivo.variable} ${spectral.variable}`}
+      className={`${chakra.variable} ${plexSans.variable} ${plexMono.variable}`}
     >
       <body className="min-h-dvh">
         <a

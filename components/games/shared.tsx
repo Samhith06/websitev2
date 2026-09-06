@@ -11,6 +11,7 @@ import { Card } from '@/components/ui/surfaces';
 import { Label, Num } from '@/components/ui/typography';
 import { CoinMark } from '@/components/ui/marks';
 import { CopyButton } from '@/components/ui/CopyButton';
+import { isRed, type Card as PlayingCardValue } from '@/lib/cards';
 import type { GameSlug } from '@/lib/types';
 
 /* -------------------------------------------------------------------------- */
@@ -485,6 +486,62 @@ export function SignInToPlay({ game }: { game: string }) {
           The paytables, the RTP and the verifier stay readable without an account.
         </p>
       </Card>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Playing cards                                                              */
+/* -------------------------------------------------------------------------- */
+
+const SUIT_GLYPH: Record<PlayingCardValue['s'], string> = {
+  S: '♠', H: '♥', D: '♦', C: '♣',
+};
+const SUIT_NAME: Record<PlayingCardValue['s'], string> = {
+  S: 'spades', H: 'hearts', D: 'diamonds', C: 'clubs',
+};
+
+/**
+ * One card, dealt in.
+ *
+ * Shared by both card games rather than written twice. They render the same
+ * object and the same suit glyphs, and two copies is how a red diamond ends up
+ * black on one table after a change to the other.
+ */
+export function PlayingCard({
+  card,
+  faceDown,
+  big,
+  order = 0,
+}: {
+  card: PlayingCardValue;
+  faceDown?: boolean;
+  big?: boolean;
+  /** Its place in the hand, which staggers the deal so cards arrive in turn. */
+  order?: number;
+}) {
+  const style = { animationDelay: `${Math.min(order, 6) * 70}ms` };
+
+  if (faceDown) {
+    return (
+      <div
+        className={`pcard down${big ? ' big' : ''}`}
+        style={style}
+        role="img"
+        aria-label="Face-down card"
+      />
+    );
+  }
+
+  return (
+    <div
+      className={`pcard${big ? ' big' : ''}${isRed(card) ? ' red' : ''}`}
+      style={style}
+      role="img"
+      aria-label={`${card.r} of ${SUIT_NAME[card.s]}`}
+    >
+      <span className="r">{card.r}</span>
+      <span className="s">{SUIT_GLYPH[card.s]}</span>
     </div>
   );
 }

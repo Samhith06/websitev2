@@ -3898,3 +3898,814 @@ footer.site a:hover {
     grid-template-columns: 1fr;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Blackjack table
+
+   The first table followed a supplied design that carried its own palette and
+   two of its own typefaces, and testers said so: it read as a different site,
+   the seats were cramped, and the betting was unreadable — three chip circles
+   per seat driven by one shared chip ladder, which is why more than one person
+   came away believing a bet placed on one hand had been copied onto all of
+   them.
+
+   So this is the site's own system rather than a second one. Cyan is the
+   interface colour, gold is money, green and red are outcomes, and the figures
+   are mono like every other figure on the site. The felt is the ground with a
+   faint cyan wash rather than casino green, for the same reason.
+
+   The betting is rebuilt around the complaint: every hand carries its own
+   panel, its own three stakes, its own running total and its own clear, so
+   what belongs to which hand is never inferred from position.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.bjt {
+  border: 1px solid var(--edge);
+  border-radius: var(--r);
+  background:
+    radial-gradient(130% 80% at 50% -10%, rgba(34, 211, 255, 0.07), transparent 62%),
+    linear-gradient(180deg, var(--panel-2), var(--panel));
+  overflow: hidden;
+}
+
+/* ── Header ─────────────────────────────────────────────────────────────── */
+
+.bjt-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--edge);
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.bjt-head h2 {
+  font-size: 15px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.bjt-rules {
+  font-size: 11.5px;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+}
+
+.bjt-figs {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.bjt-fig {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.bjt-fig .k {
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted-2);
+}
+
+.bjt-fig .v {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 17px;
+  line-height: 1;
+  color: var(--text);
+}
+
+.bjt-fig .v.money {
+  color: var(--gold);
+  font-size: 21px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* The balance pulses only when it actually moves, so a win is felt rather
+   than merely printed. */
+@keyframes bjtBalance {
+  0% { transform: none; }
+  30% { transform: translateY(-3px) scale(1.05); }
+  100% { transform: none; }
+}
+
+.bjt-fig .v.bumped {
+  animation: bjtBalance 420ms ease-out;
+}
+
+.bjt-sound {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 13px;
+  border: 1px solid var(--edge-2);
+  border-radius: 999px;
+  font-size: 10.5px;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.bjt-sound:hover {
+  border-color: var(--edge-hot);
+  color: var(--text);
+}
+
+.bjt-sound i {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--muted-2);
+}
+
+.bjt-sound[aria-pressed="true"] i {
+  background: var(--blue);
+  box-shadow: 0 0 8px var(--blue);
+}
+
+/* ── Felt ───────────────────────────────────────────────────────────────── */
+
+.bjt-felt {
+  padding: 22px 18px 6px;
+}
+
+.bjt-dealer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.bjt-who {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.bjt-total {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  line-height: 1;
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--edge-2);
+  background: var(--panel);
+  color: var(--text);
+}
+
+.bjt-total.soft {
+  color: var(--blue);
+  border-color: var(--edge-hot);
+}
+
+.bjt-total.bust {
+  color: var(--red);
+  border-color: var(--color-danger-line);
+}
+
+.bjt-hold {
+  min-height: 104px;
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+}
+
+.bjt-empty {
+  align-self: center;
+  font-size: 12.5px;
+  color: var(--muted-2);
+}
+
+/* ── Cards ──────────────────────────────────────────────────────────────── */
+
+/* `.pcard` rather than a blackjack-prefixed name: baccarat deals the same
+   card, and one game owning the other's card styles is how they drift apart. */
+.pcard {
+  width: 58px;
+  height: 84px;
+  border-radius: 7px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  background: linear-gradient(180deg, #fdfdff, #e7ebf2);
+  box-shadow:
+    0 8px 18px rgba(0, 0, 0, 0.55),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+  flex: none;
+  /* Dealt in one after another, so a hand arrives rather than appearing. */
+  animation: bjtDeal 260ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+
+@keyframes bjtDeal {
+  from { opacity: 0; transform: translate(14px, -26px) rotate(7deg) scale(0.9); }
+  to   { opacity: 1; transform: none; }
+}
+
+.pcard.big {
+  width: 68px;
+  height: 98px;
+}
+
+.pcard .r {
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 23px;
+  line-height: 1;
+  color: #10131a;
+}
+
+.pcard.big .r {
+  font-size: 27px;
+}
+
+.pcard .s {
+  font-size: 15px;
+  line-height: 1;
+  color: #10131a;
+}
+
+.pcard.red .r,
+.pcard.red .s {
+  color: #c2334f;
+}
+
+.pcard.down {
+  background: repeating-linear-gradient(45deg, #16202b 0 6px, #101820 6px 12px);
+  box-shadow:
+    0 8px 18px rgba(0, 0, 0, 0.55),
+    inset 0 0 0 1px var(--edge-hot);
+}
+
+/* ── Message strip ──────────────────────────────────────────────────────── */
+
+.bjt-say {
+  margin: 16px auto 18px;
+  max-width: 580px;
+  text-align: center;
+  font-size: 13px;
+  padding: 9px 18px;
+  border-radius: 999px;
+  border: 1px solid var(--edge);
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--muted);
+}
+
+.bjt-say.turn {
+  border-color: var(--edge-hot);
+  background: var(--color-brand-bg);
+  color: var(--blue);
+}
+
+.bjt-say.good {
+  border-color: var(--color-online-line);
+  background: var(--color-online-bg);
+  color: var(--green);
+}
+
+.bjt-say.bad {
+  border-color: var(--color-danger-line);
+  background: var(--color-danger-bg);
+  color: var(--red);
+}
+
+/* ── The hands ──────────────────────────────────────────────────────────── */
+
+.bjt-hands {
+  display: flex;
+  gap: 14px;
+  align-items: stretch;
+  justify-content: center;
+  flex-wrap: wrap;
+  padding-bottom: 18px;
+}
+
+.bjt-hand {
+  position: relative;
+  flex: 1 1 236px;
+  max-width: 300px;
+  min-width: 214px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 13px 13px 12px;
+  border-radius: 13px;
+  border: 1px solid var(--edge);
+  background: var(--panel);
+  transition:
+    border-color 0.18s,
+    box-shadow 0.18s,
+    transform 0.18s;
+}
+
+/* Whose turn it is, said in the interface colour rather than implied by a
+   subtle glow — the previous table's "it feels dead" complaint. */
+.bjt-hand.active {
+  border-color: var(--blue-deep);
+  box-shadow:
+    0 0 0 1px var(--blue-deep),
+    0 0 30px -8px rgba(34, 211, 255, 0.55);
+  transform: translateY(-3px);
+}
+
+.bjt-hand.won {
+  border-color: var(--color-online-line);
+  background: linear-gradient(180deg, var(--color-online-bg), var(--panel));
+}
+
+.bjt-hand.lost {
+  border-color: var(--color-danger-line);
+}
+
+.bjt-hand-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.bjt-hand-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 11.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+/* A numbered token on every hand. Position alone was doing this job before,
+   which is exactly the ambiguity the testers hit. */
+.bjt-no {
+  width: 21px;
+  height: 21px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-family: var(--mono);
+  font-size: 11px;
+  border: 1px solid var(--edge-2);
+  color: var(--muted);
+}
+
+.bjt-hand.active .bjt-no {
+  border-color: var(--blue);
+  background: var(--color-brand-bg);
+  color: var(--blue);
+}
+
+.bjt-turn {
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--blue);
+}
+
+.bjt-cards {
+  display: flex;
+  gap: 12px;
+  min-height: 116px;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.bjt-split {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+}
+
+.bjt-split .row {
+  display: flex;
+  gap: 5px;
+}
+
+.bjt-split .meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 22px;
+}
+
+.bjt-total.focus {
+  border-color: var(--blue);
+  background: var(--color-brand-bg);
+  color: var(--blue);
+}
+
+@keyframes bjtPop {
+  from { opacity: 0; transform: scale(0.7); }
+  to   { opacity: 1; transform: none; }
+}
+
+.bjt-res {
+  animation: bjtPop 220ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.bjt-res.win {
+  background: var(--green);
+  color: #04241a;
+}
+
+.bjt-res.push {
+  background: var(--edge-2);
+  color: var(--text);
+}
+
+.bjt-res.lose {
+  background: var(--red);
+  color: #2c060f;
+}
+
+/* ── The bet panel — the part this redesign exists for ──────────────────── */
+
+.bjt-bets {
+  border-top: 1px solid var(--edge);
+  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.bjt-bet {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  align-items: center;
+  gap: 7px;
+}
+
+.bjt-bet .lbl {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11.5px;
+  color: var(--muted);
+  min-width: 0;
+}
+
+.bjt-bet .lbl s {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex: none;
+  text-decoration: none;
+}
+
+.bjt-bet.spot-main .lbl s { background: var(--gold); }
+.bjt-bet.spot-pairs .lbl s { background: #b57cff; }
+.bjt-bet.spot-plusThree .lbl s { background: var(--warn); }
+
+.bjt-bet .amt {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 13.5px;
+  min-width: 44px;
+  text-align: right;
+  color: var(--text);
+}
+
+.bjt-bet .amt.zero {
+  color: var(--muted-2);
+}
+
+@keyframes bjtBump {
+  0% { transform: none; }
+  40% { transform: scale(1.22); }
+  100% { transform: none; }
+}
+
+.bjt-bet .amt.bumped {
+  animation: bjtBump 260ms ease-out;
+  color: var(--gold);
+}
+
+.bjt-step {
+  width: 27px;
+  height: 27px;
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--edge-2);
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1;
+  transition: 0.14s;
+}
+
+.bjt-step:hover:not(:disabled) {
+  border-color: var(--blue-deep);
+  color: var(--blue);
+}
+
+.bjt-step:disabled {
+  opacity: 0.28;
+  cursor: not-allowed;
+}
+
+.bjt-hand-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-top: 1px solid var(--edge);
+  padding-top: 9px;
+}
+
+.bjt-hand-foot .tot {
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted-2);
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+
+.bjt-hand-foot .tot b {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 14px;
+  letter-spacing: 0;
+  color: var(--gold);
+}
+
+.bjt-mini {
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--edge);
+  transition: 0.14s;
+}
+
+.bjt-mini:hover:not(:disabled) {
+  border-color: var(--edge-hot);
+  color: var(--blue);
+}
+
+.bjt-mini:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.bjt-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 10.5px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.bjt-notes .hit {
+  color: var(--green);
+}
+
+/* ── Control bar ────────────────────────────────────────────────────────── */
+
+.bjt-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px;
+  border-top: 1px solid var(--edge);
+  background: rgba(0, 0, 0, 0.28);
+}
+
+.bjt-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.bjt-group > .k {
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted-2);
+}
+
+.bjt-chip {
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  border: 2px dashed var(--edge-2);
+  background: var(--panel-2);
+  color: var(--text);
+  transition: 0.16s;
+}
+
+.bjt-chip:hover {
+  transform: translateY(-2px);
+}
+
+.bjt-chip[aria-pressed="true"] {
+  border-style: solid;
+  border-color: var(--blue);
+  background: var(--color-brand-bg);
+  color: var(--blue);
+  box-shadow: 0 0 0 4px rgba(34, 211, 255, 0.12);
+}
+
+.bjt-count {
+  width: 33px;
+  height: 33px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  border: 1px solid var(--edge-2);
+  color: var(--muted);
+  transition: 0.14s;
+}
+
+.bjt-count:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--edge-hot);
+}
+
+.bjt-count[aria-pressed="true"] {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: #03181f;
+}
+
+.bjt-count:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.bjt-acts {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+
+/* ── Reference drawer ───────────────────────────────────────────────────── */
+
+.bjt-ref {
+  border-top: 1px solid var(--edge);
+}
+
+.bjt-ref > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 12px 18px;
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.bjt-ref > summary::-webkit-details-marker {
+  display: none;
+}
+
+.bjt-ref > summary:hover {
+  color: var(--blue);
+}
+
+.bjt-ref[open] > summary {
+  color: var(--text);
+  border-bottom: 1px solid var(--edge);
+}
+
+.bjt-refgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 1px;
+  background: var(--edge);
+}
+
+.bjt-refgrid > div {
+  background: var(--panel);
+  padding: 15px 18px;
+}
+
+.bjt-refgrid h4 {
+  font-size: 9.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted-2);
+  margin-bottom: 9px;
+}
+
+.bjt-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 3px 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.bjt-row b {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.bjt-note {
+  margin-top: 11px;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--muted-2);
+}
+
+/* ── Narrow screens ─────────────────────────────────────────────────────── */
+
+@media (max-width: 760px) {
+  .bjt-felt {
+    padding: 18px 12px 4px;
+  }
+
+  /* Hands scroll rather than shrink. Five 214px panels squeezed onto a phone
+     is what "cramped" meant. */
+  .bjt-hands {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    justify-content: flex-start;
+    margin: 0 -12px;
+    padding: 0 12px 18px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .bjt-hand {
+    scroll-snap-align: center;
+    flex: 0 0 84%;
+    max-width: 84%;
+  }
+
+  .bjt-bar,
+  .bjt-head {
+    padding: 12px;
+  }
+
+  .bjt-acts {
+    width: 100%;
+  }
+
+  .bjt-acts .btn {
+    flex: 1 1 auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pcard,
+  .bjt-res,
+  .bjt-bet .amt.bumped,
+  .bjt-fig .v.bumped {
+    animation: none;
+  }
+
+  .bjt-hand,
+  .bjt-chip {
+    transition: none;
+  }
+
+  .bjt-hand.active {
+    transform: none;
+  }
+}

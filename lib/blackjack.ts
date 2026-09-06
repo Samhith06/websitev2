@@ -30,21 +30,17 @@
  * after split, no surrender.
  */
 
+import { RANKS, isRed, type Card, type Rank } from './cards';
+
+// The card itself moved to `lib/cards.ts` when baccarat arrived — both games
+// need it and neither should import the other's rules to get it. Re-exported
+// here so nothing that already reads a card from this module has to move.
+export { RANKS, SUITS, isRed, type Card, type Rank, type Suit } from './cards';
+
 export const DECKS = 6;
 export const SHOE_SIZE = DECKS * 52;
 export const MAX_SEATS = 5;
 export const MAX_HANDS_PER_SEAT = 2;
-
-export const RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'] as const;
-export const SUITS = ['S', 'H', 'D', 'C'] as const;
-
-export type Rank = (typeof RANKS)[number];
-export type Suit = (typeof SUITS)[number];
-
-/** A card is stored as rank + suit; everything else is derived. */
-export type Card = { r: Rank; s: Suit };
-
-export const isRed = (card: Card) => card.s === 'H' || card.s === 'D';
 
 /** Aces count 11 here; `handTotal` demotes them as needed. */
 export function cardValue(rank: Rank): number {
