@@ -1,7 +1,7 @@
 import { auth } from '@/auth';
 import { devBypass, roleFor } from '@/lib/admin';
 import { MAX_PINS, listClips, pinnedCount } from '@/lib/store/clips';
-import { clipLength, dateShort, formatMultiplier, money } from '@/lib/format';
+import { clipLength, compact, dateShort, formatMultiplier, money } from '@/lib/format';
 import { AddClipForm, ClipRowActions, RefreshClipsButton } from '@/components/admin/ClipControls';
 
 export const metadata = { title: 'Clips' };
@@ -101,6 +101,7 @@ function Section({
                 <th>Source</th>
                 <th>Kind</th>
                 <th>Figures</th>
+                <th>Watched</th>
                 <th>When</th>
                 <th style={{ textAlign: 'right' }}>Actions</th>
               </tr>
@@ -140,6 +141,15 @@ function Section({
                     ) : (
                       <span style={{ color: 'var(--muted)' }}>—</span>
                     )}
+                  </td>
+                  {/* Two different numbers, so both are labelled. "here" is
+                      plays on this site; "kick" is Kick's own view count,
+                      which counts views that never touched this site. */}
+                  <td className="n" style={{ color: 'var(--muted)' }}>
+                    <b style={{ color: 'var(--text)' }}>{compact(clip.plays ?? 0)}</b> here
+                    {typeof clip.views === 'number' ? (
+                      <span className="small muted"> · {compact(clip.views)} kick</span>
+                    ) : null}
                   </td>
                   <td className="n" style={{ color: 'var(--muted)' }}>
                     {dateShort(clip.occurredAt)}

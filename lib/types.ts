@@ -116,7 +116,10 @@ export type Clip = {
   /** Aspect is a data field, not a constant (§23). */
   aspect: '16:9' | '9:16';
   durationSeconds: number;
+  /** Kick's own view count, which counts views on Kick rather than here. */
   views?: number;
+  /** Times the clip has been played on this site. */
+  plays?: number;
   occurredAt: string;
   pinned?: boolean;
   status: 'draft' | 'published';

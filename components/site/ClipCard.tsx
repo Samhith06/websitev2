@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { Clip } from '@/lib/types';
-import { clipLength, coins, dateShort, formatMultiplier, relativeTime } from '@/lib/format';
+import { clipLength, coins, compact, dateShort, formatMultiplier, relativeTime } from '@/lib/format';
 import { ClipVideo } from './ClipVideo';
 
 /**
@@ -58,10 +58,16 @@ export function ClipCard({
   const canPlayHere = clip.videoUrl ? !unplayable : Boolean(iframeUrl);
   const onFail = useCallback(() => setUnplayable(true), []);
 
+  // Counted here rather than on the card's click, because opening the player
+  // is the play — a mis-click that is closed straight away still opened it,
+  // and that is close enough to a watch for a counter on a carousel.
+  const [plays, setPlays] = useState(clip.plays ?? 0);
+
   // Escape closes it, and the page behind it stops scrolling while it is open.
   useEffect(() => {
     if (!playing) return;
     onPlayingChange?.(true);
+    void countPlay(clip.id, setPlays);
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setPlaying(false);
     };
@@ -112,6 +118,9 @@ export function ClipCard({
           <div className="ct">{clip.title}</div>
           <div className="cm">
             {clip.source} · {relativeTime(clip.occurredAt)}
+            {/* Hidden at zero. "0 plays" on every card the day this ships
+                advertises that nobody has watched them. */}
+            {plays > 0 ? <> · {compact(plays)} {plays === 1 ? 'play' : 'plays'}</> : null}
           </div>
           {/* The wall of fame's figures, kept exactly as they read before —
               in coins, not dollars, which is the unit the rest of that page
@@ -244,4 +253,43 @@ function ClipThumb({ clip }: { clip: Clip }) {
     // eslint-disable-next-line @next/next/no-img-element
     <img src={clip.thumbUrl} alt="" loading="lazy" onError={() => setFailed(true)} />
   );
+}
+
+/**
+ * Count one play, at most once a day per clip per browser.
+ *
+ * The window is what stops the number being a measure of how many times one
+ * person pressed replay. It lives in `localStorage` rather than on the server
+ * because the server would have to know who was calling to do the same job,
+ * and the count is not worth keeping a record of who watched what.
+ *
+ * Every failure here is silent and harmless: storage that throws (private
+ * windows, blocked site data) just means the play is counted again next time,
+ * and a request that does not land means it is not counted at all. Neither is
+ * worth interrupting somebody watching a clip.
+ */
+const A_DAY = 24 * 60 * 60 * 1000;
+
+async function countPlay(id: string, onCounted: (plays: number) => void): Promise<void> {
+  const key = `clipplay:${id}`;
+  try {
+    const last = Number(localStorage.getItem(key) ?? 0);
+    if (Number.isFinite(last) && Date.now() - last < A_DAY) return;
+    localStorage.setItem(key, String(Date.now()));
+  } catch {
+    // No storage to remember with, so count it and move on.
+  }
+
+  try {
+    const response = await fetch('/api/clips/play', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id }),
+      keepalive: true,
+    });
+    const data = await response.json();
+    if (typeof data?.plays === 'number') onCounted(data.plays);
+  } catch {
+    // Not worth a word on screen — nobody opened a clip to read about this.
+  }
 }

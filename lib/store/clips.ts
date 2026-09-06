@@ -35,11 +35,24 @@ type ClipRow = {
   bet_amount: number | null;
   payout_amount: number | null;
   max_win: boolean;
+  /** Joined from `clip_plays`; absent on the RETURNING paths, which is fine. */
+  plays?: number | null;
 };
 
 const COLUMNS = `id, kind, source, url, embed_url, video_url, thumb_url, title, aspect,
                  duration_seconds, views, occurred_at, pinned, status,
                  slot_name, bet_amount, payout_amount, max_win`;
+
+/**
+ * The same columns qualified, plus the play count joined on.
+ *
+ * `COLUMNS` stays unqualified because `RETURNING` cannot join — a freshly
+ * written row simply has no plays yet, and reads zero, which is true.
+ */
+const QUALIFIED = COLUMNS.split(',').map((c) => `c.${c.trim()}`).join(', ');
+const SELECT_WITH_PLAYS = `SELECT ${QUALIFIED}, COALESCE(p.plays, 0)::int AS plays
+                             FROM clips c
+                             LEFT JOIN clip_plays p ON p.clip_id = c.id`;
 
 function toClip(row: ClipRow): Clip {
   return {
@@ -61,6 +74,7 @@ function toClip(row: ClipRow): Clip {
     bet: row.bet_amount ?? undefined,
     payout: row.payout_amount ?? undefined,
     maxWin: row.max_win,
+    plays: row.plays ?? 0,
   };
 }
 
@@ -78,18 +92,18 @@ export async function listClips(options: {
 
   if (options.kind) {
     values.push(options.kind);
-    where.push(`kind = $${values.length}`);
+    where.push(`c.kind = $${values.length}`);
   }
   if (options.status) {
     values.push(options.status);
-    where.push(`status = $${values.length}`);
+    where.push(`c.status = $${values.length}`);
   }
   values.push(options.limit ?? 60);
 
   const found = await rows<ClipRow>(
-    `SELECT ${COLUMNS} FROM clips
+    `${SELECT_WITH_PLAYS}
      ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
-     ORDER BY pinned DESC, sort_order ASC, occurred_at DESC
+     ORDER BY c.pinned DESC, c.sort_order ASC, c.occurred_at DESC
      LIMIT $${values.length}`,
     values,
   );
@@ -105,7 +119,7 @@ export async function publishedBigWins(limit = 24): Promise<Clip[]> {
 }
 
 export async function clipById(id: string): Promise<Clip | null> {
-  const row = await one<ClipRow>(`SELECT ${COLUMNS} FROM clips WHERE id = $1`, [id]);
+  const row = await one<ClipRow>(`${SELECT_WITH_PLAYS} WHERE c.id = $1`, [id]);
   return row ? toClip(row) : null;
 }
 
@@ -295,6 +309,30 @@ export async function setClipPinned(id: string, pinned: boolean): Promise<void> 
  * Only a big win can carry it: the tag sits beside the multiplier on the wall
  * of fame, and a plain clip has neither.
  */
+/**
+ * One play of one clip.
+ *
+ * Counts nothing but the play: no viewer, no session, no address. Repeat plays
+ * are filtered in the browser rather than here, because telling them apart on
+ * the server would mean keeping a record of who watched what, and the question
+ * being asked is only how many times.
+ *
+ * A clip that is not published — or not a clip at all — inserts nothing and
+ * comes back zero, so the endpoint needs no separate existence check and an
+ * invented id cannot create a row.
+ */
+export async function recordClipPlay(id: string): Promise<number> {
+  const updated = await write<{ plays: number }>(
+    `INSERT INTO clip_plays (clip_id, plays, last_play_at)
+     SELECT id, 1, now() FROM clips WHERE id = $1 AND status = 'published'
+     ON CONFLICT (clip_id) DO UPDATE
+       SET plays = clip_plays.plays + 1, last_play_at = now()
+     RETURNING plays`,
+    [id],
+  );
+  return updated[0]?.plays ?? 0;
+}
+
 export async function setClipMaxWin(id: string, maxWin: boolean): Promise<void> {
   await write(
     `UPDATE clips SET max_win = $2 WHERE id = $1 AND kind = 'big_win'`,
