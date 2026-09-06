@@ -33,6 +33,7 @@ import {
   createClip,
   deleteClip,
   refreshClipMetadata,
+  setClipMaxWin,
   setClipPinned,
   setClipStatus,
 } from '@/lib/store/clips';
@@ -915,6 +916,9 @@ export async function addClip(formData: FormData): Promise<Outcome> {
   const occurredAt = String(formData.get('occurredAt') ?? '').trim();
   const publish = formData.get('publish') === 'on';
   const pinned = formData.get('pinned') === 'on';
+  // Only a big win can be a max win: the tag sits beside the multiplier, and a
+  // plain clip has neither.
+  const maxWin = kind === 'big_win' && formData.get('maxWin') === 'on';
 
   if (!url) return { ok: false, error: 'Paste the clip URL.' };
   if (!title) return { ok: false, error: 'Give it a title — it is what people read.' };
@@ -941,6 +945,7 @@ export async function addClip(formData: FormData): Promise<Outcome> {
       slotName: slotName || null,
       bet: kind === 'big_win' ? bet : null,
       payout: kind === 'big_win' ? payout : null,
+      maxWin,
       // A date-only input is midday UTC, not midnight: midnight lands on the
       // previous day for anyone west of Greenwich and the clip sorts wrong.
       occurredAt: occurredAt ? new Date(`${occurredAt}T12:00:00Z`).toISOString() : undefined,
@@ -952,7 +957,7 @@ export async function addClip(formData: FormData): Promise<Outcome> {
       actorDiscordId: who.discordId,
       action: 'clip.added',
       target: clip.id,
-      detail: { kind, url, title, status: clip.status, pinned },
+      detail: { kind, url, title, status: clip.status, pinned, maxWin },
     });
 
     revalidatePath('/admin/clips');
@@ -1023,6 +1028,32 @@ export async function publishClip(id: string, publish: boolean): Promise<Outcome
   revalidatePath('/community');
   revalidatePath('/');
   return { ok: true, message: publish ? 'Published.' : 'Back to draft.' };
+}
+
+/**
+ * Mark a big win as the slot's ceiling, or take the mark off.
+ *
+ * Separate from adding the clip because the wall is already full of wins that
+ * predate the tag — a flag that could only be set at creation would mean
+ * re-adding every one of them to use it.
+ */
+export async function markClipMaxWin(id: string, maxWin: boolean): Promise<Outcome> {
+  const who = await staff();
+  if (!who) return DENIED;
+
+  await setClipMaxWin(id, maxWin);
+
+  await record_({
+    actor: who.name,
+    actorDiscordId: who.discordId,
+    action: maxWin ? 'clip.max_win.set' : 'clip.max_win.cleared',
+    target: id,
+  });
+
+  revalidatePath('/admin/clips');
+  revalidatePath('/community');
+  revalidatePath('/');
+  return { ok: true, message: maxWin ? 'Marked as a max win.' : 'Max win mark removed.' };
 }
 
 export async function pinClip(id: string, pinned: boolean): Promise<Outcome> {

@@ -124,6 +124,12 @@ export type Clip = {
   slotName?: string;
   bet?: number;
   payout?: number;
+  /**
+   * The slot paid its own ceiling. Flagged by a mod, never inferred — the
+   * ceiling belongs to the game rather than the round, and nothing here knows
+   * any slot's maximum.
+   */
+  maxWin?: boolean;
 };
 
 /**

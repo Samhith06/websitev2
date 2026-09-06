@@ -113,6 +113,7 @@ function Section({
                       {clip.title}
                     </a>
                     {clip.pinned ? <span className="tag gold"> pinned</span> : null}
+                    {clip.maxWin ? <span className="tag max"> max win</span> : null}
                     {clip.durationSeconds > 0 ? (
                       <span className="small muted"> · {clipLength(clip.durationSeconds)}</span>
                     ) : null}
@@ -150,6 +151,8 @@ function Section({
                       published={clip.status === 'published'}
                       pinned={Boolean(clip.pinned)}
                       canDelete={canDelete}
+                      bigWin={clip.kind === 'big_win'}
+                      maxWin={Boolean(clip.maxWin)}
                     />
                   </td>
                 </tr>

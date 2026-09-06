@@ -646,6 +646,33 @@ nav.mainnav a.on::after {
   background: rgba(255, 179, 71, 0.06);
 }
 
+/*
+ * Max win — a slot paying its own ceiling, which is the rarest thing on the
+ * wall and the only tag allowed to shout. It sits beside the gold multiplier,
+ * so it is deliberately not gold: two gold tags side by side read as one
+ * two-part label rather than as two facts.
+ */
+.tag.max {
+  color: #fff;
+  border-color: rgba(255, 59, 92, 0.55);
+  background: linear-gradient(180deg, #ff4d6d, #d81f45);
+  font-weight: 600;
+  box-shadow: 0 2px 12px -3px rgba(255, 59, 92, 0.8);
+}
+
+/* The tag row on a wall-of-fame card, over the thumbnail. */
+.cliptags {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  max-width: calc(100% - 16px);
+}
+
 .muted {
   color: var(--muted);
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { addClip, pinClip, publishClip, refreshClips, removeClip } from '@/app/(site)/admin/actions';
+import { addClip, markClipMaxWin, pinClip, publishClip, refreshClips, removeClip } from '@/app/(site)/admin/actions';
 
 type Result = { ok: true; message: string } | { ok: false; error: string };
 
@@ -135,6 +135,13 @@ export function AddClipForm() {
         </div>
       ) : null}
 
+      {bigWin ? (
+        <label className="small" style={{ display: 'flex', gap: 7, alignItems: 'center', marginTop: 12 }}>
+          <input type="checkbox" name="maxWin" />
+          The slot paid its maximum — tag it MAX WIN
+        </label>
+      ) : null}
+
       {preview !== null ? (
         <div className="readout" style={{ borderTop: '1px solid var(--edge)' }}>
           <span>Multiplier shown on the card</span>
@@ -226,12 +233,17 @@ export function ClipRowActions({
   published,
   pinned,
   canDelete,
+  bigWin,
+  maxWin,
 }: {
   id: string;
   title: string;
   published: boolean;
   pinned: boolean;
   canDelete: boolean;
+  /** Only a big win can be a max win — the tag sits beside its multiplier. */
+  bigWin: boolean;
+  maxWin: boolean;
 }) {
   const { note, pending, run } = useAction();
   const [confirming, setConfirming] = useState(false);
@@ -253,6 +265,16 @@ export function ClipRowActions({
         >
           {pinned ? 'Unpin' : 'Pin'}
         </button>
+        {bigWin ? (
+          <button
+            className={`btn sm ${maxWin ? 'gold' : 'ghost'}`}
+            disabled={pending}
+            onClick={() => run(() => markClipMaxWin(id, !maxWin))}
+            title="A max win is the slot paying its own ceiling"
+          >
+            {maxWin ? 'Max win ✓' : 'Mark max win'}
+          </button>
+        ) : null}
         {canDelete ? (
           <button className="btn sm danger" disabled={pending} onClick={() => setConfirming(true)}>
             Delete

@@ -95,12 +95,15 @@ export function ClipCard({
           {clip.durationSeconds ? (
             <span className="dur">{clipLength(clip.durationSeconds)}</span>
           ) : null}
-          {showWin && hasFigures ? (
-            <span
-              className="badge tag gold"
-              style={{ position: 'absolute', top: 8, left: 8, zIndex: 1 }}
-            >
-              {formatMultiplier(clip.bet!, clip.payout!)}
+          {/* The multiplier, and — where it earned one — the max-win mark
+              beside it. Two tags in one row rather than two absolute boxes, so
+              neither can land on top of the other. */}
+          {showWin && (hasFigures || clip.maxWin) ? (
+            <span className="cliptags">
+              {hasFigures ? (
+                <span className="tag gold">{formatMultiplier(clip.bet!, clip.payout!)}</span>
+              ) : null}
+              {clip.maxWin ? <span className="tag max">Max win</span> : null}
             </span>
           ) : null}
         </div>

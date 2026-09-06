@@ -34,11 +34,12 @@ type ClipRow = {
   slot_name: string | null;
   bet_amount: number | null;
   payout_amount: number | null;
+  max_win: boolean;
 };
 
 const COLUMNS = `id, kind, source, url, embed_url, video_url, thumb_url, title, aspect,
                  duration_seconds, views, occurred_at, pinned, status,
-                 slot_name, bet_amount, payout_amount`;
+                 slot_name, bet_amount, payout_amount, max_win`;
 
 function toClip(row: ClipRow): Clip {
   return {
@@ -59,6 +60,7 @@ function toClip(row: ClipRow): Clip {
     slotName: row.slot_name ?? undefined,
     bet: row.bet_amount ?? undefined,
     payout: row.payout_amount ?? undefined,
+    maxWin: row.max_win,
   };
 }
 
@@ -124,6 +126,7 @@ export type NewClip = {
   slotName?: string | null;
   bet?: number | null;
   payout?: number | null;
+  maxWin?: boolean;
   addedBy?: string;
 };
 
@@ -179,8 +182,8 @@ export async function createClip(input: NewClip): Promise<Clip> {
     `INSERT INTO clips
        (id, kind, source, url, embed_url, thumb_url, title, aspect,
         duration_seconds, views, occurred_at, pinned, status, slot_name,
-        bet_amount, payout_amount, added_by, video_url)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $16, $17, $9, $10, $11, $12, $13, $14, $15, $18)
+        bet_amount, payout_amount, added_by, video_url, max_win)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $16, $17, $9, $10, $11, $12, $13, $14, $15, $18, $19)
      ON CONFLICT (id) DO UPDATE
        SET title         = EXCLUDED.title,
            kind          = EXCLUDED.kind,
@@ -189,6 +192,7 @@ export async function createClip(input: NewClip): Promise<Clip> {
            slot_name     = EXCLUDED.slot_name,
            bet_amount    = EXCLUDED.bet_amount,
            payout_amount = EXCLUDED.payout_amount,
+           max_win       = EXCLUDED.max_win,
            occurred_at   = EXCLUDED.occurred_at,
            -- Re-adding a clip is how a mod fixes one whose metadata failed the
            -- first time, so a real thumbnail must be allowed to replace an
@@ -217,6 +221,7 @@ export async function createClip(input: NewClip): Promise<Clip> {
       live.durationSeconds ?? 0,
       live.views,
       videoUrl,
+      input.maxWin ?? false,
     ],
   );
   return toClip(inserted[0]);
@@ -282,6 +287,19 @@ export async function setClipPinned(id: string, pinned: boolean): Promise<void> 
     throw new ClipError(`Only ${MAX_PINS} clips can be pinned at once. Unpin one first.`);
   }
   await write('UPDATE clips SET pinned = $2 WHERE id = $1', [id, pinned]);
+}
+
+/**
+ * Mark a big win as the slot's ceiling, or take the mark off.
+ *
+ * Only a big win can carry it: the tag sits beside the multiplier on the wall
+ * of fame, and a plain clip has neither.
+ */
+export async function setClipMaxWin(id: string, maxWin: boolean): Promise<void> {
+  await write(
+    `UPDATE clips SET max_win = $2 WHERE id = $1 AND kind = 'big_win'`,
+    [id, maxWin],
+  );
 }
 
 export async function deleteClip(id: string): Promise<void> {
