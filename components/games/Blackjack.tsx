@@ -653,6 +653,31 @@ function HandPanel({
   onClear: (hand: number) => void;
   onCopyToAll: (hand: number) => void;
 }) {
+  /**
+   * Bring this hand into view when it is the one to act.
+   *
+   * On a phone the hands are a horizontal scroller, so with three of them the
+   * live hand is usually off-screen — and being told "hand 2 to act" while
+   * hand 2 is somewhere to the right undoes the whole point of ringing it.
+   * `inline: 'center'` slides the rail to it; `block: 'nearest'` means the
+   * page itself only moves if the table is off-screen vertically too.
+   */
+  const panel = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!active) return;
+    // A smooth scroll is dropped outright while the tab is hidden — so a hand
+    // that becomes live while the player is in another app would still be off
+    // to the right when they came back. Jumping straight there is correct in
+    // that case, and it is what anyone asking for less motion wants anyway.
+    const jump =
+      document.hidden || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    panel.current?.scrollIntoView({
+      behavior: jump ? 'auto' : 'smooth',
+      inline: 'center',
+      block: 'nearest',
+    });
+  }, [active]);
+
   // While betting the stake rows show what is being built; once a round is on
   // the table they show what that hand actually has down. The settled hand
   // stays in `seat` until the next deal replaces it, which is what lets a
@@ -677,6 +702,7 @@ function HandPanel({
 
   return (
     <section
+      ref={panel}
       className={`bjt-hand${active ? ' active' : ''}${won ? ' won' : ''}${lost ? ' lost' : ''}`}
       aria-label={`Hand ${index + 1}`}
     >
@@ -776,7 +802,9 @@ function HandPanel({
           </span>
         ) : (
           <span className="tot">
-            Hand {index + 1} stake <b>{total === 0 ? '0' : coins(total)}</b>
+            {/* Just "stake": the panel is already titled with the hand's
+                number, and repeating it wraps this line onto two on a phone. */}
+            Stake <b>{total === 0 ? '0' : coins(total)}</b>
           </span>
         )}
         <span style={{ display: 'flex', gap: 6 }}>

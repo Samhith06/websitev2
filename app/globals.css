@@ -4436,6 +4436,7 @@ footer.site a:hover {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 8px;
   border-top: 1px solid var(--edge);
   padding-top: 9px;
@@ -5084,8 +5085,24 @@ footer.site a:hover {
   .bacc-side:first-child { order: 1; }
   .bacc-side:last-child { order: 3; }
 
+  /*
+   * Two columns, with the tie stretched across the middle — which keeps the
+   * felt's own symmetry rather than losing it: each pair bet stays beside the
+   * hand it is about, and the tie still sits between the two sides.
+   *
+   *   Player pair | Player
+   *          Tie
+   *   Banker      | Banker pair
+   *
+   * Five equal columns would be the real layout but gives each spot 70px,
+   * which is not enough for a stake and two steppers.
+   */
   .bacc-spots {
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  .bacc-spot.k-tie {
+    grid-column: 1 / -1;
   }
 
   .bacc-road {
