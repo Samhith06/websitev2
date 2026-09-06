@@ -26,6 +26,10 @@ export default async function PayoutsPage() {
   const board = frozen ?? archive[0] ?? null;
   const standings = board?.frozenStandings ?? [];
   const boardDue = standings.filter((row) => row.prize > 0);
+  // Boards frozen before the real name was stored have only the masked one, so
+  // those rows still need the Razed wagerers screen. Said once, plainly, rather
+  // than leaving a row of stars looking like a bug.
+  const someMasked = boardDue.some((row) => !row.username);
 
   const claimsTotal = claims.reduce((sum, c) => sum + c.reward, 0);
   const boardTotal = boardDue.reduce((sum, r) => sum + r.prize, 0);
@@ -97,7 +101,7 @@ export default async function PayoutsPage() {
             </div>
             <CopyPayoutList
               label="Copy winners as list"
-              rows={boardDue.map((r) => ({ username: r.maskedUsername, amount: r.prize }))}
+              rows={boardDue.map((r) => ({ username: r.username ?? r.maskedUsername, amount: r.prize }))}
             />
           </div>
 
@@ -113,7 +117,7 @@ export default async function PayoutsPage() {
                   >
                     {row.rank}
                   </span>
-                  {row.maskedUsername}{' '}
+                  {row.username ?? row.maskedUsername}{' '}
                   <span style={{ color: 'var(--gold)' }}>{money(row.prize)}</span>
                 </div>
                 <div className="qd">
@@ -121,14 +125,25 @@ export default async function PayoutsPage() {
                 </div>
               </div>
               <div className="qacts">
-                <CopyOne username={row.maskedUsername} amount={row.prize} />
+                <CopyOne username={row.username ?? row.maskedUsername} amount={row.prize} />
               </div>
             </div>
           ))}
 
           <p className="small muted" style={{ marginTop: 12, marginBottom: 0 }}>
-            Names are masked here as they are everywhere else. Full Razed usernames for sending tips
-            are on the <a href="/admin/razed">Razed wagerers</a> screen.
+            {someMasked ? (
+              <>
+                Some names here are masked: this board was frozen before full usernames were
+                recorded, and a frozen board is never re-queried. Look those up on the{' '}
+                <a href="/admin/razed">Razed wagerers</a> screen. Boards frozen from now on carry
+                the real name.
+              </>
+            ) : (
+              <>
+                Full Razed usernames, because a tip cannot be sent to a masked one. They stay masked
+                everywhere a member can see.
+              </>
+            )}
           </p>
         </div>
       ) : (

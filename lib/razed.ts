@@ -235,10 +235,24 @@ export async function fetchRazedLeaderboard({
 export function toBoardRows(
   rows: RazedRow[],
   prizeFor: (rank: number) => number,
+  options: {
+    /**
+     * Carry the real username alongside the masked one.
+     *
+     * Off by default, and that default is the safety. A board built for a
+     * public page has no business holding names it will not print — a row is
+     * an object, and an object handed to a client component is serialised into
+     * the page whether or not a field is rendered. Staff screens opt in; the
+     * home page, the leaderboard and the claim flow never do, so there is no
+     * name in their payload to leak.
+     */
+    reveal?: boolean;
+  } = {},
 ): LeaderboardRow[] {
   return rows.map((row) => ({
     rank: row.rank,
     maskedUsername: mask(row.username),
+    ...(options.reveal ? { username: row.username } : {}),
     wagered: row.wagered,
     prize: prizeFor(row.rank),
     // Movement needs two snapshots to compare; it stays null until the poller

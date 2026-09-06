@@ -28,7 +28,12 @@ export default async function AdminLeaderboardPage() {
         to: period.endsAt.slice(0, 10),
       })
     : null;
-  const rows = feed?.ok ? toBoardRows(feed.rows, (rank) => prizeForRank(period!.tiers, rank)) : [];
+  // Staff see the real names. A moderator checking a board, or about to send
+  // somebody a prize, needs to know who it actually is — masking exists to
+  // keep casino handles off the public site, not to keep them from staff.
+  const rows = feed?.ok
+    ? toBoardRows(feed.rows, (rank) => prizeForRank(period!.tiers, rank), { reveal: true })
+    : [];
 
   if (!period) {
     const now = new Date();
@@ -120,7 +125,7 @@ export default async function AdminLeaderboardPage() {
             <div className="editrow" key={row.rank}>
               <div className="er">#{row.rank}</div>
               <div className="er" style={{ color: 'var(--text)' }}>
-                {row.maskedUsername}
+                {row.username ?? row.maskedUsername}
               </div>
               <div className="er">{money(row.wagered)} wagered</div>
               <div className="er" style={{ color: row.prize ? 'var(--gold)' : 'var(--muted-2)' }}>

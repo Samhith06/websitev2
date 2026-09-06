@@ -306,7 +306,23 @@ export async function freezeMonth(): Promise<Outcome> {
     };
   }
 
-  const standings = toBoardRows(feed.rows, (rank) => prizeForRank(period.tiers, rank));
+  /**
+   * Frozen with the real usernames.
+   *
+   * Payouts are sent by hand as tips on Razed, and a masked name cannot be
+   * tipped — a frozen board without them is a payout list that has to be
+   * cross-referenced against another screen before it can be used.
+   *
+   * This does not reach the public archive: `/leaderboard` renders frozen
+   * standings on the server and prints `maskedUsername`, and `toUiPeriod`
+   * drops the standings entirely before anything is handed to a client
+   * component, so the name is never serialised into a page.
+   */
+  const standings = toBoardRows(
+    feed.rows,
+    (rank) => prizeForRank(period.tiers, rank),
+    { reveal: true },
+  );
   const froze = await freezeStandings(period.id, standings);
   if (!froze) return { ok: false, error: 'That period was already frozen.' };
 
