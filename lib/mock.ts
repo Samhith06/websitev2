@@ -305,9 +305,9 @@ export const gameConfigs: GameConfig[] = [
   {
     slug: "baccarat",
     name: "Baccarat",
-    description: "Coming after fairness has run in public for a month.",
-    enabled: false,
-    comingSoon: true,
+    description:
+      "Punto banco, eight decks. Player, Banker, Tie and both pairs, every one of them at 99%.",
+    enabled: true,
     rtp: 0.99,
     minBet: 10,
     maxBet: 100,

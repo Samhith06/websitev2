@@ -197,5 +197,136 @@ console.log(`${offWheel === 0 ? 'PASS' : 'FAIL'}  wheel spins land in range     
 if (offWheel) failures++;
 
 
+/* ------------------------------------------------------------ baccarat --- */
+
+/**
+ * The paytable, priced against an exact enumeration of the shoe.
+ *
+ * The drawing rules are reimplemented here from the published punto banco
+ * table rather than imported from `lib/baccarat.ts`, for the same reason as
+ * everything else in this file: a table that verifies itself verifies nothing.
+ * Only the four multipliers are read out of the library, and it is those four
+ * this checks.
+ *
+ * The enumeration is exhaustive, not sampled. Every ordered sequence of the up
+ * to six cards a coup can use, weighted by the chance of drawing it from a
+ * fresh eight-deck shoe — 13 ranks to a position, which is small enough to walk
+ * in full, and suits never touch the outcome.
+ */
+console.log('\n--- Baccarat, exact over an eight-deck shoe ---');
+
+const baccaratSrc = readFileSync(`${root}/lib/baccarat.ts`, 'utf8');
+const paysBlock = baccaratSrc.slice(
+  baccaratSrc.indexOf('export const BACCARAT_PAYS'),
+);
+const PAYS = {};
+for (const [, k, v] of paysBlock
+  .slice(0, paysBlock.indexOf('};'))
+  .matchAll(/(\w+):\s*([\d.]+)/g)) {
+  PAYS[k] = Number(v);
+}
+
+const BACC_DECKS = 8;
+const PER_RANK = BACC_DECKS * 4;
+const SHOE = PER_RANK * 13;
+
+// index 0 = ace (1), 1..8 = 2..9, 9..12 = ten/jack/queen/king (0)
+const pip = (r) => (r === 0 ? 1 : r <= 8 ? r + 1 : 0);
+const mod10 = (...vs) => vs.reduce((a, b) => a + b, 0) % 10;
+
+function bankerDraws(banker, playerThird) {
+  if (playerThird === null) return banker <= 5;
+  if (banker <= 2) return true;
+  if (banker === 3) return playerThird !== 8;
+  if (banker === 4) return playerThird >= 2 && playerThird <= 7;
+  if (banker === 5) return playerThird >= 4 && playerThird <= 7;
+  if (banker === 6) return playerThird === 6 || playerThird === 7;
+  return false;
+}
+
+{
+  const counts = new Array(13).fill(PER_RANK);
+  let left = SHOE;
+  let pPlayer = 0;
+  let pBanker = 0;
+  let pTie = 0;
+
+  const each = (fn) => {
+    for (let r = 0; r < 13; r += 1) {
+      const c = counts[r];
+      if (c === 0) continue;
+      const p = c / left;
+      counts[r] = c - 1;
+      left -= 1;
+      fn(r, p);
+      counts[r] = c;
+      left += 1;
+    }
+  };
+
+  const settle = (pf, bf, w) => {
+    if (pf > bf) pPlayer += w;
+    else if (bf > pf) pBanker += w;
+    else pTie += w;
+  };
+
+  each((p1, w1) =>
+    each((b1, w2) =>
+      each((p2, w3) =>
+        each((b2, w4) => {
+          const w = w1 * w2 * w3 * w4;
+          const player = mod10(pip(p1), pip(p2));
+          const banker = mod10(pip(b1), pip(b2));
+
+          if (player >= 8 || banker >= 8) return settle(player, banker, w);
+
+          if (player <= 5) {
+            each((p3, w5) => {
+              const third = pip(p3);
+              const pf = mod10(player, third);
+              if (!bankerDraws(banker, third)) return settle(pf, banker, w * w5);
+              each((b3, w6) => settle(pf, mod10(banker, pip(b3)), w * w5 * w6));
+            });
+            return;
+          }
+
+          if (!bankerDraws(banker, null)) return settle(player, banker, w);
+          each((b3, w6) => settle(player, mod10(banker, pip(b3)), w * w6));
+        }),
+      ),
+    ),
+  );
+
+  check('baccarat probabilities sum to 1', pPlayer + pBanker + pTie, 1, 1e-9);
+
+  // A tie pushes Player and Banker, which is why those two are priced against
+  // what is left of 99% after the ties have handed their stakes back.
+  const pPair = (PER_RANK - 1) / (SHOE - 1);
+  check('baccarat Player RTP', pPlayer * PAYS.player + pTie, 0.99, 0.0002);
+  check('baccarat Banker RTP', pBanker * PAYS.banker + pTie, 0.99, 0.0002);
+  check('baccarat Tie RTP', pTie * PAYS.tie, 0.99, 0.0002);
+  check('baccarat Player pair RTP', pPair * PAYS.playerPair, 0.99, 0.0002);
+  check('baccarat Banker pair RTP', pPair * PAYS.bankerPair, 0.99, 0.0002);
+
+  console.log(
+    `      P(player) ${pPlayer.toFixed(6)}  P(banker) ${pBanker.toFixed(6)}  ` +
+      `P(tie) ${pTie.toFixed(6)}  P(pair) ${pPair.toFixed(6)}`,
+  );
+  console.log(
+    '      a real table would return ' +
+      `${((pPlayer * 2 + pTie) * 100).toFixed(2)}% / ` +
+      `${((pBanker * 1.95 + pTie) * 100).toFixed(2)}% / ` +
+      `${(pTie * 9 * 100).toFixed(2)}% / ` +
+      `${(pPair * 12 * 100).toFixed(2)}%`,
+  );
+
+  // The published eight-deck figures, as a second opinion on the enumeration
+  // above: if the drawing table were reimplemented wrongly these would not
+  // land, whatever the multipliers said.
+  check('P(banker) matches the published figure', pBanker, 0.4585974, 1e-6);
+  check('P(player) matches the published figure', pPlayer, 0.4462466, 1e-6);
+  check('P(tie) matches the published figure', pTie, 0.0951560, 1e-6);
+}
+
 console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : `${failures} CHECK(S) FAILED`}`);
 process.exit(failures === 0 ? 0 : 1);

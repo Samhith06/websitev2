@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server';
-import { diceRoll, kenoDraw, limboResult, wheelSpin } from '@/lib/fairness';
+import { baccaratCoup, diceRoll, kenoDraw, limboResult, wheelSpin } from '@/lib/fairness';
 import {
-  KENO_MAX_PICKS, KENO_RISKS, WHEEL_RISKS, capPayout, diceChance, diceMultiplier, diceWins,
-  kenoHits, kenoPaytable, wheelSegments,
+  KENO_MAX_PICKS, KENO_RISKS, LIMITS, WHEEL_RISKS, capPayout, diceChance, diceMultiplier,
+  diceWins, kenoHits, kenoPaytable, wheelSegments,
 } from '@/lib/games';
+import {
+  BACCARAT_BETS, emptySpread, settleCoup, spreadTotal,
+  type BaccaratSpread,
+} from '@/lib/baccarat';
 import { playRound, type PlayFailure, type Resolution } from '@/lib/store/play';
 import { requireUser } from '@/lib/player';
 import { gameIsPlayable } from '@/lib/store/settings';
@@ -169,6 +173,62 @@ function resolverFor(game: GameSlug, body: Record<string, unknown>): Resolver | 
           multiplier,
           payout: capPayout(Number(body.bet), multiplier),
           outcome: { index, risk, segments, multiplier },
+        };
+      };
+    }
+
+    /* ------------------------------------------------------------------ */
+    /**
+     * Baccarat, the one game here that stakes several spots at once.
+     *
+     * `playRound` records a round as one bet and one payout, which still fits:
+     * the bet is the whole spread and the multiplier is what actually came
+     * back per coin of it. The split is validated against that total rather
+     * than trusted, because the total is what the balance was debited by — a
+     * spread that summed to more than it claimed would be a free bet.
+     */
+    case 'baccarat': {
+      const bet = Number(body.bet);
+      const raw = (body.spread ?? {}) as Record<string, unknown>;
+
+      const spread: BaccaratSpread = emptySpread();
+      for (const key of BACCARAT_BETS) {
+        const amount = Number(raw[key] ?? 0);
+        if (!Number.isFinite(amount) || amount < 0 || Math.floor(amount) !== amount) {
+          return () => refuse('Every stake has to be a whole number of coins.');
+        }
+        spread[key] = amount;
+      }
+
+      return ({ serverSeed, clientSeed, nonce }) => {
+        const total = spreadTotal(spread);
+        if (total === 0) return refuse('Back at least one spot before dealing.');
+        if (total !== bet) {
+          return refuse('The stakes on the table do not add up to the bet. Nothing has been staked.');
+        }
+
+        const coup = baccaratCoup(serverSeed, clientSeed, nonce);
+        const { lines, returned } = settleCoup(spread, coup);
+
+        // Capped like every other game, and the multiplier is recomputed from
+        // the capped figure so the round never records a payout it did not
+        // make.
+        const payout = Math.min(returned, LIMITS.maxWinPerRound);
+        return {
+          multiplier: bet > 0 ? Math.round((payout / bet) * 10_000) / 10_000 : 0,
+          payout,
+          outcome: {
+            player: coup.player,
+            banker: coup.banker,
+            playerTotal: coup.playerTotal,
+            bankerTotal: coup.bankerTotal,
+            result: coup.outcome,
+            natural: coup.natural,
+            playerPair: coup.playerPair,
+            bankerPair: coup.bankerPair,
+            spread,
+            lines,
+          },
         };
       };
     }

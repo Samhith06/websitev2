@@ -7,7 +7,7 @@ import { Button, Input } from '@/components/ui/controls';
 import { Card } from '@/components/ui/surfaces';
 import { Label, Num } from '@/components/ui/typography';
 
-type Game = 'keno' | 'dice' | 'limbo' | 'wheel';
+type Game = 'keno' | 'dice' | 'limbo' | 'wheel' | 'baccarat';
 
 type Response = {
   ok: true;
@@ -70,8 +70,12 @@ export function VerifyForm({
         <div className="space-y-4 p-5">
           <div>
             <Label className="mb-1.5">Game</Label>
-            <div className="grid grid-cols-4 gap-1.5">
-              {(['keno', 'dice', 'limbo', 'wheel'] as const).map((g) => (
+            {/* Blackjack is absent on purpose: a hand is played out over
+                several requests, so recomputing one needs the moves as well as
+                the seeds, and this form takes three values. Baccarat takes no
+                decisions at all, so its whole coup is checkable here. */}
+            <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-5">
+              {(['keno', 'dice', 'limbo', 'wheel', 'baccarat'] as const).map((g) => (
                 <button
                   key={g}
                   type="button"

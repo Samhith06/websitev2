@@ -17,7 +17,9 @@
  * can be recomputed by anybody — that is what the /verify page does.
  */
 import { createHash, createHmac, randomBytes } from 'node:crypto';
-import { DECKS, RANKS, SHOE_SIZE, SUITS, type Card } from './blackjack';
+import { DECKS } from './blackjack';
+import { BACCARAT_DECKS, playCoup, type Coup } from './baccarat';
+import { freshShoe, type Card } from './cards';
 import { WHEEL_SEGMENTS } from './games';
 
 export const HOUSE_EDGE = 0.99; // 99% RTP, stated on every paytable.
@@ -74,21 +76,27 @@ export type WheelOutcome = { index: number };
 
 /** Ten distinct numbers from 1–40, by partial Fisher–Yates over the stream. */
 /**
- * A fresh six-deck blackjack shoe, shuffled deterministically from the round's
- * seed. Fisher-Yates over the same byte stream keno draws from, so the whole
- * shoe is reproducible by anyone holding the three values — and by nobody
- * beforehand, since the server seed is only revealed on rotation.
+ * A fresh shoe, shuffled deterministically from the round's seed. Fisher-Yates
+ * over the same byte stream keno draws from, so the whole shoe is reproducible
+ * by anyone holding the three values — and by nobody beforehand, since the
+ * server seed is only revealed on rotation.
  *
- * It lives here rather than in `lib/blackjack.ts` because it needs `crypto`,
- * and that module is imported by the table component: a rules file that drags
+ * The deck count is a parameter because the two card games disagree: blackjack
+ * deals from six and baccarat from eight, as both are played. Six is the
+ * default so every existing blackjack round still rebuilds byte for byte.
+ *
+ * It lives here rather than in the rules files because it needs `crypto`, and
+ * those are imported by the table components: a rules file that drags
  * `node:crypto` into the browser bundle does not build.
  */
-export function buildShoe(serverSeed: string, clientSeed: string, nonce: number): Card[] {
-  const shoe: Card[] = [];
-  for (let d = 0; d < DECKS; d += 1) {
-    for (const s of SUITS) for (const r of RANKS) shoe.push({ r, s });
-  }
-  const swaps = floats(serverSeed, clientSeed, nonce, SHOE_SIZE - 1);
+export function buildShoe(
+  serverSeed: string,
+  clientSeed: string,
+  nonce: number,
+  decks = DECKS,
+): Card[] {
+  const shoe = freshShoe(decks);
+  const swaps = floats(serverSeed, clientSeed, nonce, shoe.length - 1);
   for (let i = shoe.length - 1; i > 0; i -= 1) {
     const j = Math.floor(swaps[shoe.length - 1 - i] * (i + 1));
     const t = shoe[i];
@@ -96,6 +104,18 @@ export function buildShoe(serverSeed: string, clientSeed: string, nonce: number)
     shoe[j] = t;
   }
   return shoe;
+}
+
+/**
+ * One baccarat coup, drawn off a freshly shuffled eight-deck shoe.
+ *
+ * A new shoe per coup rather than one carried between rounds, for the same
+ * reason blackjack gets one per hand: a shoe with a history would make a coup's
+ * outcome depend on the rounds before it, and verifying a single round would
+ * mean replaying a whole session.
+ */
+export function baccaratCoup(serverSeed: string, clientSeed: string, nonce: number): Coup {
+  return playCoup(buildShoe(serverSeed, clientSeed, nonce, BACCARAT_DECKS));
 }
 
 export function kenoDraw(serverSeed: string, clientSeed: string, nonce: number, board = 40, draw = 10): KenoOutcome {
@@ -160,7 +180,7 @@ export function giveawayWinnerIndex(serverSeed: string, giveawayId: string, entr
 /* -------------------------------------------------------------------------- */
 
 export type VerifyInput = {
-  game: 'keno' | 'dice' | 'limbo' | 'wheel';
+  game: 'keno' | 'dice' | 'limbo' | 'wheel' | 'baccarat';
   serverSeed: string;
   clientSeed: string;
   nonce: number;
@@ -168,7 +188,7 @@ export type VerifyInput = {
 
 export type VerifyResult = {
   serverSeedHash: string;
-  outcome: KenoOutcome | DiceOutcome | LimboOutcome | WheelOutcome;
+  outcome: KenoOutcome | DiceOutcome | LimboOutcome | WheelOutcome | Coup;
   /** A human-readable rendering of the same thing, for the result panel. */
   display: string;
 };
@@ -200,6 +220,20 @@ export function verify(input: VerifyInput): VerifyResult {
         serverSeedHash,
         outcome,
         display: `segment ${outcome.index + 1} of ${WHEEL_SEGMENTS}`,
+      };
+    }
+    case 'baccarat': {
+      // The whole coup is recomputable, cards included: the drawing rules take
+      // no decisions from anybody, so the seeds fix every card that comes out.
+      const outcome = baccaratCoup(serverSeed, clientSeed, nonce);
+      const hand = (cards: Card[]) => cards.map((c) => `${c.r}${c.s}`).join(' ');
+      return {
+        serverSeedHash,
+        outcome,
+        display:
+          `Player ${outcome.playerTotal} (${hand(outcome.player)}) · ` +
+          `Banker ${outcome.bankerTotal} (${hand(outcome.banker)}) · ` +
+          `${outcome.outcome} wins`.replace('tie wins', 'tie'),
       };
     }
   }

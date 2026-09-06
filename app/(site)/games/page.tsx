@@ -23,6 +23,7 @@ const ART: Record<string, { cls: string; symbol: string }> = {
   wheel: { cls: 'wheel', symbol: '◎' },
   keno: { cls: 'keno', symbol: '⬡' },
   blackjack: { cls: 'blackjack', symbol: '♠' },
+  baccarat: { cls: 'baccarat', symbol: '♦' },
 };
 
 export default async function GamesLobby() {

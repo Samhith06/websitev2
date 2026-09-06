@@ -13,9 +13,11 @@ import { GamesGate } from '@/components/games/GamesGate';
 import { GameTable } from '@/components/games/Table';
 import { CoinPill } from '@/components/ui/CoinPill';
 import { Blackjack } from '@/components/games/Blackjack';
+import { Baccarat } from '@/components/games/Baccarat';
 
+/** The four that share one frame. Blackjack and baccarat each own their own. */
 const TABLE_GAMES = ['dice', 'limbo', 'wheel', 'keno'] as const;
-const PLAYABLE = [...TABLE_GAMES, 'blackjack'] as const;
+const PLAYABLE = [...TABLE_GAMES, 'blackjack', 'baccarat'] as const;
 type Playable = (typeof PLAYABLE)[number];
 
 export function generateStaticParams() {
@@ -107,6 +109,8 @@ export default async function GamePage({ params }: { params: Promise<{ slug: str
 
       {slug === 'blackjack' ? (
         <Blackjack limits={limits} />
+      ) : slug === 'baccarat' ? (
+        <Baccarat limits={limits} />
       ) : (
         <GameTable
           slug={slug as (typeof TABLE_GAMES)[number]}
