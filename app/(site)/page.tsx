@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { currentStream } from '@/lib/store/stream';
 import { currentPeriod, potOf, prizeForRank } from '@/lib/store/periods';
 import { fetchRazedLeaderboard, toBoardRows } from '@/lib/razed';
-import { publishedClips } from '@/lib/store/clips';
+import { publishedBigWins, publishedClips } from '@/lib/store/clips';
 import { coinFlow } from '@/lib/store/coins';
 import { listTiers, nextTier, progressTo } from '@/lib/store/milestones';
 import { wagerStateFor } from '@/lib/store/wager';
@@ -10,6 +10,7 @@ import { currentUser } from '@/lib/player';
 import { razed, socials, portraitUrl, aboutCopy } from '@/lib/mock';
 import { coins, money } from '@/lib/format';
 import { ClipCard } from '@/components/site/ClipCard';
+import { FameRail } from '@/components/site/FameRail';
 import { StreamStage } from '@/components/site/StreamStage';
 import { CopyCode } from '@/components/ui/CopyCode';
 
@@ -29,10 +30,13 @@ const PLATFORM_MARKS: Record<string, string> = {
 export default async function HomePage() {
   const user = await currentUser();
 
-  const [stream, period, clips, flow, tiers, wager] = await Promise.all([
+  const [stream, period, clips, wins, flow, tiers, wager] = await Promise.all([
     currentStream(),
     currentPeriod('monthly'),
     publishedClips(4),
+    // Enough to fill the rail and keep it moving; the whole wall is a click
+    // away on /community.
+    publishedBigWins(12),
     coinFlow(new Date(0)),
     listTiers(),
     wagerStateFor(user?.id ?? null),
@@ -216,6 +220,27 @@ export default async function HomePage() {
           </div>
         </div>
       </div>
+
+      {/* ---------------------------------------------------------------- */}
+      {/* Wall of fame                                                      */}
+      {/* ---------------------------------------------------------------- */}
+      {/* Above the recent clips on purpose: the big wins are the best thing
+          on the site and used to be reachable only from a tab on /community,
+          which is two clicks past the page most people ever see. */}
+      {wins.length > 0 ? (
+        <div className="sec">
+          <div className="sec-head">
+            <div>
+              <span className="eyebrow">Wall of fame</span>
+              <h2>Biggest wins</h2>
+            </div>
+            <Link className="btn sm ghost" href="/community?view=fame">
+              See the wall
+            </Link>
+          </div>
+          <FameRail wins={wins} />
+        </div>
+      ) : null}
 
       {/* ---------------------------------------------------------------- */}
       {/* Clips                                                             */}

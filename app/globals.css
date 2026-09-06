@@ -5109,3 +5109,96 @@ footer.site a:hover {
     transition: none;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Wall of fame rail — home page
+
+   A marquee, not a slideshow. It carries the big wins past the front page
+   instead of leaving them two clicks away behind a tab on /community, and it
+   moves because a still row of six reads as a grid while a moving one reads as
+   "there are more of these".
+
+   It stops whenever somebody might be aiming at it: on hover, on focus
+   anywhere inside it, and while a clip is playing. `.famtrack` holds the wins
+   twice and travels exactly half its own width, which is what makes the loop
+   seamless — the second set is under the cursor at the moment the first set
+   would have run out.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.famerail {
+  position: relative;
+  overflow: hidden;
+  /* Fades the wins out at both ends rather than cutting them off square, so
+     the row reads as continuing past the page instead of being clipped. */
+  mask-image: linear-gradient(90deg, transparent, #000 5%, #000 95%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 5%, #000 95%, transparent);
+}
+
+.famtrack {
+  display: flex;
+  gap: 12px;
+  width: max-content;
+  animation-name: famslide;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  /* Duration is set per rail in the component, from how many wins there are. */
+  animation-duration: 34s;
+}
+
+@keyframes famslide {
+  from { transform: translateX(0); }
+  /* Half the track is one full set, plus the gap that set carries with it. */
+  to { transform: translateX(calc(-50% - 6px)); }
+}
+
+.famerail:hover .famtrack,
+.famerail:focus-within .famtrack,
+.famerail[data-paused] .famtrack {
+  animation-play-state: paused;
+}
+
+.famcard {
+  width: 244px;
+  flex: none;
+}
+
+/* A win card is taller than a plain clip — it carries the bet, the payout and
+   the slot underneath — and one card being taller than its neighbour makes the
+   whole row look broken while it slides, so they all take the row's height. */
+.famcard .clip {
+  height: 100%;
+}
+
+@media (max-width: 700px) {
+  .famcard {
+    width: 208px;
+  }
+}
+
+/*
+ * Asked to stop moving, it stops entirely — and becomes a rail the reader
+ * scrolls themselves, rather than a row that is simply frozen with half its
+ * contents unreachable. The duplicate set is display:none here because there
+ * is no loop left for it to serve, and a hand-scrolled rail that repeats
+ * itself halfway along is just confusing.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .famerail {
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    mask-image: none;
+    -webkit-mask-image: none;
+  }
+
+  .famtrack {
+    animation: none;
+  }
+
+  .famcard[inert] {
+    display: none;
+  }
+
+  .famcard {
+    scroll-snap-align: start;
+  }
+}
