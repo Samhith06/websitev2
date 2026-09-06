@@ -68,15 +68,35 @@ export function ClipVideo({
         }
 
         const hls = new Hls({ enableWorker: true });
+
+        // Recovery is bounded, and that bound is the point.
+        //
+        // Retrying a network error forever sounds generous and is the opposite:
+        // a clip whose URL is simply wrong — a stale shard segment that 403s,
+        // which is exactly what the older rows hold — never errors *out*, it
+        // just retries under a "Loading clip…" label until the viewer gives up.
+        // A refusal is not a blip. Anything the server answers with a 4xx is
+        // permanent, so it goes straight to the fallback and the Kick link;
+        // a genuine blip gets two more goes before the same thing happens.
+        let networkRetries = 0;
+        let recoveredMedia = false;
         hls.on(Hls.Events.ERROR, (_event, data) => {
-          // Only a fatal error is worth surrendering to. hls.js recovers from
-          // most network and media errors on its own, and a modal that gave up
-          // on the first dropped segment would be worse than the bug this
-          // replaces.
           if (!data.fatal) return;
-          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) hls.startLoad();
-          else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
-          else { hls.destroy(); onFail(); }
+          const status = data.response?.code;
+          const refused = typeof status === 'number' && status >= 400 && status < 500;
+
+          if (data.type === Hls.ErrorTypes.NETWORK_ERROR && !refused && networkRetries < 2) {
+            networkRetries += 1;
+            hls.startLoad();
+            return;
+          }
+          if (data.type === Hls.ErrorTypes.MEDIA_ERROR && !recoveredMedia) {
+            recoveredMedia = true;
+            hls.recoverMediaError();
+            return;
+          }
+          hls.destroy();
+          onFail();
         });
         hls.loadSource(src);
         hls.attachMedia(video);
