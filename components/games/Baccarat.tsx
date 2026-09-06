@@ -4,8 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { coins } from '@/lib/format';
 import { LIMITS } from '@/lib/games';
 import {
-  BACCARAT_BETS, BACCARAT_LABELS, BACCARAT_PAYTABLE, BACCARAT_RULES,
-  emptySpread, spreadTotal,
+  BACCARAT_LABELS, BACCARAT_LAYOUT, BACCARAT_PAYTABLE, BACCARAT_RULES,
+  baccaratTotal, emptySpread, spreadTotal,
   type BaccaratBet, type BaccaratLine, type BaccaratOutcome, type BaccaratSpread,
 } from '@/lib/baccarat';
 import type { Card } from '@/lib/cards';
@@ -16,6 +16,11 @@ import { FairnessDrawer, PlayingCard, SignInToPlay, useGame } from './shared';
 
 /** The same ladder the blackjack table uses, so a chip means one thing here. */
 const CHIPS = [1, 5, 10, 25, 50] as const;
+
+/** The paytable, read in the order the spots sit on the felt. */
+const feltOrder = BACCARAT_LAYOUT.map(
+  (bet) => BACCARAT_PAYTABLE.find((row) => row.bet === bet)!,
+);
 
 /** What a settled coup looks like coming back off the wire. */
 type Coup = {
@@ -56,6 +61,20 @@ export function Baccarat({ limits = LIMITS }: { limits?: { minBet: number; maxBe
   const [lastSpread, setLastSpread] = useState<BaccaratSpread | null>(null);
   const [coup, setCoup] = useState<Coup | null>(null);
   const [returned, setReturned] = useState<number | null>(null);
+  /**
+   * How many of the coup's cards are face up.
+   *
+   * The server settles the whole coup in one request — it has to, because the
+   * drawing rules leave nobody a decision — but landing all six cards at once
+   * throws the result away in a single frame. So the answer is held and turned
+   * over a card at a time, in the order a dealer turns them.
+   *
+   * Everything that gives the ending away waits on this: the winner, the
+   * per-spot verdicts, the balance, the bead. The cards are all the player has
+   * until the last one lands, which is the entire point.
+   */
+  const [shown, setShown] = useState(0);
+  const revealTimers = useRef<Array<ReturnType<typeof setTimeout>>>([]);
   const [history, setHistory] = useState<BaccaratOutcome[]>([]);
   const [refusal, setRefusal] = useState<string | null>(null);
   const [bumped, setBumped] = useState<BaccaratBet | null>(null);
@@ -79,23 +98,110 @@ export function Baccarat({ limits = LIMITS }: { limits?: { minBet: number; maxBe
 
   useEffect(() => () => { if (bumpTimer.current) clearTimeout(bumpTimer.current); }, []);
 
-  const balance = state?.balance ?? 0;
+  /**
+   * The order a dealer turns them: player, banker, player, banker, then the
+   * third cards — the player's before the banker's, because that is the order
+   * they were drawn and the banker's decision depends on it.
+   */
+  const dealOrder = (c: Coup): Array<'p' | 'b'> => {
+    const order: Array<'p' | 'b'> = ['p', 'b', 'p', 'b'];
+    if (c.player.length > 2) order.push('p');
+    if (c.banker.length > 2) order.push('b');
+    return order;
+  };
+
+  const clearReveal = useCallback(() => {
+    revealTimers.current.forEach(clearTimeout);
+    revealTimers.current = [];
+  }, []);
+
+  useEffect(() => clearReveal, [clearReveal]);
+
+  /** Turn everything face up at once — the skip button, and reduced motion. */
+  const revealAll = useCallback((c: Coup) => {
+    clearReveal();
+    setShown(c.player.length + c.banker.length);
+  }, [clearReveal]);
+
+  /**
+   * Turn them over on a timer.
+   *
+   * The opening four go at a steady clip because none of them is a decision —
+   * they are dealt, not drawn. The pause before a third card is twice as long
+   * on purpose: that card is the only moment in the game where anything is
+   * still open, so it is the one worth waiting on. A coup that ends on a
+   * natural is over in about a second and a half; the longest possible one
+   * takes just under three.
+   */
+  const revealSlowly = useCallback((c: Coup) => {
+    clearReveal();
+    setShown(0);
+    const order = dealOrder(c);
+    let at = 0;
+    order.forEach((_, i) => {
+      at += i >= 4 ? 800 : 340;
+      revealTimers.current.push(setTimeout(() => setShown(i + 1), at));
+    });
+  }, [clearReveal]);
+
   const staked = spreadTotal(spread);
 
-  // The header's coin pill is server-rendered and cannot see a round settle.
+  /**
+   * The bead, the sound and the ledger line, once the last card is down.
+   *
+   * Driven off the reveal rather than the response, so the record of the coup
+   * never appears before the coup does.
+   */
+  const settledCoup = coup && shown >= coup.player.length + coup.banker.length ? coup : null;
+  const logged = useRef<Coup | null>(null);
+  useEffect(() => {
+    if (!settledCoup || logged.current === settledCoup) return;
+    logged.current = settledCoup;
+    setHistory((prev) => [settledCoup.result, ...prev].slice(0, 24));
+    if (!soundOn) return;
+    const paid = returned ?? 0;
+    const stake = spreadTotal(settledCoup.spread);
+    if (paid > stake) sounds.win(paid >= stake * 3);
+    else sounds.settle();
+  }, [settledCoup, returned, soundOn]);
+
+  // How much of each hand is face up. Everything on screen reads from these
+  // rather than from the coup, so nothing can leak a card that has not landed.
+  const order = coup ? dealOrder(coup) : [];
+  const facing = order.slice(0, shown);
+  const playerUp = coup ? coup.player.slice(0, facing.filter((x) => x === 'p').length) : [];
+  const bankerUp = coup ? coup.banker.slice(0, facing.filter((x) => x === 'b').length) : [];
+  const revealing = Boolean(coup) && !settledCoup;
+
+  /**
+   * The balance the player should be looking at.
+   *
+   * The server moved it the moment the coup settled, so printing it straight
+   * would announce the result while the cards are still coming — a jump up is
+   * a win before anybody has seen one. While a reveal is running the
+   * settlement is subtracted back out, which lands on the real figure the
+   * instant the last card does, with no snapshot to keep in step.
+   */
+  const settlement = revealing && coup ? (returned ?? 0) - spreadTotal(coup.spread) : 0;
+  const balance = (state?.balance ?? 0) - settlement;
+
+  // The header's coin pill is server-rendered and cannot see a round settle,
+  // so it is told every figure this table shows. It is told the *held* one:
+  // publishing the settled balance mid-reveal would announce the result in the
+  // page header while the cards were still coming.
   const previous = useRef<number | null>(null);
   const [balanceMoved, setBalanceMoved] = useState(false);
   useEffect(() => {
     if (!state) return;
-    publishBalance(state.balance);
-    if (previous.current !== null && previous.current !== state.balance) {
+    publishBalance(balance);
+    if (previous.current !== null && previous.current !== balance) {
       setBalanceMoved(true);
       const timer = setTimeout(() => setBalanceMoved(false), 460);
-      previous.current = state.balance;
+      previous.current = balance;
       return () => clearTimeout(timer);
     }
-    previous.current = state.balance;
-  }, [state]);
+    previous.current = balance;
+  }, [state, balance]);
 
   /* ---------------------------------------------------------------------- */
 
@@ -147,6 +253,8 @@ export function Baccarat({ limits = LIMITS }: { limits?: { minBet: number; maxBe
     // The coup on the table belongs to the round just played, so it comes down
     // before the next one goes up — a stale hand under a fresh bet is how a
     // player misreads which round they are looking at.
+    clearReveal();
+    setShown(0);
     setCoup(null);
     setReturned(null);
 
@@ -158,18 +266,25 @@ export function Baccarat({ limits = LIMITS }: { limits?: { minBet: number; maxBe
     setReturned(result.payout);
     setLastSpread(placed);
     setSpread(emptySpread());
-    setHistory((prev) => [outcome.result, ...prev].slice(0, 24));
 
-    if (soundOn) (result.payout > result.bet ? sounds.win(result.payout >= result.bet * 3) : sounds.settle());
+    // Anyone who has asked their system to stop moving things gets the answer
+    // straight away rather than a suspense they did not want.
+    const still =
+      typeof window !== 'undefined' &&
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (still) revealAll(outcome);
+    else revealSlowly(outcome);
   }
+
 
   if (signedOut) return <SignInToPlay game="Baccarat" />;
 
   const blocked =
-    busy || !state || staked < limits.minBet || staked > balance || staked > limits.maxBet;
+    busy || revealing || !state || staked < limits.minBet || staked > balance || staked > limits.maxBet;
 
   const dealLabel =
-    busy ? 'Dealing…'
+    revealing ? 'Dealing…'
+    : busy ? 'Dealing…'
     : !state ? 'Loading…'
     : staked === 0 ? 'Back a spot'
     : staked > balance ? 'Not enough coins'
@@ -179,11 +294,15 @@ export function Baccarat({ limits = LIMITS }: { limits?: { minBet: number; maxBe
 
   const say =
     refusal ?? error ??
-    (coup
-      ? summarise(coup, returned ?? 0)
-      : 'Back Player, Banker or Tie — the cards draw themselves from there.');
+    (settledCoup ? summarise(settledCoup, returned ?? 0)
+    : revealing ? dealingLine(playerUp.length, bankerUp.length)
+    : 'Back Player, Banker or Tie — the cards draw themselves from there.');
 
-  const tone = refusal || error ? 'bad' : coup ? ((returned ?? 0) > 0 ? 'good' : 'bad') : '';
+  const tone =
+    refusal || error ? 'bad'
+    : settledCoup ? ((returned ?? 0) > 0 ? 'good' : 'bad')
+    : revealing ? 'turn'
+    : '';
 
   return (
     <div className="bjt">
@@ -223,34 +342,43 @@ export function Baccarat({ limits = LIMITS }: { limits?: { minBet: number; maxBe
       {/* ================================================================== */}
       <div className="bacc-felt">
         <div className="bacc-hands">
+          {/* Totals are counted off the cards that are actually face up, not
+              read off the coup — otherwise the score announces a card before
+              it lands. A pair is only a pair once both cards are down. */}
           <Side
             title="Player"
-            cards={coup?.player}
-            total={coup?.playerTotal}
-            pair={coup?.playerPair}
-            won={coup?.result === 'player'}
-            tied={coup?.result === 'tie'}
+            cards={playerUp}
+            total={baccaratTotal(playerUp)}
+            pair={playerUp.length >= 2 && Boolean(coup?.playerPair)}
+            won={settledCoup?.result === 'player'}
+            tied={settledCoup?.result === 'tie'}
+            dealing={revealing}
           />
 
           <div className="bacc-verdict">
             <span className="bacc-vs">versus</span>
-            {coup ? (
+            {settledCoup ? (
               <>
-                <span className={`bacc-flag ${coup.result}`}>
-                  {coup.result === 'tie' ? 'Tie' : `${BACCARAT_LABELS[coup.result]} wins`}
+                <span className={`bacc-flag ${settledCoup.result}`}>
+                  {settledCoup.result === 'tie' ? 'Tie' : `${BACCARAT_LABELS[settledCoup.result]} wins`}
                 </span>
-                {coup.natural ? <span className="bacc-flag natural">Natural</span> : null}
+                {settledCoup.natural ? <span className="bacc-flag natural">Natural</span> : null}
               </>
+            ) : revealing && coup ? (
+              <button type="button" className="bjt-mini" onClick={() => revealAll(coup)}>
+                Skip
+              </button>
             ) : null}
           </div>
 
           <Side
             title="Banker"
-            cards={coup?.banker}
-            total={coup?.bankerTotal}
-            pair={coup?.bankerPair}
-            won={coup?.result === 'banker'}
-            tied={coup?.result === 'tie'}
+            cards={bankerUp}
+            total={baccaratTotal(bankerUp)}
+            pair={bankerUp.length >= 2 && Boolean(coup?.bankerPair)}
+            won={settledCoup?.result === 'banker'}
+            tied={settledCoup?.result === 'tie'}
+            dealing={revealing}
           />
         </div>
 
@@ -259,8 +387,10 @@ export function Baccarat({ limits = LIMITS }: { limits?: { minBet: number; maxBe
         </p>
 
         <div className="bacc-spots">
-          {BACCARAT_BETS.map((bet) => {
-            const settledLine = coup?.lines.find((l) => l.bet === bet);
+          {BACCARAT_LAYOUT.map((bet) => {
+            // Off `settledCoup`, not `coup`: a spot that reads "Paid 133"
+            // while the third card is still in the air has given the game away.
+            const settledLine = settledCoup?.lines.find((l) => l.bet === bet);
             const odds = BACCARAT_PAYTABLE.find((p) => p.bet === bet)!;
             // Once a coup is on the table it shows what that spot actually
             // had down and what it did; a fresh stake replaces it.
@@ -382,7 +512,7 @@ export function Baccarat({ limits = LIMITS }: { limits?: { minBet: number; maxBe
         <div className="bjt-refgrid">
           <div>
             <h4>What this table pays</h4>
-            {BACCARAT_PAYTABLE.map((row) => (
+            {feltOrder.map((row) => (
               <div key={row.bet} className="bjt-row">
                 <span>{row.label}</span>
                 <b>{row.pays}</b>
@@ -395,7 +525,7 @@ export function Baccarat({ limits = LIMITS }: { limits?: { minBet: number; maxBe
 
           <div>
             <h4>What a casino pays</h4>
-            {BACCARAT_PAYTABLE.map((row) => (
+            {feltOrder.map((row) => (
               <div key={row.bet} className="bjt-row">
                 <span>{row.label}</span>
                 <b>{row.casino}</b>
@@ -441,6 +571,7 @@ function Side({
   pair,
   won,
   tied,
+  dealing,
 }: {
   title: string;
   cards?: Card[];
@@ -448,6 +579,8 @@ function Side({
   pair?: boolean;
   won?: boolean;
   tied?: boolean;
+  /** A coup is on its way but this side has nothing face up yet. */
+  dealing?: boolean;
 }) {
   return (
     <section className={`bacc-side${won ? ' won' : ''}${tied ? ' tied' : ''}`} aria-label={title}>
@@ -459,16 +592,34 @@ function Side({
       <div className="bacc-row">
         {cards?.length ? (
           cards.map((card, i) => (
-            <PlayingCard key={`${card.r}${card.s}-${i}`} card={card} order={i} big />
+            /* `order` is left at zero: these arrive one at a time already, and
+               the stagger meant for a hand dealt in one go would hold each
+               card back a second time after it had been turned. */
+            <PlayingCard key={`${card.r}${card.s}-${i}`} card={card} big />
           ))
         ) : (
-          <span className="bjt-empty">Waiting for bets</span>
+          <span className="bjt-empty">{dealing ? 'Dealing…' : 'Waiting for bets'}</span>
         )}
       </div>
 
       <span className="bacc-score">{cards?.length ? total : '—'}</span>
     </section>
   );
+}
+
+/**
+ * What the strip says while the cards are still coming.
+ *
+ * It narrates the deal without ever getting ahead of it — naming the card that
+ * has just landed, and saying plainly when the hand is waiting on a third.
+ */
+function dealingLine(playerUp: number, bankerUp: number): string {
+  const down = playerUp + bankerUp;
+  if (down === 0) return 'Dealing.';
+  if (down < 4) return down % 2 === 1 ? 'Player…' : 'Banker…';
+  if (down === 4) return 'Player and banker are down. Anyone for a third?';
+  if (down === 5) return playerUp === 3 ? 'Player takes a third…' : 'Banker takes a third…';
+  return 'Banker takes a third…';
 }
 
 /** One line about the coup, in the order a dealer would say it. */

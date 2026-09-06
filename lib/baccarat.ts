@@ -130,6 +130,23 @@ export const BACCARAT_PAYTABLE: Array<{
   },
 ];
 
+/**
+ * The order the spots sit on the felt, which is not the order they are
+ * settled in.
+ *
+ * A real table reads Player pair · Player · Tie · Banker · Banker pair: the
+ * two main bets either side of the tie, each with its own pair bet on the
+ * outside. Keeping that arrangement means somebody who has played baccarat
+ * before does not have to hunt for Banker, and it puts each pair bet next to
+ * the hand it is about rather than in a row of its own.
+ *
+ * `BACCARAT_BETS` stays in settlement order, because that is what the server
+ * iterates and what the payout lines come back in.
+ */
+export const BACCARAT_LAYOUT: BaccaratBet[] = [
+  'playerPair', 'player', 'tie', 'banker', 'bankerPair',
+];
+
 export const BACCARAT_LABELS: Record<BaccaratBet, string> = {
   player: 'Player',
   banker: 'Banker',
