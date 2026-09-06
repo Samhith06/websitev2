@@ -195,6 +195,8 @@ interface KickClipResponse {
     id: string;
     title: string | null;
     thumbnail_url: string | null;
+    clip_url: string | null;
+    video_url: string | null;
     duration: number | null;
     views: number | null;
     view_count: number | null;
@@ -205,6 +207,14 @@ interface KickClipResponse {
 
 export type ClipMetadata = {
   thumbnailUrl: string | null;
+  /**
+   * The clip's own HLS playlist, which is what the site plays. Kick's iframe
+   * player has no clip route left — it reads the channel slug, drops the
+   * `?clip=` it is handed and renders the live player, so every clip on the
+   * site showed "MattySpinss is offline". The playlist is public and sent with
+   * `Access-Control-Allow-Origin: *`, so we play it ourselves instead.
+   */
+  videoUrl: string | null;
   durationSeconds: number | null;
   views: number | null;
   title: string | null;
@@ -231,6 +241,7 @@ export type ClipMetadata = {
 export async function fetchKickClip(clipId: string): Promise<ClipMetadata> {
   const empty: ClipMetadata = {
     thumbnailUrl: null,
+    videoUrl: null,
     durationSeconds: null,
     views: null,
     title: null,
@@ -259,6 +270,9 @@ export async function fetchKickClip(clipId: string): Promise<ClipMetadata> {
 
     return {
       thumbnailUrl: clip.thumbnail_url || null,
+      // Kick names the same playlist twice. Either will do; neither is signed,
+      // so the URL keeps working for as long as the clip does.
+      videoUrl: clip.video_url || clip.clip_url || derivePlaylist(clip.thumbnail_url),
       durationSeconds:
         typeof clip.duration === "number" && clip.duration > 0 ? Math.round(clip.duration) : null,
       views: clip.view_count ?? clip.views ?? null,
@@ -269,4 +283,17 @@ export async function fetchKickClip(clipId: string): Promise<ClipMetadata> {
     console.error(`[kick-api] Error fetching clip ${clipId}:`, error);
     return empty;
   }
+}
+
+/**
+ * The playlist sits beside the thumbnail, in the same per-clip directory.
+ *
+ * Only used when Kick answers with a thumbnail but no stream URL, which does
+ * happen. It is a substitution rather than a guess: the shard segment — the
+ * part that cannot be derived from the clip id — comes from the URL Kick just
+ * gave us.
+ */
+function derivePlaylist(thumbnailUrl: string | null): string | null {
+  if (!thumbnailUrl || !thumbnailUrl.includes('/thumbnail.')) return null;
+  return thumbnailUrl.replace(/\/thumbnail\.[a-z0-9]+$/i, '/playlist.m3u8');
 }

@@ -22,6 +22,7 @@ type ClipRow = {
   source: string;
   url: string;
   embed_url: string;
+  video_url: string;
   thumb_url: string;
   title: string;
   aspect: string;
@@ -35,7 +36,7 @@ type ClipRow = {
   payout_amount: number | null;
 };
 
-const COLUMNS = `id, kind, source, url, embed_url, thumb_url, title, aspect,
+const COLUMNS = `id, kind, source, url, embed_url, video_url, thumb_url, title, aspect,
                  duration_seconds, views, occurred_at, pinned, status,
                  slot_name, bet_amount, payout_amount`;
 
@@ -46,6 +47,7 @@ function toClip(row: ClipRow): Clip {
     source: row.source as ClipSource,
     url: row.url,
     embedUrl: row.embed_url,
+    videoUrl: row.video_url ?? '',
     thumbUrl: row.thumb_url,
     title: row.title,
     aspect: row.aspect === '9:16' ? '9:16' : '16:9',
@@ -164,9 +166,10 @@ export async function createClip(input: NewClip): Promise<Clip> {
   const live =
     parsed.source === 'kick' && parsed.id
       ? await fetchKickClip(parsed.id)
-      : { thumbnailUrl: null, durationSeconds: null, views: null, title: null, occurredAt: null };
+      : { thumbnailUrl: null, videoUrl: null, durationSeconds: null, views: null, title: null, occurredAt: null };
 
   const thumbUrl = parsed.source === 'kick' ? (live.thumbnailUrl ?? '') : parsed.thumbUrl;
+  const videoUrl = parsed.source === 'kick' ? (live.videoUrl ?? '') : '';
 
   // Kick knows when the clip was taken better than a mod filling in a date
   // field, but a date typed on purpose wins over one inferred.
@@ -176,8 +179,8 @@ export async function createClip(input: NewClip): Promise<Clip> {
     `INSERT INTO clips
        (id, kind, source, url, embed_url, thumb_url, title, aspect,
         duration_seconds, views, occurred_at, pinned, status, slot_name,
-        bet_amount, payout_amount, added_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $16, $17, $9, $10, $11, $12, $13, $14, $15)
+        bet_amount, payout_amount, added_by, video_url)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $16, $17, $9, $10, $11, $12, $13, $14, $15, $18)
      ON CONFLICT (id) DO UPDATE
        SET title         = EXCLUDED.title,
            kind          = EXCLUDED.kind,
@@ -191,6 +194,7 @@ export async function createClip(input: NewClip): Promise<Clip> {
            -- first time, so a real thumbnail must be allowed to replace an
            -- empty one — but never the other way round.
            thumb_url     = COALESCE(NULLIF(EXCLUDED.thumb_url, ''), clips.thumb_url),
+           video_url     = COALESCE(NULLIF(EXCLUDED.video_url, ''), clips.video_url),
            duration_seconds = GREATEST(EXCLUDED.duration_seconds, clips.duration_seconds),
            views         = COALESCE(EXCLUDED.views, clips.views)
      RETURNING ${COLUMNS}`,
@@ -212,6 +216,7 @@ export async function createClip(input: NewClip): Promise<Clip> {
       input.addedBy ?? null,
       live.durationSeconds ?? 0,
       live.views,
+      videoUrl,
     ],
   );
   return toClip(inserted[0]);
@@ -241,21 +246,26 @@ export async function refreshClipMetadata(): Promise<RefreshReport> {
 
   for (const row of found) {
     const live = await fetchKickClip(row.id);
-    if (!live.thumbnailUrl && live.durationSeconds === null) {
+    if (!live.thumbnailUrl && live.durationSeconds === null && !live.videoUrl) {
       report.failed.push(row.id);
       continue;
     }
 
+    // The playlist is what makes a clip playable at all, so a row missing it
+    // counts as changed even when nothing else moved — that is how clips added
+    // before the Kick player stopped serving clips get repaired.
     const changed = await write<{ id: string }>(
       `UPDATE clips
           SET thumb_url        = COALESCE($2, thumb_url),
               duration_seconds = COALESCE($3, duration_seconds),
-              views            = COALESCE($4, views)
+              views            = COALESCE($4, views),
+              video_url        = COALESCE(NULLIF($5, ''), video_url)
         WHERE id = $1
           AND (thumb_url IS DISTINCT FROM COALESCE($2, thumb_url)
-               OR duration_seconds IS DISTINCT FROM COALESCE($3, duration_seconds))
+               OR duration_seconds IS DISTINCT FROM COALESCE($3, duration_seconds)
+               OR video_url IS DISTINCT FROM COALESCE(NULLIF($5, ''), video_url))
         RETURNING id`,
-      [row.id, live.thumbnailUrl, live.durationSeconds, live.views],
+      [row.id, live.thumbnailUrl, live.durationSeconds, live.views, live.videoUrl ?? ''],
     );
     if (changed.length) report.fixed += 1;
   }
@@ -325,7 +335,14 @@ export function parseSourceUrl(raw: string): ParsedSource | null {
       return {
         source: 'kick',
         id,
-        embedUrl: `https://player.kick.com/${channel}?clip=${id}`,
+        // Deliberately empty, and this is the fix rather than an omission.
+        // `player.kick.com/<channel>?clip=<id>` looks like a clip embed and is
+        // not one: the player reads the channel slug, drops the query string
+        // and renders the live player, so every Kick clip on the site opened
+        // on "MattySpinss is offline". Kick has no clip embed left, so the
+        // clip is played from its own HLS playlist instead — fetched in
+        // `createClip`, for the same reason as the thumbnail below.
+        embedUrl: '',
         // Deliberately empty. The shard segment in a Kick thumbnail URL is
         // per-clip and cannot be derived from the id — the guessed form this
         // used to build 403'd on every clip — so the real one is fetched in
@@ -334,7 +351,7 @@ export function parseSourceUrl(raw: string): ParsedSource | null {
         aspect: '16:9',
       };
     }
-    return { source: 'kick', id: null, embedUrl: trimmed, thumbUrl: '', aspect: '16:9' };
+    return { source: 'kick', id: null, embedUrl: '', thumbUrl: '', aspect: '16:9' };
   }
 
   if (host.endsWith('youtube.com') || host === 'youtu.be') {

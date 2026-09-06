@@ -324,8 +324,15 @@ const kick = await clips.createClip({
   status: 'published',
 });
 check('a Kick clip is recognised', kick.source === 'kick' && kick.id === 'clip_TESTID123');
-check('its embed is built from the link', kick.embedUrl.includes('player.kick.com/mattyspinss?clip='));
-check('its thumbnail is built from the link', kick.thumbUrl.includes('clips.kick.com'));
+// Kick has no clip embed any more — `player.kick.com/<channel>?clip=<id>` drops
+// the clip and renders the live player — so a Kick clip must carry no iframe
+// URL at all. It plays from `videoUrl`, which only Kick can supply; this id is
+// invented, so the fetch comes back empty and both fields stay blank. That is
+// the correct outcome: the card falls back to a link rather than an embed that
+// would show an offline channel.
+check('a Kick clip carries no iframe embed', kick.embedUrl === '');
+check('an unfetchable clip stays blank rather than guessing',
+  kick.videoUrl === '' && kick.thumbUrl === '');
 
 const youtube = await clips.createClip({
   kind: 'big_win', url: 'https://www.youtube.com/watch?v=abc123XYZ',

@@ -38,7 +38,8 @@ export default async function AdminClipsPage() {
           <h1>Clips</h1>
           <div className="sh-sub">
             Nothing appears on the public site until it is published. {pins} of {MAX_PINS} pins
-            used — pinned clips lead the carousel.
+            used — pinned clips lead the carousel. A Kick clip that will not play needs
+            &ldquo;Refresh clip data&rdquo;: its stream URL comes from Kick and cannot be guessed.
           </div>
         </div>
         <RefreshClipsButton />

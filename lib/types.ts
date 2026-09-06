@@ -104,7 +104,13 @@ export type Clip = {
   kind: 'clip' | 'big_win';
   source: ClipSource;
   url: string;
+  /**
+   * The iframe player, for the platforms that still have one. Empty for Kick,
+   * which does not: its clips play from `videoUrl` instead.
+   */
   embedUrl: string;
+  /** Kick only — the clip's HLS playlist, played in a <video> on the page. */
+  videoUrl: string;
   thumbUrl: string;
   title: string;
   /** Aspect is a data field, not a constant (§23). */

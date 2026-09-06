@@ -165,10 +165,14 @@ export function AddClipForm() {
 /**
  * Repair the clips already stored.
  *
- * Kick thumbnails were built from a guessed URL that always 403s, so every
- * clip added before that was fixed shows a broken image. This asks Kick for
- * the real thumbnail and duration and writes them back — safe to press twice,
- * since a clip that cannot be read is left alone rather than blanked.
+ * Two things need asking Kick for, and neither can be worked out from a clip
+ * id: the thumbnail — built from a guessed URL that always 403s, which is the
+ * broken image on the home rail — and the clip's own stream, which is now how
+ * a Kick clip is played at all, since Kick's iframe player no longer serves
+ * clips and shows the offline channel instead.
+ *
+ * Safe to press twice: a clip that cannot be read is left exactly as it was
+ * rather than blanked, so a Kick outage costs nothing.
  */
 export function RefreshClipsButton() {
   const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
@@ -188,7 +192,7 @@ export function RefreshClipsButton() {
           })
         }
       >
-        {pending ? 'Asking Kick…' : 'Refresh thumbnails'}
+        {pending ? 'Asking Kick…' : 'Refresh clip data'}
       </button>
       {note ? (
         <span className="small" style={{ color: note.ok ? 'var(--green)' : 'var(--red)' }}>
