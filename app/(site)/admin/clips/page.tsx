@@ -1,8 +1,14 @@
 import { auth } from '@/auth';
 import { devBypass, roleFor } from '@/lib/admin';
-import { MAX_PINS, listClips, pinnedCount } from '@/lib/store/clips';
+import { MAX_PINS, listClips, pinnedCount, type ClipSort } from '@/lib/store/clips';
+import type { ClipSource } from '@/lib/types';
 import { clipLength, compact, dateShort, formatMultiplier, money } from '@/lib/format';
 import { AddClipForm, ClipRowActions, RefreshClipsButton } from '@/components/admin/ClipControls';
+import {
+  ClipFilters,
+  type ClipShow,
+  type ClipSourceFilter,
+} from '@/components/admin/ClipFilters';
 
 export const metadata = { title: 'Clips' };
 export const dynamic = 'force-dynamic';
@@ -19,14 +25,45 @@ export const dynamic = 'force-dynamic';
  * has started and not finished, and burying it under thirty published clips is
  * how it stays unfinished.
  */
-export default async function AdminClipsPage() {
+const SHOWS: ClipShow[] = ['all', 'clip', 'big_win', 'pinned', 'max_win'];
+const SOURCES: ClipSourceFilter[] = ['any', 'kick', 'youtube', 'instagram', 'x'];
+const SORTS: ClipSort[] = ['featured', 'newest', 'oldest', 'plays', 'title', 'title_desc'];
+
+/** Anything not in the list falls back rather than reaching SQL. */
+function pick<T extends string>(value: string | undefined, allowed: T[], fallback: T): T {
+  return allowed.includes(value as T) ? (value as T) : fallback;
+}
+
+export default async function AdminClipsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; show?: string; source?: string; sort?: string }>;
+}) {
+  const params = await searchParams;
+  const q = params.q ?? '';
+  const show = pick(params.show, SHOWS, 'all');
+  const source = pick(params.source, SOURCES, 'any');
+  const sort = pick(params.sort, SORTS, 'featured');
+
   const session = devBypass() ? null : await auth();
   const isOwner = devBypass() || roleFor(session?.user?.discordId ?? null) === 'owner';
 
-  const [all, pins] = await Promise.all([listClips({ limit: 200 }), pinnedCount()]);
+  const [all, pins] = await Promise.all([
+    listClips({
+      limit: 200,
+      query: q,
+      sort,
+      source: source === 'any' ? undefined : (source as ClipSource),
+      kind: show === 'clip' || show === 'big_win' ? show : undefined,
+      pinned: show === 'pinned' || undefined,
+      maxWin: show === 'max_win' || undefined,
+    }),
+    pinnedCount(),
+  ]);
 
   const drafts = all.filter((c) => c.status === 'draft');
   const published = all.filter((c) => c.status === 'published');
+  const narrowed = Boolean(q.trim()) || show !== 'all' || source !== 'any';
 
   return (
     <>
@@ -34,6 +71,7 @@ export default async function AdminClipsPage() {
         <div>
           <span className="eyebrow">
             {published.length} published · {drafts.length} draft
+            {narrowed ? ' · filtered' : ''}
           </span>
           <h1>Clips</h1>
           <div className="sh-sub">
@@ -47,16 +85,26 @@ export default async function AdminClipsPage() {
 
       <AddClipForm />
 
+      <ClipFilters q={q} show={show} source={source} sort={sort} />
+
       <Section
         title="Drafts"
-        empty="No drafts — everything added has been published."
+        empty={
+          narrowed
+            ? 'No drafts match that filter.'
+            : 'No drafts — everything added has been published.'
+        }
         clips={drafts}
         canDelete={isOwner}
       />
 
       <Section
         title="Published"
-        empty="Nothing is published yet, so the carousel and the wall of fame are empty."
+        empty={
+          narrowed
+            ? 'No published clips match that filter.'
+            : 'Nothing is published yet, so the carousel and the wall of fame are empty.'
+        }
         clips={published}
         canDelete={isOwner}
       />

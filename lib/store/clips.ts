@@ -78,14 +78,40 @@ function toClip(row: ClipRow): Clip {
   };
 }
 
+/** How the admin list can be reordered. `featured` is the carousel's own order. */
+export type ClipSort = 'featured' | 'newest' | 'oldest' | 'plays' | 'title' | 'title_desc';
+
+/**
+ * `featured` is the order the public carousel is built from, so it stays the
+ * default and stays exactly as it was — every other option here is a staff
+ * convenience that must not be able to reorder the front page by accident.
+ */
+const CLIP_SORT_SQL: Record<ClipSort, string> = {
+  featured: 'c.pinned DESC, c.sort_order ASC, c.occurred_at DESC',
+  newest: 'c.occurred_at DESC',
+  oldest: 'c.occurred_at ASC',
+  plays: 'COALESCE(p.plays, 0) DESC',
+  title: 'lower(c.title) ASC',
+  title_desc: 'lower(c.title) DESC',
+};
+
 /**
  * Pinned first, then explicit order, then newest. The public site always passes
  * `status: 'published'`; admin is the only caller that sees drafts.
+ *
+ * Everything past `limit` is optional and off by default, so the public callers
+ * below get precisely the query they got before this grew a search box.
  */
 export async function listClips(options: {
   kind?: 'clip' | 'big_win';
   status?: 'published' | 'draft';
   limit?: number;
+  /** Matched against the title, the slot name and the URL. */
+  query?: string;
+  source?: ClipSource;
+  pinned?: boolean;
+  maxWin?: boolean;
+  sort?: ClipSort;
 } = {}): Promise<Clip[]> {
   const where: string[] = [];
   const values: unknown[] = [];
@@ -98,12 +124,45 @@ export async function listClips(options: {
     values.push(options.status);
     where.push(`c.status = $${values.length}`);
   }
+
+  const query = (options.query ?? '').trim();
+  if (query) {
+    values.push(`%${query}%`);
+    const like = `$${values.length}`;
+    // A clip is often identified by its link — that is what is on somebody's
+    // clipboard when they come looking for one — but the URL is only searched
+    // when the query looks like part of a link or an id. Every Kick URL carries
+    // the channel name, so an unconditional match turns "pin" into a search for
+    // "mattyspinss" and hands back the whole channel.
+    //
+    // The test is for characters that do not appear inside an ordinary word:
+    // a URL brings `/` and `.`, and a clip id like `clip_p3` brings `_`. A
+    // plain word is looked for in the title and the slot name, where somebody
+    // typing a word means it to be looked for.
+    const looksLikeLink = /[/._-]/.test(query);
+    where.push(
+      looksLikeLink
+        ? `(c.title ILIKE ${like} OR c.slot_name ILIKE ${like} OR c.url ILIKE ${like})`
+        : `(c.title ILIKE ${like} OR c.slot_name ILIKE ${like})`,
+    );
+  }
+  if (options.source) {
+    values.push(options.source);
+    where.push(`c.source = $${values.length}`);
+  }
+  if (options.pinned) where.push('c.pinned');
+  if (options.maxWin) where.push('c.max_win');
+
   values.push(options.limit ?? 60);
+
+  // `c.id` breaks every tie so a stable list cannot shuffle between two reads
+  // that sort equal — which they do constantly once ordering by title.
+  const order = `${CLIP_SORT_SQL[options.sort ?? 'featured']}, c.id ASC`;
 
   const found = await rows<ClipRow>(
     `${SELECT_WITH_PLAYS}
      ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
-     ORDER BY c.pinned DESC, c.sort_order ASC, c.occurred_at DESC
+     ORDER BY ${order}
      LIMIT $${values.length}`,
     values,
   );
