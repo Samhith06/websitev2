@@ -38,7 +38,38 @@ function passwordMatches(request: NextRequest, expected: string): boolean {
   }
 }
 
+/**
+ * One canonical hostname, and www redirects to it.
+ *
+ * Two hostnames serving identical content is not only a duplicate for
+ * crawlers. With AUTH_URL on the bare domain, somebody who signs in from www
+ * has their session cookie set on the apex and returns to www looking signed
+ * out — the same confusion as signing in on the old railway.app origin, just
+ * mirrored. Railway has no domain-level redirect, so it happens here, before
+ * anything renders.
+ *
+ * Only the exact www host is matched, so localhost and any preview hostname
+ * are left alone and development is unaffected. The scheme is forced to https
+ * because Railway terminates TLS at its proxy and the app sees plain http.
+ */
+const CANONICAL_HOST = 'mattyspins.com';
+
+function canonicalRedirect(request: NextRequest): NextResponse | null {
+  if (request.headers.get('host') !== `www.${CANONICAL_HOST}`) return null;
+
+  const url = request.nextUrl.clone();
+  url.protocol = 'https:';
+  url.host = CANONICAL_HOST;
+  url.port = '';
+  // 308 rather than 302: permanent, and it preserves the method, so a POST
+  // arriving on www is not silently downgraded to a GET.
+  return NextResponse.redirect(url, 308);
+}
+
 export function middleware(request: NextRequest) {
+  const redirect = canonicalRedirect(request);
+  if (redirect) return redirect;
+
   const sitePassword = process.env.SITE_PASSWORD;
   if (!sitePassword) return NextResponse.next();
 
