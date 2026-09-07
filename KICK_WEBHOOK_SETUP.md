@@ -43,7 +43,7 @@ Before you start, you need:
    **Webhook URL:**
 
    ```
-   https://mattyspins-web-production-75f8.up.railway.app/api/kick/webhook
+   https://mattyspins.com/api/kick/webhook
    ```
 
    **Description:** (Optional)
@@ -132,7 +132,7 @@ After creating the webhook, Kick will show you:
 ### **Step 6: Test Verification**
 
 1. **Generate code on website:**
-   - Go to https://mattyspins-web-production-75f8.up.railway.app/me
+   - Go to https://mattyspins.com/me
    - Click "Generate my code"
    - You'll get something like: `MS-DWJC`
 
@@ -212,7 +212,7 @@ This means webhook is working but user isn't verified yet.
 
 **Solutions:**
 
-1. Make sure URL is exactly: `https://mattyspins-web-production-75f8.up.railway.app/api/kick/webhook`
+1. Make sure URL is exactly: `https://mattyspins.com/api/kick/webhook`
 2. No trailing slash
 3. HTTPS not HTTP
 4. Check Railway deployment is live: `railway status`
@@ -225,7 +225,7 @@ This means webhook is working but user isn't verified yet.
 2. **Verify URL is correct**
 3. **Test webhook endpoint manually:**
    ```bash
-   curl https://mattyspins-web-production-75f8.up.railway.app/api/kick/webhook
+   curl https://mattyspins.com/api/kick/webhook
    ```
    Should return error (that's OK - it means endpoint exists)
 
@@ -278,7 +278,7 @@ KICK_WEBHOOK_PUBLIC_KEY=-----BEGIN PUBLIC KEY-----...
 # Required for app functionality
 DATABASE_URL=<set by Railway Postgres>
 AUTH_SECRET=<random string>
-AUTH_URL=https://mattyspins-web-production-75f8.up.railway.app
+AUTH_URL=https://mattyspins.com
 DISCORD_CLIENT_ID=<from Discord>
 DISCORD_CLIENT_SECRET=<from Discord>
 OWNER_DISCORD_IDS=<your Discord numeric ID>
@@ -367,7 +367,7 @@ Look for:
 ### Test Webhook Endpoint:
 
 ```bash
-curl -X POST https://mattyspins-web-production-75f8.up.railway.app/api/kick/webhook \
+curl -X POST https://mattyspins.com/api/kick/webhook \
   -H "Content-Type: application/json" \
   -d '{"test": "data"}'
 ```
@@ -409,7 +409,7 @@ You know it's working when:
 **Webhook URL:**
 
 ```
-https://mattyspins-web-production-75f8.up.railway.app/api/kick/webhook
+https://mattyspins.com/api/kick/webhook
 ```
 
 **Required Events:**

@@ -1,8 +1,15 @@
 # 🎉 Deployment Successful!
 
+> **This is a snapshot of the 2 September 2026 launch, not a live status page.**
+> The feature list and checklists below describe that release and have not been
+> kept current. Two things here *are* maintained because getting them wrong
+> breaks a release: the production URL, and
+> [Future Deployments](#-future-deployments) — read that section before
+> shipping, since pushing to `main` does **not** deploy.
+
 ## ✅ Your Website is Live!
 
-**Production URL:** https://mattyspins-web-production-75f8.up.railway.app
+**Production URL:** https://mattyspins.com
 
 ---
 
@@ -21,10 +28,11 @@
 
 ### 🔧 Technical:
 
-- Built with Next.js 15.5.24
+- Built with Next.js 15.5.24 (Railpack — `railway.json` still says NIXPACKS,
+  which the service overrides)
 - Deployed on Railway
 - Database: PostgreSQL
-- Automatic deployments from GitHub main branch
+- Deploys are triggered manually with `railway up` — there is no GitHub trigger
 
 ---
 
@@ -35,7 +43,7 @@
 1. **Visit the Site**
 
    ```
-   https://mattyspins-web-production-75f8.up.railway.app
+   https://mattyspins.com
    ```
 
 2. **Test Automatic Stream Detection**
@@ -60,7 +68,7 @@
 ```env
 DATABASE_URL=<already set by Railway Postgres>
 AUTH_SECRET=<generate a long random string>
-AUTH_URL=https://mattyspins-web-production-75f8.up.railway.app
+AUTH_URL=https://mattyspins.com
 DISCORD_CLIENT_ID=<from Discord Developer Portal>
 DISCORD_CLIENT_SECRET=<from Discord Developer Portal>
 OWNER_DISCORD_IDS=<your numeric Discord ID>
@@ -79,7 +87,7 @@ KICK_WEBHOOK_PUBLIC_KEY=<for webhook verification>
 1. Go to https://discord.com/developers/applications
 2. Select your application
 3. Go to OAuth2 → Redirects
-4. Add: `https://mattyspins-web-production-75f8.up.railway.app/api/auth/callback/discord`
+4. Add: `https://mattyspins.com/api/auth/callback/discord`
 5. Save
 
 ---
@@ -91,7 +99,7 @@ KICK_WEBHOOK_PUBLIC_KEY=<for webhook verification>
 - [ ] **Homepage** (`/`) - Shows correct live/offline status
 - [ ] **Leaderboard** (`/leaderboard`) - Displays board data
 - [ ] **Games** (`/games`) - Game lobby loads
-- [ ] **Shop** (`/shop`) - Shop items show
+- [ ] **Store** (`/store`) - Store items show
 - [ ] **Admin** (`/admin`) - Dashboard accessible (if admin)
 
 ### Test Features:
@@ -137,34 +145,59 @@ railway logs
 ### Check Health:
 
 ```
-https://mattyspins-web-production-75f8.up.railway.app/api/health
+https://mattyspins.com/api/health
 ```
 
 ### Check Stream Status:
 
 ```
-https://mattyspins-web-production-75f8.up.railway.app/api/stream/sync
+https://mattyspins.com/api/stream/sync
 ```
 
 ---
 
 ## 🔄 Future Deployments
 
-Railway is now configured for automatic deployments:
+**Pushing to `main` does not deploy anything.** This service has no GitHub
+trigger — every deployment it has ever had was started by hand from the CLI.
+`railway deployment list` shows it: none of the entries carry a repo or a
+commit. This document used to claim the opposite, which cost a deploy that
+everyone involved believed had already gone out.
+
+So a release is two separate steps, and the second one is the one that ships:
 
 ```bash
-# Just commit and push:
-git add .
-git commit -m "your changes"
+# 1. Push the code, so the repo matches what is about to go live.
 git push origin main
 
-# Railway automatically deploys!
+# 2. Deploy. This uploads the working directory, NOT the pushed commit.
+railway up
 ```
 
-### Manual Deploy (if needed):
+Because `railway up` ships your working directory rather than the commit,
+check the tree is clean and equal to `origin/main` before running it —
+otherwise you deploy whatever you happen to have lying around, and the commit
+the site claims to be running is not the code it is running:
 
 ```bash
-railway up
+git status --porcelain          # must print nothing
+git rev-parse HEAD origin/main  # must print the same hash twice
+```
+
+Naming the commit in the deploy message keeps that link visible afterwards,
+since Railway records no commit of its own:
+
+```bash
+railway up --message "$(git rev-parse --short HEAD) — what changed"
+```
+
+### Verify it actually landed
+
+A successful upload is not a successful deploy. Check the live site for
+something only the new build has, rather than trusting the CLI's output:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' https://mattyspins.com/api/health
 ```
 
 ---
@@ -181,7 +214,7 @@ railway up
 **Solution 2: Check API**
 
 ```bash
-curl https://mattyspins-web-production-75f8.up.railway.app/api/stream/sync
+curl https://mattyspins.com/api/stream/sync
 ```
 
 **Solution 3: Check Logs**
@@ -219,7 +252,7 @@ Your website is now live and ready to share!
 **Main URL:**
 
 ```
-https://mattyspins-web-production-75f8.up.railway.app
+https://mattyspins.com
 ```
 
 **Key Pages:**
@@ -227,22 +260,16 @@ https://mattyspins-web-production-75f8.up.railway.app
 - Homepage: `/`
 - Games: `/games`
 - Leaderboard: `/leaderboard`
-- Shop: `/shop`
+- Store: `/store`
 - Admin: `/admin`
 
 ---
 
-## 🎨 Optional: Custom Domain
+## 🎨 Custom Domain — done
 
-To use your own domain (e.g., mattyspins.com):
-
-1. Go to Railway Dashboard
-2. Select mattyspins-web service
-3. Settings → Domains
-4. Click "Add Domain"
-5. Enter your domain
-6. Update DNS records as shown
-7. Wait for SSL certificate
+The site serves from **https://mattyspins.com**. The original
+`*.up.railway.app` address no longer answers, so anything still pointing at it
+(bookmarks, the Discord OAuth redirect, monitoring) needs the real domain.
 
 ---
 

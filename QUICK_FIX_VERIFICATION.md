@@ -14,7 +14,7 @@ You're typing the verification code in Kick chat but your account isn't getting 
 
 2. **Create Webhook:**
    - Click "Create Webhook" or "Add Webhook"
-   - **URL:** `https://mattyspins-web-production-75f8.up.railway.app/api/kick/webhook`
+   - **URL:** `https://mattyspins.com/api/kick/webhook`
    - **Events:** Select `chat.message.sent` (required!)
    - Also select: `livestream.status.updated`, `channel.subscription.new`
    - Click "Create"
@@ -53,7 +53,7 @@ You're typing the verification code in Kick chat but your account isn't getting 
 ### **Step 3: Test It** (⏱️ 1 min)
 
 1. **Generate Code:**
-   - Go to: https://mattyspins-web-production-75f8.up.railway.app/me
+   - Go to: https://mattyspins.com/me
    - Sign in with Discord if needed
    - Click "Generate my code"
    - Copy the code (e.g., `MS-DWJC`)
@@ -147,7 +147,7 @@ Railway Dashboard
 ### ❌ Wrong Webhook URL
 
 ```
-Wrong: https://mattyspins-web-production-75f8.up.railway.app/api/kick/webhook/
+Wrong: https://mattyspins.com/api/kick/webhook/
                                                                                ↑ no trailing slash!
 ```
 

@@ -163,7 +163,7 @@ railway logs --filter="signature"
 2. Check deployment: `railway logs`
 3. Verify webhook URL in Kick settings:
    ```
-   https://mattyspins-web-production-75f8.up.railway.app/api/kick/webhook
+   https://mattyspins.com/api/kick/webhook
    ```
 4. No trailing slash!
 5. HTTPS not HTTP
@@ -177,7 +177,7 @@ Follow this exact sequence:
 ### 1. **Sign in with Discord**
 
 ```
-Go to: https://mattyspins-web-production-75f8.up.railway.app
+Go to: https://mattyspins.com
 Click: "Sign in with Discord"
 Authorize the app
 ```
@@ -185,7 +185,7 @@ Authorize the app
 ### 2. **Go to Profile Page**
 
 ```
-Go to: https://mattyspins-web-production-75f8.up.railway.app/me
+Go to: https://mattyspins.com/me
 ```
 
 ### 3. **Generate Code**
@@ -238,7 +238,7 @@ Look for:
 ### Check If Webhook Endpoint Exists
 
 ```bash
-curl -I https://mattyspins-web-production-75f8.up.railway.app/api/kick/webhook
+curl -I https://mattyspins.com/api/kick/webhook
 ```
 
 **Expected:** `401 Unauthorized` or `503 Service Unavailable` (both are OK)
@@ -247,7 +247,7 @@ curl -I https://mattyspins-web-production-75f8.up.railway.app/api/kick/webhook
 ### Check Database Connection
 
 ```bash
-curl https://mattyspins-web-production-75f8.up.railway.app/api/health
+curl https://mattyspins.com/api/health
 ```
 
 **Expected:** `{"ok": true, "database": "connected"}`
