@@ -1512,6 +1512,100 @@ nav.mainnav a.on::after {
   border-color: rgba(34, 211, 255, 0.18);
 }
 
+/* -------------------------------------------------------------------------- *
+ * Admin tables — the member filter bar, and the clip list                      *
+ * -------------------------------------------------------------------------- */
+
+/*
+ * Search, filters and sort on one line, and the search box is the part that
+ * gives up its width first: on a phone every control ends up full width, in
+ * that order, which is also the order somebody reaches for them.
+ */
+.ufilters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.ufilters .uf-search {
+  flex: 1 1 280px;
+  min-width: 220px;
+}
+
+.ufilters .uf-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.ufilters .uf-pick > span {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* A select sizes itself to its longest option unless it is told not to. */
+.ufilters .uf-pick select {
+  width: auto;
+  min-width: 130px;
+}
+
+/* The Apply button is a fallback for no-JavaScript; it still has to sit on the
+   baseline of the controls beside it rather than float above them. */
+.ufilters > .btn {
+  align-self: flex-end;
+  height: 34px;
+}
+
+@media (max-width: 640px) {
+  .ufilters .uf-pick,
+  .ufilters .uf-pick select,
+  .ufilters > .btn {
+    width: 100%;
+  }
+}
+
+/*
+ * The clip list carries a name, three facts about the file and four buttons.
+ * Given a column each, the name wrapped every two words and the buttons were
+ * pushed off the edge of the screen. The facts belong under the name, and the
+ * buttons get whatever width they need.
+ */
+.tw.tclips table {
+  min-width: 720px;
+}
+
+.tw.tclips .clipcell {
+  min-width: 240px;
+}
+
+.clipmeta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+/* Sized to its buttons — `1%` is the usual way of asking a table cell for its
+   minimum width and leaving the rest to the columns that need it. */
+.tw td.acts {
+  width: 1%;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.rowacts {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
 .tw td.n {
   font-family: var(--mono);
   font-variant-numeric: tabular-nums;

@@ -250,7 +250,10 @@ export function ClipRowActions({
 
   return (
     <>
-      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+      {/* One row, never wrapped. Wrapping turned four buttons into four
+          lines and every clip row three times as tall; the cell is sized
+          to its buttons instead and the table scrolls if it has to. */}
+      <div className="rowacts">
         <button
           className={`btn sm ${published ? 'ghost' : 'green'}`}
           disabled={pending}
@@ -272,7 +275,7 @@ export function ClipRowActions({
             onClick={() => run(() => markClipMaxWin(id, !maxWin))}
             title="A max win is the slot paying its own ceiling"
           >
-            {maxWin ? 'Max win ✓' : 'Mark max win'}
+            {maxWin ? 'Max win ✓' : 'Max win'}
           </button>
         ) : null}
         {canDelete ? (

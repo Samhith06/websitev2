@@ -1,24 +1,60 @@
 import Link from 'next/link';
 import { rows } from '@/lib/db';
-import { searchUsers } from '@/lib/store/accounts';
+import {
+  searchUsers,
+  type MemberFilter,
+  type MemberSort,
+  type WatchFilter,
+} from '@/lib/store/accounts';
 import { roleFor } from '@/lib/admin';
-import { coins, dateShort } from '@/lib/format';
+import { coins, dateShort, duration, money } from '@/lib/format';
 import { auth } from '@/auth';
 import { devBypass } from '@/lib/admin';
 import { AdjustBalance } from '@/components/admin/AdjustBalance';
+import { UserFilters } from '@/components/admin/UserFilters';
 
 export const metadata = { title: 'Users' };
 export const dynamic = 'force-dynamic';
 
 const PAGE = 40;
 
+const FILTERS: MemberFilter[] = ['all', 'vip', 'sub', 'whale', 'razed', 'unlinked', 'frozen'];
+const WATCHED: WatchFilter[] = ['any', '1h', '2h', '5h', '10h'];
+const SORTS: MemberSort[] = ['recent', 'name', 'name_desc', 'joined', 'coins', 'watched'];
+
+/** What the count line says it is showing, so a short list is never a mystery. */
+const FILTER_LABEL: Record<MemberFilter, string> = {
+  all: 'accounts',
+  vip: 'VIPs',
+  sub: 'active subs',
+  whale: 'whales',
+  razed: 'Razed-linked accounts',
+  unlinked: 'accounts with no Kick link',
+  frozen: 'frozen accounts',
+};
+
+/** Anything not in the list falls back rather than reaching SQL. */
+function pick<T extends string>(value: string | undefined, allowed: T[], fallback: T): T {
+  return allowed.includes(value as T) ? (value as T) : fallback;
+}
+
 export default async function AdminUsersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; page?: string }>;
+  searchParams: Promise<{
+    q?: string;
+    page?: string;
+    filter?: string;
+    watched?: string;
+    sort?: string;
+  }>;
 }) {
-  const { q, page } = await searchParams;
-  const pageNum = Math.max(1, Number(page) || 1);
+  const params = await searchParams;
+  const { q } = params;
+  const pageNum = Math.max(1, Number(params.page) || 1);
+  const filter = pick(params.filter, FILTERS, 'all');
+  const watched = pick(params.watched, WATCHED, 'any');
+  const sort = pick(params.sort, SORTS, 'recent');
 
   // Adjusting a balance is Matty's, not a mod's — the column is simply absent
   // for anyone else rather than present and refusing.
@@ -26,7 +62,7 @@ export default async function AdminUsersPage({
   const isOwner = devBypass() || roleFor(session?.user?.discordId ?? null) === 'owner';
 
   const [{ members, total }, links] = await Promise.all([
-    searchUsers({ query: q, limit: PAGE, offset: (pageNum - 1) * PAGE }),
+    searchUsers({ query: q, filter, watched, sort, limit: PAGE, offset: (pageNum - 1) * PAGE }),
     rows<{ user_id: string; username: string; status: string }>(
       'SELECT user_id::text, username, status FROM razed_links',
     ),
@@ -34,12 +70,26 @@ export default async function AdminUsersPage({
 
   const razedByUser = new Map(links.map((l) => [l.user_id, l]));
   const pages = Math.max(1, Math.ceil(total / PAGE));
+  const narrowed = filter !== 'all' || watched !== 'any' || Boolean(q?.trim());
+
+  /** Every link out of here keeps the filter — only the page number moves. */
+  const linkTo = (page: number) =>
+    `/admin/users?${new URLSearchParams({
+      ...(q ? { q } : {}),
+      ...(filter !== 'all' ? { filter } : {}),
+      ...(watched !== 'any' ? { watched } : {}),
+      ...(sort !== 'recent' ? { sort } : {}),
+      page: String(page),
+    })}`;
 
   return (
     <>
       <div className="sec-head">
         <div>
-          <span className="eyebrow">{total} accounts</span>
+          <span className="eyebrow">
+            {total} {FILTER_LABEL[filter]}
+            {watched !== 'any' ? ` · ${watched.replace('h', ' hours')} watched or more` : ''}
+          </span>
           <h1>Users</h1>
           <div className="sh-sub">
             Click a name for everything on that account — watch time, wager, coins, bets and every
@@ -49,18 +99,14 @@ export default async function AdminUsersPage({
         </div>
       </div>
 
-      <form style={{ marginBottom: 14 }}>
-        <input
-          className="inp"
-          name="q"
-          defaultValue={q ?? ''}
-          placeholder="Search by Discord name, Kick username or Discord id…"
-          aria-label="Search users"
-        />
-      </form>
+      <UserFilters q={q ?? ''} filter={filter} watched={watched} sort={sort} />
 
       {members.length === 0 ? (
-        <div className="emptyq">No accounts match that search.</div>
+        <div className="emptyq">
+          {narrowed
+            ? 'No accounts match that filter.'
+            : 'No accounts yet — the list fills as people sign in.'}
+        </div>
       ) : (
         <div className="tw">
           <table>
@@ -69,6 +115,8 @@ export default async function AdminUsersPage({
                 <th>User</th>
                 <th>Role</th>
                 <th>Coins</th>
+                <th>Watched</th>
+                <th>Wagered</th>
                 <th>Kick</th>
                 <th>Razed</th>
                 <th>Joined</th>
@@ -80,6 +128,9 @@ export default async function AdminUsersPage({
                 const role = roleFor(member.discordId);
                 const razed = razedByUser.get(String(member.id));
                 const frozen = member.status === 'frozen';
+                const subbed =
+                  member.subActiveUntil !== null &&
+                  new Date(member.subActiveUntil).getTime() > Date.now();
                 return (
                   <tr key={member.id} style={frozen ? { opacity: 0.55 } : undefined}>
                     <td>
@@ -88,6 +139,13 @@ export default async function AdminUsersPage({
                           public page is the one page that deliberately hides
                           it. It is still one click away from there. */}
                       <Link href={`/admin/users/${member.id}`}>{member.discordUsername}</Link>{' '}
+                      {/* The multiplier that actually applies, never both — a
+                          VIP who also subs earns 2.5×, not 4.5×. */}
+                      {member.isVip ? (
+                        <span className="tag gold">VIP</span>
+                      ) : subbed ? (
+                        <span className="tag blue">Sub</span>
+                      ) : null}{' '}
                       {frozen ? <span className="tag red">Frozen</span> : null}
                     </td>
                     <td>
@@ -96,6 +154,14 @@ export default async function AdminUsersPage({
                       </span>
                     </td>
                     <td className="g">{coins(member.balance)}</td>
+                    <td className="n" style={{ color: 'var(--muted)' }}>
+                      {member.watchMinutes > 0 ? duration(member.watchMinutes * 60) : '—'}
+                    </td>
+                    <td className="n" style={{ color: 'var(--muted)' }}>
+                      {/* Null is "no approved Razed link", which is a different
+                          thing from having wagered nothing under one. */}
+                      {member.wagered === null ? '—' : money(member.wagered)}
+                    </td>
                     <td className="n" style={{ color: 'var(--muted)' }}>
                       {member.kick?.kickUsername ?? '—'}
                     </td>
@@ -131,10 +197,7 @@ export default async function AdminUsersPage({
       {pages > 1 ? (
         <div style={{ display: 'flex', gap: 8, marginTop: 14, alignItems: 'center' }}>
           {pageNum > 1 ? (
-            <Link
-              className="btn sm"
-              href={`/admin/users?${new URLSearchParams({ ...(q ? { q } : {}), page: String(pageNum - 1) })}`}
-            >
+            <Link className="btn sm" href={linkTo(pageNum - 1)}>
               ← Previous
             </Link>
           ) : null}
@@ -142,10 +205,7 @@ export default async function AdminUsersPage({
             Page {pageNum} of {pages}
           </span>
           {pageNum < pages ? (
-            <Link
-              className="btn sm"
-              href={`/admin/users?${new URLSearchParams({ ...(q ? { q } : {}), page: String(pageNum + 1) })}`}
-            >
+            <Link className="btn sm" href={linkTo(pageNum + 1)}>
               Next →
             </Link>
           ) : null}
@@ -154,7 +214,10 @@ export default async function AdminUsersPage({
 
       <p className="small muted" style={{ marginTop: 14, maxWidth: '72ch' }}>
         Roles come from OWNER_DISCORD_IDS and MOD_DISCORD_IDS in the environment, not from this
-        table — there is no way to grant yourself admin from inside the app.
+        table — there is no way to grant yourself admin from inside the app. Watch time is counted
+        from paid ticks rather than from watch coins, so a VIP&rsquo;s 2.5× multiplier does not
+        inflate it. Wagered is the lifetime figure from the newest Razed snapshot and only counts
+        under an approved link.
       </p>
     </>
   );

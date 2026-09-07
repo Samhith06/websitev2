@@ -2,6 +2,8 @@ import 'server-only';
 import { randomInt } from 'node:crypto';
 import { one, rows, tx, write } from '@/lib/db';
 import { apply } from './coins';
+import { TICK_MINUTES } from './presence';
+import { LIFETIME_PERIOD } from './razed-snapshots';
 import type { KickLink, VerificationState } from '@/lib/types';
 
 /**
@@ -399,7 +401,39 @@ export async function recentUsers(
 /* Member search                                                              */
 /* -------------------------------------------------------------------------- */
 
-export type MemberFilter = 'all' | 'unlinked' | 'frozen';
+export type MemberFilter =
+  | 'all'
+  | 'vip'
+  | 'sub'
+  | 'whale'
+  | 'razed'
+  | 'unlinked'
+  | 'frozen';
+
+/** A floor on watch time, in whole hours. `any` is no filter at all. */
+export type WatchFilter = 'any' | '1h' | '2h' | '5h' | '10h';
+
+export type MemberSort = 'recent' | 'name' | 'name_desc' | 'joined' | 'coins' | 'watched';
+
+const WATCH_HOURS: Record<WatchFilter, number> = { any: 0, '1h': 1, '2h': 2, '5h': 5, '10h': 10 };
+
+/**
+ * What the Whale badge asks for, and deliberately the same number.
+ *
+ * A staff filter called "whales" that disagreed with the badge called Whale
+ * would be two different answers to one question, and the person reading the
+ * screen has no way to tell which one the badge used.
+ */
+export const WHALE_WAGER = 100_000;
+
+const SORT_SQL: Record<MemberSort, string> = {
+  recent: 'u.last_seen_at DESC',
+  name: 'lower(u.discord_username) ASC',
+  name_desc: 'lower(u.discord_username) DESC',
+  joined: 'u.created_at DESC',
+  coins: 'COALESCE(b.balance, 0) DESC',
+  watched: 'COALESCE(w.ticks, 0) DESC',
+};
 
 export type MemberRow = User & {
   kick: KickLink | null;
@@ -407,27 +441,74 @@ export type MemberRow = User & {
   lifetimeEarned: number;
 };
 
+/** A list row, which carries the figures the list can be filtered and sorted on. */
+export type MemberListRow = MemberRow & {
+  isVip: boolean;
+  subActiveUntil: string | null;
+  /** Watch time from paid ticks — the same unit the member detail screen uses. */
+  watchMinutes: number;
+  /** Lifetime wagered under an approved Razed link; null when there is none. */
+  wagered: number | null;
+};
+
 /**
- * The admin member list, searchable, filterable and paged.
+ * The admin member list, searchable, filterable, sortable and paged.
  *
  * `recentUsers` caps at 50 with no search, which is fine for a handful of
  * accounts and useless at two hundred: three quarters of the membership is
  * simply unreachable. This returns a page plus the total so the screen can say
  * honestly how many rows the filter actually matched.
+ *
+ * Every figure a filter tests against is also selected and shown, because a
+ * list filtered to "watched 2h+" that does not print the watch time is asking
+ * to be trusted rather than read. The joins are all one-to-one — `sub_state`,
+ * `coin_balances`, `kick_links` and `razed_links` are keyed on `user_id`, and
+ * `razed_wagers` is pinned to a single snapshot — so none of them can multiply
+ * a row and quietly inflate the total.
  */
 export async function searchUsers(opts: {
   query?: string;
   filter?: MemberFilter;
+  watched?: WatchFilter;
+  sort?: MemberSort;
   limit?: number;
   offset?: number;
-} = {}): Promise<{ members: MemberRow[]; total: number }> {
+} = {}): Promise<{ members: MemberListRow[]; total: number }> {
   const limit = Math.min(Math.max(opts.limit ?? 25, 1), 100);
   const offset = Math.max(opts.offset ?? 0, 0);
   const query = (opts.query ?? '').trim();
   const filter = opts.filter ?? 'all';
+  const watched = opts.watched ?? 'any';
+  const sort = opts.sort ?? 'recent';
+
+  // The lifetime snapshot is named in the FROM clause, so its parameter has to
+  // be allocated before any of the WHERE ones.
+  const params: unknown[] = [LIFETIME_PERIOD];
+
+  const from = `
+       FROM users u
+       LEFT JOIN kick_links    k ON k.user_id = u.id
+       LEFT JOIN coin_balances b ON b.user_id = u.id
+       LEFT JOIN sub_state     s ON s.user_id = u.id
+       LEFT JOIN (
+         SELECT user_id, COUNT(*)::int AS ticks
+           FROM coin_ledger
+          WHERE kind = 'watch'
+          GROUP BY user_id
+       ) w ON w.user_id = u.id
+       LEFT JOIN razed_links rl ON rl.user_id = u.id
+       LEFT JOIN razed_wagers rw
+              ON lower(rw.username) = lower(rl.username)
+             -- Approval is the gate on the *figure*, not on the name. A link is
+             -- a self-declared username with nothing technical behind it, so a
+             -- pending one is searchable but wagers nothing.
+             AND rl.status = 'approved'
+             AND rw.snapshot_id = (
+               SELECT id FROM razed_snapshots WHERE period = $1
+                ORDER BY fetched_at DESC LIMIT 1
+             )`;
 
   const where: string[] = [];
-  const params: unknown[] = [];
 
   if (query) {
     params.push(`%${query}%`);
@@ -437,6 +518,7 @@ export async function searchUsers(opts: {
     where.push(
       `(u.discord_username ILIKE ${like}
         OR k.kick_username ILIKE ${like}
+        OR rl.username ILIKE ${like}
         OR u.discord_id = ${exact}
         OR k.kick_user_id = ${exact})`,
     );
@@ -444,14 +526,25 @@ export async function searchUsers(opts: {
 
   if (filter === 'unlinked') where.push('k.kick_user_id IS NULL');
   if (filter === 'frozen') where.push("u.status = 'frozen'");
+  if (filter === 'vip') where.push('s.is_vip = true');
+  // A sub is only a sub while the window is open — an expired one is a member.
+  if (filter === 'sub') where.push('s.sub_active_until > now()');
+  if (filter === 'razed') where.push("rl.status = 'approved'");
+  if (filter === 'whale') {
+    params.push(WHALE_WAGER);
+    where.push(`rw.wagered >= $${params.length}`);
+  }
+
+  const hours = WATCH_HOURS[watched] ?? 0;
+  if (hours > 0) {
+    params.push(Math.ceil((hours * 60) / TICK_MINUTES));
+    where.push(`COALESCE(w.ticks, 0) >= $${params.length}`);
+  }
 
   const clause = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
   const totalRow = await one<{ n: string }>(
-    `SELECT count(*)::text AS n
-       FROM users u
-       LEFT JOIN kick_links k ON k.user_id = u.id
-       ${clause}`,
+    `SELECT count(*)::text AS n ${from} ${clause}`,
     params,
   );
 
@@ -460,22 +553,30 @@ export async function searchUsers(opts: {
   params.push(offset);
   const offsetParam = `$${params.length}`;
 
+  // `u.id` breaks every tie, so paging cannot show one account twice and skip
+  // another when two rows sort equal — which they do constantly on a name.
+  const order = `${SORT_SQL[sort] ?? SORT_SQL.recent}, u.id ASC`;
+
   const found = await rows<UserRow & {
     kick_user_id: string | null;
     kick_username: string | null;
     verified_at: Date | null;
     balance: number | null;
     lifetime_earned: number | null;
+    is_vip: boolean | null;
+    sub_active_until: Date | null;
+    ticks: number | null;
+    wagered: string | null;
   }>(
     `SELECT u.id::text, u.discord_id, u.discord_username, u.avatar_url, u.status,
             u.frozen_reason, u.frozen_until, u.created_at,
             k.kick_user_id, k.kick_username, k.verified_at,
-            b.balance, b.lifetime_earned
-       FROM users u
-       LEFT JOIN kick_links    k ON k.user_id = u.id
-       LEFT JOIN coin_balances b ON b.user_id = u.id
+            b.balance, b.lifetime_earned,
+            s.is_vip, s.sub_active_until,
+            w.ticks, rw.wagered::text AS wagered
+       ${from}
        ${clause}
-      ORDER BY u.last_seen_at DESC
+      ORDER BY ${order}
       LIMIT ${limitParam} OFFSET ${offsetParam}`,
     params,
   );
@@ -489,6 +590,10 @@ export async function searchUsers(opts: {
         : null,
       balance: row.balance ?? 0,
       lifetimeEarned: row.lifetime_earned ?? 0,
+      isVip: row.is_vip ?? false,
+      subActiveUntil: row.sub_active_until ? row.sub_active_until.toISOString() : null,
+      watchMinutes: (row.ticks ?? 0) * TICK_MINUTES,
+      wagered: row.wagered === null ? null : Number(row.wagered),
     })),
   };
 }

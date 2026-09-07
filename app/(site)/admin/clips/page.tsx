@@ -93,13 +93,11 @@ function Section({
       {clips.length === 0 ? (
         <div className="emptyq">{empty}</div>
       ) : (
-        <div className="tw">
+        <div className="tw tclips">
           <table>
             <thead>
               <tr>
                 <th>Clip</th>
-                <th>Source</th>
-                <th>Kind</th>
                 <th>Figures</th>
                 <th>Watched</th>
                 <th>When</th>
@@ -109,23 +107,25 @@ function Section({
             <tbody>
               {clips.map((clip) => (
                 <tr key={clip.id}>
-                  <td>
+                  {/* Kind, source and length were three columns of their own,
+                      which left the title squeezed into a two-word ribbon and
+                      pushed the buttons off the right-hand edge. They are all
+                      *about* the clip, so they sit under its name. */}
+                  <td className="clipcell">
                     <a href={clip.url} target="_blank" rel="noreferrer noopener">
                       {clip.title}
                     </a>
-                    {clip.pinned ? <span className="tag gold"> pinned</span> : null}
-                    {clip.maxWin ? <span className="tag max"> max win</span> : null}
-                    {clip.durationSeconds > 0 ? (
-                      <span className="small muted"> · {clipLength(clip.durationSeconds)}</span>
-                    ) : null}
-                  </td>
-                  <td className="n" style={{ color: 'var(--muted)' }}>
-                    {clip.source} · {clip.aspect}
-                  </td>
-                  <td>
-                    <span className={`tag ${clip.kind === 'big_win' ? 'gold' : ''}`}>
-                      {clip.kind === 'big_win' ? 'big win' : 'clip'}
-                    </span>
+                    <div className="clipmeta">
+                      <span className={`tag ${clip.kind === 'big_win' ? 'gold' : ''}`}>
+                        {clip.kind === 'big_win' ? 'big win' : 'clip'}
+                      </span>
+                      {clip.pinned ? <span className="tag gold">pinned</span> : null}
+                      {clip.maxWin ? <span className="tag max">max win</span> : null}
+                      <span className="small muted">
+                        {clip.source} · {clip.aspect}
+                        {clip.durationSeconds > 0 ? ` · ${clipLength(clip.durationSeconds)}` : ''}
+                      </span>
+                    </div>
                   </td>
                   <td className="n">
                     {clip.kind === 'big_win' && clip.bet && clip.payout ? (
@@ -154,7 +154,7 @@ function Section({
                   <td className="n" style={{ color: 'var(--muted)' }}>
                     {dateShort(clip.occurredAt)}
                   </td>
-                  <td style={{ textAlign: 'right' }}>
+                  <td className="acts">
                     <ClipRowActions
                       id={clip.id}
                       title={clip.title}
