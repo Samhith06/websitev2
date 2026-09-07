@@ -1729,6 +1729,13 @@ nav.mainnav a.on::after {
   line-height: 1.1;
 }
 
+/* Total wagered sits beside the prize pool at the same size, so it takes the
+   blue rather than the gold. Two gold figures side by side read as two pots,
+   and only one of them is money anybody is being paid. */
+.lb-head .pool.total {
+  color: var(--blue);
+}
+
 .cd-mini {
   display: flex;
   gap: 7px;

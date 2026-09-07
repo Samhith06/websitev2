@@ -36,6 +36,21 @@ export default async function LeaderboardPage() {
   const pot = period ? potOf(period.tiers) : 0;
   const windowLabel = period ? periodLabel(period.startsAt, period.endsAt) : '';
 
+  /**
+   * Everything wagered under the code this period, summed from the same rows
+   * the table below is printed from — so the headline figure can never
+   * disagree with the column it is the total of.
+   *
+   * Razed caps a page at 100 rows and `fetchRazedLeaderboard` stops at that
+   * many, so on a month with more referred players than that this is the sum
+   * of the board rather than the sum of the month. It says which it is instead
+   * of rounding the difference away: a total quietly missing its tail is the
+   * same failure as a board that stops at position 100.
+   */
+  const totalWagered = rows.reduce((sum, row) => sum + row.wagered, 0);
+  const partialTotal = feed?.ok === true && feed.truncated;
+  const playersInWindow = feed?.ok === true ? feed.total : rows.length;
+
   const [first, second, third] = rows;
   const rest = rows.slice(3);
 
@@ -62,6 +77,17 @@ export default async function LeaderboardPage() {
               {period.tiers.length
                 ? `Top ${period.tiers.length} paid · tipped directly by Razed`
                 : 'No prize tiers set for this period yet.'}
+            </div>
+          </div>
+          <div>
+            <div className="eyebrow">Total wagered</div>
+            <div className="pool total">{rows.length ? money(totalWagered) : '—'}</div>
+            <div className="small muted">
+              {rows.length === 0
+                ? 'Nothing to total until the board reads.'
+                : partialTotal
+                  ? `Top ${rows.length} of ${playersInWindow} players · the tail is not counted here`
+                  : `Across ${rows.length} player${rows.length === 1 ? '' : 's'} under the code`}
             </div>
           </div>
           <div>
