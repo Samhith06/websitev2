@@ -673,6 +673,39 @@ nav.mainnav a.on::after {
   max-width: calc(100% - 16px);
 }
 
+/*
+ * Over a thumbnail the ordinary tag has no ground of its own.
+ *
+ * Elsewhere a tag sits on the card's dark panel, so a 6% wash and a gold
+ * outline are plenty. On a slot frame the thing behind it is whatever the
+ * capture happened to hold — reels lit yellow, a white paytable, a bonus
+ * screen — and the multiplier, the single most interesting figure on the
+ * wall, disappears into it. So a tag on a thumbnail brings its own backing,
+ * the same near-black the duration pill already uses, and states the
+ * multiplier in a lighter gold at a weight that carries at 10px.
+ */
+.cliptags .tag {
+  background: rgba(0, 0, 0, 0.82);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  box-shadow: 0 2px 10px -4px rgba(0, 0, 0, 0.9);
+}
+
+.cliptags .tag.gold {
+  color: #ffdd93;
+  border-color: rgba(255, 209, 102, 0.55);
+  background: rgba(0, 0, 0, 0.82);
+  font-weight: 700;
+}
+
+/* The max-win mark already carries its own solid fill — leave it alone. */
+.cliptags .tag.max {
+  background: linear-gradient(180deg, #ff4d6d, #d81f45);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: 0 2px 12px -3px rgba(255, 59, 92, 0.8);
+}
+
 .muted {
   color: var(--muted);
 }
