@@ -7,7 +7,7 @@ import { coinFlow } from '@/lib/store/coins';
 import { listTiers, nextTier, progressTo } from '@/lib/store/milestones';
 import { wagerStateFor } from '@/lib/store/wager';
 import { currentUser } from '@/lib/player';
-import { razed, socials, portraitUrl, aboutCopy } from '@/lib/mock';
+import { razed, socials, portraitUrl, aboutCopy, discordInvite } from '@/lib/mock';
 import { coins, money } from '@/lib/format';
 import { ClipCard } from '@/components/site/ClipCard';
 import { FameRail } from '@/components/site/FameRail';
@@ -148,6 +148,28 @@ export default async function HomePage() {
                 </Link>
               </>
             )}
+          </div>
+
+          {/* The invite lives in the rail rather than down beside the socials
+              because it is the one call to action on this page that asks
+              nothing of a visitor and is not a casino — someone who will never
+              sign up under the code can still take it. It should not need the
+              whole page scrolled to find. */}
+          <div className="railcard">
+            <h3>Discord</h3>
+            <p className="small muted" style={{ margin: 0 }}>
+              Giveaway pings, clip drops and the people you already recognise from chat. Free, and
+              you do not need a Razed account to be in it.
+            </p>
+            <a
+              className="btn discord sm wide"
+              style={{ marginTop: 11 }}
+              href={discordInvite}
+              target="_blank"
+              rel="noreferrer noopener"
+            >
+              Join the server →
+            </a>
           </div>
         </div>
       </div>
