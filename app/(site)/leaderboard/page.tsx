@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { archivedPeriods, currentPeriod, potOf, prizeForRank } from '@/lib/store/periods';
 import { fetchRazedLeaderboard, healthFrom, toBoardRows } from '@/lib/razed';
-import { money, relativeTime } from '@/lib/format';
+import { money, periodLabel, relativeTime } from '@/lib/format';
 import { Countdown } from '@/components/ui/Countdown';
 
 export const metadata: Metadata = {
@@ -34,13 +34,7 @@ export default async function LeaderboardPage() {
   const archive = await archivedPeriods(12);
 
   const pot = period ? potOf(period.tiers) : 0;
-  const monthLabel = period
-    ? new Date(period.startsAt).toLocaleString('en-GB', {
-        timeZone: 'UTC',
-        month: 'long',
-        year: 'numeric',
-      })
-    : '';
+  const windowLabel = period ? periodLabel(period.startsAt, period.endsAt) : '';
 
   const [first, second, third] = rows;
   const rest = rows.slice(3);
@@ -62,7 +56,7 @@ export default async function LeaderboardPage() {
       {period ? (
         <div className="lb-head">
           <div>
-            <div className="eyebrow">{monthLabel} prize pool</div>
+            <div className="eyebrow">{windowLabel} prize pool</div>
             <div className="pool">{pot ? money(pot) : '—'}</div>
             <div className="small muted">
               {period.tiers.length
@@ -189,11 +183,7 @@ export default async function LeaderboardPage() {
             </div>
           </div>
           {archive.map((month) => {
-            const label = new Date(month.startsAt).toLocaleString('en-GB', {
-              timeZone: 'UTC',
-              month: 'long',
-              year: 'numeric',
-            });
+            const label = periodLabel(month.startsAt, month.endsAt);
             const standings = month.frozenStandings ?? [];
             const winner = standings[0];
             return (

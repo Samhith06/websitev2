@@ -2,7 +2,7 @@ import { currentPeriod, potOf, prizeForRank } from '@/lib/store/periods';
 import { fetchRazedLeaderboard, toBoardRows } from '@/lib/razed';
 import { devBypass, roleFor } from '@/lib/admin';
 import { auth } from '@/auth';
-import { money } from '@/lib/format';
+import { money, periodLabel } from '@/lib/format';
 import { FreezeMonthButton } from '@/components/admin/AdminButtons';
 import { OpenPeriod, PeriodControls, PrizeEditor } from '@/components/admin/PeriodEditor';
 
@@ -36,8 +36,10 @@ export default async function AdminLeaderboardPage() {
     : [];
 
   if (!period) {
+    // The current calendar month, as the default that usually needs no change.
     const now = new Date();
-    const month = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+    const first = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const last = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0));
     return (
       <>
         <div className="sec-head">
@@ -51,7 +53,10 @@ export default async function AdminLeaderboardPage() {
           </div>
         </div>
         {isOwner ? (
-          <OpenPeriod defaultMonth={month} />
+          <OpenPeriod
+            defaultStart={first.toISOString().slice(0, 10)}
+            defaultEnd={last.toISOString().slice(0, 10)}
+          />
         ) : (
           <div className="emptyq">No monthly board is open. Only Matty can open one.</div>
         )}
@@ -59,21 +64,17 @@ export default async function AdminLeaderboardPage() {
     );
   }
 
-  const monthLabel = new Date(period.startsAt).toLocaleString('en-GB', {
-    timeZone: 'UTC',
-    month: 'long',
-    year: 'numeric',
-  });
+  const windowLabel = periodLabel(period.startsAt, period.endsAt);
   const totalWagered = rows.reduce((sum, r) => sum + r.wagered, 0);
 
   return (
     <>
       <div className="sec-head">
         <div>
-          <span className="eyebrow">{monthLabel} · live</span>
+          <span className="eyebrow">{windowLabel} · live</span>
           <h1>Leaderboard</h1>
           <div className="sh-sub">
-            Standings are read-only from Razed. Prizes stay editable until the month freezes.
+            Standings are read-only from Razed. Prizes stay editable until the board freezes.
           </div>
         </div>
         {isOwner ? <FreezeMonthButton /> : null}
@@ -145,7 +146,8 @@ export default async function AdminLeaderboardPage() {
       {isOwner ? (
         <PeriodControls
           periodId={period.id}
-          month={period.startsAt.slice(0, 7)}
+          startsAt={period.startsAt.slice(0, 10)}
+          endsAt={period.endsAt.slice(0, 10)}
           frozen={period.frozenAt != null}
         />
       ) : null}

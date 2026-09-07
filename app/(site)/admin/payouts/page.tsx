@@ -1,6 +1,6 @@
 import { pendingPayouts } from '@/lib/store/milestones';
 import { archivedPeriods, frozenPeriod } from '@/lib/store/periods';
-import { dateTime, money } from '@/lib/format';
+import { dateTime, money, periodLabel } from '@/lib/format';
 import { ClaimRow } from '@/components/admin/QueueRows';
 import { CopyOne, CopyPayoutList } from '@/components/admin/PayoutList';
 
@@ -87,12 +87,7 @@ export default async function PayoutsPage() {
           >
             <div>
               <h2 style={{ fontSize: 15, marginBottom: 3 }}>
-                {new Date(board.startsAt).toLocaleString('en-GB', {
-                  timeZone: 'UTC',
-                  month: 'long',
-                  year: 'numeric',
-                })}{' '}
-                leaderboard
+                {periodLabel(board.startsAt, board.endsAt)} leaderboard
               </h2>
               <div className="small muted">
                 {board.frozenAt ? `Frozen ${dateTime(board.frozenAt)} · ` : ''}standings are

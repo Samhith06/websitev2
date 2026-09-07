@@ -21,23 +21,31 @@ function Note({ note }: { note: { ok: boolean; text: string } | null }) {
 }
 
 /**
- * Opening a month.
+ * Opening a board.
  *
- * The month picker defaults to the current calendar month because that is
- * almost always what is wanted, and the dates are derived in UTC to match what
- * the site tells members — a board whose window disagrees with the copy would
- * pay the wrong people.
+ * The dates default to the current calendar month because that is almost
+ * always what is wanted, but they are two ordinary date fields — a fortnight
+ * promo, or a season that runs to the 20th, is the same form. They are read in
+ * UTC to match what the site tells members: a board whose window disagrees
+ * with the copy would pay the wrong people.
  */
-export function OpenPeriod({ defaultMonth }: { defaultMonth: string }) {
+export function OpenPeriod({
+  defaultStart,
+  defaultEnd,
+}: {
+  defaultStart: string;
+  defaultEnd: string;
+}) {
   const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
   const [pending, start] = useTransition();
 
   return (
     <div className="card">
-      <h2 style={{ fontSize: 15, marginBottom: 4 }}>Open a monthly board</h2>
+      <h2 style={{ fontSize: 15, marginBottom: 4 }}>Open a board</h2>
       <p className="small muted" style={{ marginBottom: 14 }}>
-        The window is the calendar month in UTC, which is what the leaderboard tells members. Only
-        one monthly board can be open at a time.
+        The window is whatever dates you set — a calendar month, a fortnight, anything else. Both
+        are read in UTC and the end date counts in full, so a board ending on the 30th includes
+        everything wagered on the 30th. Only one board can be open at a time.
       </p>
 
       <form
@@ -50,13 +58,25 @@ export function OpenPeriod({ defaultMonth }: { defaultMonth: string }) {
         style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}
       >
         <div className="field" style={{ margin: 0 }}>
-          <label htmlFor="month">Month</label>
+          <label htmlFor="startsAt">Starts</label>
           <input
-            id="month"
+            id="startsAt"
             className="inp"
-            type="month"
-            name="month"
-            defaultValue={defaultMonth}
+            type="date"
+            name="startsAt"
+            defaultValue={defaultStart}
+            required
+          />
+        </div>
+
+        <div className="field" style={{ margin: 0 }}>
+          <label htmlFor="endsAt">Ends</label>
+          <input
+            id="endsAt"
+            className="inp"
+            type="date"
+            name="endsAt"
+            defaultValue={defaultEnd}
             required
           />
         </div>
@@ -275,11 +295,13 @@ export function PrizeEditor({
  */
 export function PeriodControls({
   periodId,
-  month,
+  startsAt,
+  endsAt,
   frozen,
 }: {
   periodId: number;
-  month: string;
+  startsAt: string;
+  endsAt: string;
   frozen: boolean;
 }) {
   const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
@@ -303,7 +325,7 @@ export function PeriodControls({
       <h2 style={{ fontSize: 15, marginBottom: 4 }}>Board window</h2>
       <p className="small muted" style={{ marginBottom: 14 }}>
         Moving the window changes which dates are sent to Razed, so the standings re-read straight
-        away. Possible until the month is frozen.
+        away. Possible until the board is frozen.
       </p>
 
       <form
@@ -317,8 +339,26 @@ export function PeriodControls({
       >
         <input type="hidden" name="periodId" value={periodId} />
         <div className="field" style={{ margin: 0 }}>
-          <label htmlFor="period-month">Month</label>
-          <input id="period-month" className="inp" type="month" name="month" defaultValue={month} />
+          <label htmlFor="period-starts">Starts</label>
+          <input
+            id="period-starts"
+            className="inp"
+            type="date"
+            name="startsAt"
+            defaultValue={startsAt}
+            required
+          />
+        </div>
+        <div className="field" style={{ margin: 0 }}>
+          <label htmlFor="period-ends">Ends</label>
+          <input
+            id="period-ends"
+            className="inp"
+            type="date"
+            name="endsAt"
+            defaultValue={endsAt}
+            required
+          />
         </div>
         <button className="btn sm" disabled={pending} style={{ marginBottom: 2 }}>
           {pending ? 'Saving…' : 'Move window'}

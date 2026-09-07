@@ -5,7 +5,7 @@ import { auth } from '@/auth';
 import { devBypass, roleFor, type AdminRole } from '@/lib/admin';
 import { record as record_ } from '@/lib/store/audit';
 import { InsufficientCoins, balanceOf, record } from '@/lib/store/coins';
-import { coins } from '@/lib/format';
+import { coins, isWholeCalendarMonth } from '@/lib/format';
 import { approveLink, rejectLink } from '@/lib/store/razed-links';
 import {
   TierInUse,
@@ -288,6 +288,21 @@ export async function syncRazed(): Promise<Outcome> {
  * rows — so a later restatement by Razed cannot move a board somebody has
  * already been paid against.
  */
+/**
+ * What a frozen board's Razed snapshot is filed under.
+ *
+ * A board covering a whole calendar month is keyed by that month, because
+ * `YYYY-MM` is the key the badge rules read as "wagered during a month". Any
+ * other window is keyed by its dates instead: filing a fortnight under
+ * "2026-09" would let a rule asking for a month's wager quietly answer with
+ * half of one, and the rules already ignore keys that are not months.
+ */
+function snapshotKey(startsAt: string, endsAt: string): string {
+  return isWholeCalendarMonth(startsAt, endsAt)
+    ? startsAt.slice(0, 7)
+    : `${startsAt.slice(0, 10)}_${endsAt.slice(0, 10)}`;
+}
+
 export async function freezeMonth(): Promise<Outcome> {
   const who = await staff('owner');
   if (!who) return DENIED;
@@ -337,7 +352,7 @@ export async function freezeMonth(): Promise<Outcome> {
   // The snapshot is kept alongside the frozen standings so the raw figures
   // behind the archive survive too.
   await syncPeriod(
-    `${period.startsAt.slice(0, 7)}`,
+    snapshotKey(period.startsAt, period.endsAt),
     period.startsAt.slice(0, 10),
     period.endsAt.slice(0, 10),
   );
@@ -1133,32 +1148,68 @@ export async function saveTierForm(formData: FormData): Promise<void> {
 /* -------------------------------------------------------------------------- */
 
 /**
- * Open a monthly board.
+ * The window a board covers, read from two date fields.
  *
- * The dates are the calendar month in UTC, because that is what the site tells
- * members ("midnight UTC on the 1st") and a board whose window disagrees with
- * the copy would pay the wrong people. `copyTiers` carries the previous
- * month's prize ladder over, so opening September is one click rather than ten.
+ * Both are read in UTC, because UTC is what gets sent to Razed as `from`/`to`
+ * and a window that drifts with the server's timezone would pay the wrong
+ * people. The end date is inclusive of its own day — a board ending on the
+ * 30th is expected to count everything wagered on the 30th — so it becomes the
+ * last second of that date rather than its opening midnight.
+ */
+function windowFromForm(
+  formData: FormData,
+): { ok: true; startsAt: Date; endsAt: Date } | { ok: false; error: string } {
+  const startValue = String(formData.get('startsAt') ?? '').trim();
+  const endValue = String(formData.get('endsAt') ?? '').trim();
+
+  // <input type="date"> gives YYYY-MM-DD.
+  const shape = /^\d{4}-\d{2}-\d{2}$/;
+  if (!shape.test(startValue) || !shape.test(endValue)) {
+    return { ok: false, error: 'Pick a start date and an end date.' };
+  }
+
+  const startsAt = new Date(`${startValue}T00:00:00.000Z`);
+  const endsAt = new Date(`${endValue}T23:59:59.000Z`);
+  if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime())) {
+    return { ok: false, error: 'Those dates could not be read.' };
+  }
+  // A month of 13 is invalid outright, but a day that does not exist is not:
+  // "2026-02-31" parses happily as 3 March. Reading the date back out is what
+  // catches that, so a board can never open on a window a couple of days from
+  // the one that was asked for.
+  if (
+    startsAt.toISOString().slice(0, 10) !== startValue ||
+    endsAt.toISOString().slice(0, 10) !== endValue
+  ) {
+    return { ok: false, error: 'Those dates could not be read.' };
+  }
+  if (endsAt <= startsAt) {
+    return { ok: false, error: 'The end date has to come after the start date.' };
+  }
+  return { ok: true, startsAt, endsAt };
+}
+
+/**
+ * Open a board.
+ *
+ * The window is whatever start and end dates are given, not a calendar month:
+ * a fortnight promo, a season that runs to the 20th, and the ordinary month are
+ * all the same form. Whatever is chosen is what gets sent to Razed and what the
+ * public board prints, so the copy and the payout can never disagree.
+ * `copyTiers` carries the previous board's prize ladder over, so opening the
+ * next one is one click rather than ten.
  *
  * Only one board of a type may be open at once — the store refuses a second,
- * which is what stops two overlapping months both claiming to be "this month".
+ * which is what stops two overlapping windows both claiming to be "the board".
  */
 export async function openMonthlyPeriod(formData: FormData): Promise<Outcome> {
   const who = await staff('owner');
   if (!who) return DENIED;
 
-  const monthValue = String(formData.get('month') ?? '').trim();
   const copyTiers = formData.get('copyTiers') === 'on';
-
-  // <input type="month"> gives YYYY-MM.
-  const match = /^(\d{4})-(\d{2})$/.exec(monthValue);
-  if (!match) return { ok: false, error: 'Pick a month.' };
-
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const startsAt = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0));
-  // The last instant of the month, so the window is inclusive of its final day.
-  const endsAt = new Date(Date.UTC(year, month, 1, 0, 0, 0) - 1000);
+  const window = windowFromForm(formData);
+  if (!window.ok) return { ok: false, error: window.error };
+  const { startsAt, endsAt } = window;
 
   try {
     const period = await createPeriod({
@@ -1268,15 +1319,11 @@ export async function setPeriodDates(formData: FormData): Promise<Outcome> {
   if (!who) return DENIED;
 
   const periodId = Number(formData.get('periodId'));
-  const monthValue = String(formData.get('month') ?? '').trim();
+  if (!Number.isInteger(periodId)) return { ok: false, error: 'Unknown period.' };
 
-  const match = /^(\d{4})-(\d{2})$/.exec(monthValue);
-  if (!Number.isInteger(periodId) || !match) return { ok: false, error: 'Pick a month.' };
-
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const startsAt = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0));
-  const endsAt = new Date(Date.UTC(year, month, 1, 0, 0, 0) - 1000);
+  const window = windowFromForm(formData);
+  if (!window.ok) return { ok: false, error: window.error };
+  const { startsAt, endsAt } = window;
 
   try {
     await updatePeriodDates(periodId, startsAt.toISOString(), endsAt.toISOString());

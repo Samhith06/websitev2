@@ -88,6 +88,58 @@ export function dateRange(fromIso: string, toIso: string): string {
   return `${f} – ${t}`;
 }
 
+/**
+ * Whether a window is exactly one calendar month in UTC.
+ *
+ * A board's window is stored as two instants, and the end is the last second
+ * of its final day, so "September" arrives as 1 Sep 00:00:00 → 30 Sep 23:59:59
+ * rather than as a month at all. This recognises that shape, which is what
+ * lets a whole month keep its name while a fortnight is shown as its dates.
+ */
+export function isWholeCalendarMonth(fromIso: string, toIso: string): boolean {
+  const from = new Date(fromIso);
+  const to = new Date(toIso);
+  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) return false;
+  if (from.getUTCDate() !== 1) return false;
+  if (from.getUTCHours() || from.getUTCMinutes() || from.getUTCSeconds()) return false;
+
+  const nextMonth = Date.UTC(from.getUTCFullYear(), from.getUTCMonth() + 1, 1);
+  return to.getTime() >= nextMonth - 1000 && to.getTime() < nextMonth;
+}
+
+/**
+ * What to call a leaderboard window.
+ *
+ * Boards are usually calendar months and read best as "September 2026", but the
+ * window is a decision rather than a clock — a two-week promo, a month that
+ * opens on the 5th — and naming a fortnight after the month it starts in would
+ * label a board with a period it does not cover. So the month name is used only
+ * when the window really is that whole month, and every other window is shown
+ * as the dates people actually competed over.
+ */
+export function periodLabel(fromIso: string, toIso: string): string {
+  const from = new Date(fromIso);
+  const to = new Date(toIso);
+  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) return '';
+
+  if (isWholeCalendarMonth(fromIso, toIso)) {
+    return from.toLocaleString('en-GB', { ...UTC, month: 'long', year: 'numeric' });
+  }
+
+  const sameYear = from.getUTCFullYear() === to.getUTCFullYear();
+  const sameMonth = sameYear && from.getUTCMonth() === to.getUTCMonth();
+  const start = from.toLocaleDateString('en-GB', {
+    ...UTC,
+    day: 'numeric',
+    ...(sameMonth ? {} : { month: 'short' }),
+    ...(sameYear ? {} : { year: 'numeric' }),
+  });
+  const end = to.toLocaleDateString('en-GB', {
+    ...UTC, day: 'numeric', month: 'short', year: 'numeric',
+  });
+  return `${start} – ${end}`;
+}
+
 export function dateTime(iso: string): string {
   return `${new Date(iso).toLocaleString('en-GB', {
     ...UTC, day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false,

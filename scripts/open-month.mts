@@ -1,14 +1,19 @@
 /**
- * Opens the current month's leaderboard board, with the design's prize ladder.
+ * Opens a leaderboard board, with the design's prize ladder.
  *
  * The same store functions the admin screen calls, so this goes through the
  * same validation — including the refusal to open a second board while one is
  * already open. It exists because the admin screen needs a Discord owner
  * session, which a script cannot have.
  *
+ * The window defaults to the current calendar month, and two dates override it
+ * so a promo that does not line up with a month can be opened here too. The end
+ * date counts in full, matching the admin form.
+ *
  * Every amount here is editable afterwards from /admin/leaderboard.
  *
  *   railway run npm run open:month
+ *   railway run npm run open:month -- 2026-09-05 2026-09-19
  */
 import { createPeriod, currentPeriod, potOf, upsertTier } from '../lib/store/periods';
 import { money } from '../lib/format';
@@ -40,9 +45,26 @@ const now = new Date();
 const year = now.getUTCFullYear();
 const month = now.getUTCMonth();
 
-// The calendar month in UTC — what the site tells members the window is.
-const startsAt = new Date(Date.UTC(year, month, 1, 0, 0, 0));
-const endsAt = new Date(Date.UTC(year, month + 1, 1, 0, 0, 0) - 1000);
+const [fromArg, toArg] = process.argv.slice(2);
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+if ((fromArg || toArg) && !(DATE.test(fromArg ?? '') && DATE.test(toArg ?? ''))) {
+  console.error('Give both dates as YYYY-MM-DD, or neither for the current month.');
+  process.exit(1);
+}
+
+// Both ends in UTC — what the site tells members the window is. Without
+// arguments that is the calendar month, which is the usual board.
+const startsAt = fromArg
+  ? new Date(`${fromArg}T00:00:00.000Z`)
+  : new Date(Date.UTC(year, month, 1, 0, 0, 0));
+const endsAt = toArg
+  ? new Date(`${toArg}T23:59:59.000Z`)
+  : new Date(Date.UTC(year, month + 1, 1, 0, 0, 0) - 1000);
+
+if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime())) {
+  console.error('Those dates could not be read.');
+  process.exit(1);
+}
 
 const period = await createPeriod({
   type: 'monthly',
