@@ -44,6 +44,86 @@ const emptyBets = (n: number): Bet[] =>
 
 const betTotal = (b: Bet) => b.main + b.pairs + b.plusThree;
 
+/* -------------------------------------------------------------------------- */
+/* The deal, a card at a time                                                 */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The server settles as much of a round as it can in one request — the opening
+ * deal is four to eight cards, and a stand runs the dealer's whole turn — but
+ * landing all of them in one frame throws the round away in that frame. A
+ * dealer does not do that, and neither does this: the answer arrives whole and
+ * is then put on the felt one card at a time, in the order it was dealt.
+ *
+ * A pile is one place a card can land: the dealer, or one hand at one seat.
+ * Split hands are separate piles, which is what lets a split deal its two new
+ * second cards rather than having them appear already there.
+ */
+const DEALER = 'dealer';
+const pileOf = (seat: number, hand: number) => `${seat}:${hand}`;
+
+/** How many cards each pile in a round actually holds. */
+function pileSizes(state: RoundState): Record<string, number> {
+  const sizes: Record<string, number> = { [DEALER]: state.dealer.length };
+  state.seats.forEach((seat, s) =>
+    seat.hands.forEach((hand, h) => {
+      sizes[pileOf(s, h)] = hand.cards.length;
+    }),
+  );
+  return sizes;
+}
+
+/** One thing landing: a card onto a pile, or the hole card turning over. */
+type Step = { pile: string; slow?: boolean } | { flip: true };
+
+/**
+ * What has to happen to get from what is face up to what the server says.
+ *
+ * The opening cards go round the table the way a dealer's hand does — one to
+ * every seat, one to the dealer, then round again — rather than filling each
+ * hand before starting the next. Everything after the dealer's two is the
+ * dealer's own draw, and that waits behind the hole card, because the hole
+ * turning over is the moment the round is decided.
+ */
+function dealSteps(state: RoundState, from: Record<string, number>, flip: boolean): Step[] {
+  const piles = state.seats.flatMap((seat, s) =>
+    seat.hands.map((hand, h) => ({
+      pile: pileOf(s, h),
+      up: from[pileOf(s, h)] ?? 0,
+      all: hand.cards.length,
+    })),
+  );
+  const dealerUp = from[DEALER] ?? 0;
+  const steps: Step[] = [];
+
+  const rounds = piles.reduce((most, p) => Math.max(most, p.all), 0);
+  for (let r = 0; r < rounds; r += 1) {
+    for (const p of piles) if (p.all > r && p.up <= r) steps.push({ pile: p.pile });
+    if (r < 2 && state.dealer.length > r && dealerUp <= r) steps.push({ pile: DEALER });
+  }
+
+  if (flip) steps.push({ flip: true });
+  for (let i = Math.max(dealerUp, 2); i < state.dealer.length; i += 1) {
+    steps.push({ pile: DEALER, slow: true });
+  }
+  return steps;
+}
+
+/**
+ * How long to wait before each one.
+ *
+ * The opening cards are dealt, not drawn, so they go at a steady clip. The
+ * pause before the hole turns is the longest in the game because it is the
+ * only moment where everything is still open, and the dealer's draws after it
+ * are slower than the deal for the same reason: each one can end the round.
+ */
+const paceOf = (step: Step) => ('flip' in step ? 620 : step.slow ? 540 : 300);
+
+/** Anyone who has asked their system to stop moving things gets it at once. */
+const motionOff = () =>
+  typeof window !== 'undefined' &&
+  Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
+
 /**
  * Blackjack, rebuilt after tester feedback.
  *
@@ -71,9 +151,12 @@ const betTotal = (b: Bet) => b.main + b.pairs + b.plusThree;
  *     cyan for interface, gold for money, green and red for outcomes, mono for
  *     every figure.
  *
- *   • **Feedback.** Cards deal in one at a time, stakes bump when they change,
- *     the balance pulses when it moves, the hand to act is ringed and labelled,
- *     and every hand states its own result.
+ *   • **Feedback.** Cards land one at a time in the order they were dealt —
+ *     round the table, then the dealer, and the dealer's hole card turning
+ *     last — with the result, the payout and the balance all held back until
+ *     it does. Stakes bump when they change, the balance pulses when it moves,
+ *     the hand to act is ringed and labelled, and every hand states its own
+ *     result.
  *
  * Insurance is still absent on purpose. At the usual 2:1 it returns 92.6%, and
  * the page promises 99%; priced fairly it is exactly neutral and only adds a
@@ -118,6 +201,41 @@ export function Blackjack({ limits = LIMITS }: { limits?: { minBet: number; maxB
 
   useEffect(() => setSoundOn(readSoundPreference()), []);
 
+  /* ---- what is face up, which is not the same as what the server said ---- */
+
+  /** Cards face up per pile, and whether the hole card has turned. */
+  const [shown, setShown] = useState<Record<string, number>>({});
+  const [holeUp, setHoleUp] = useState(false);
+
+  // The timers run outside React, so they read and write the counts through
+  // refs: a queue built from a stale render would deal cards twice.
+  const shownRef = useRef<Record<string, number>>({});
+  const holeUpRef = useRef(false);
+  const dealTimers = useRef<Array<ReturnType<typeof setTimeout>>>([]);
+  /** Which round those counts belong to, so a new one starts from an empty
+      felt rather than from the last round's piles. */
+  const roundRef = useRef<number | null>(null);
+
+  const stopDealing = useCallback(() => {
+    dealTimers.current.forEach(clearTimeout);
+    dealTimers.current = [];
+  }, []);
+
+  useEffect(() => stopDealing, [stopDealing]);
+
+  /**
+   * Everything face up at once — a round found mid-play by a refresh, the skip
+   * button, and anyone who has asked for less motion.
+   */
+  const landAll = useCallback((data: View) => {
+    stopDealing();
+    roundRef.current = data.roundId;
+    shownRef.current = pileSizes(data.state);
+    holeUpRef.current = !data.state.holeHidden;
+    setShown(shownRef.current);
+    setHoleUp(holeUpRef.current);
+  }, [stopDealing]);
+
   /**
    * Whatever is on the table, including a hand left mid-play by a refresh.
    *
@@ -155,6 +273,9 @@ export function Blackjack({ limits = LIMITS }: { limits?: { minBet: number; maxB
       }
       setView(data);
       setError(null);
+      // A round found part-played is not being dealt now — it was dealt
+      // before the refresh — so it goes down whole.
+      landAll(data);
       // A hand left on the table by a refresh has to say so. Without this the
       // strip still reads "set a stake, then deal" over a round that is
       // already half played.
@@ -162,17 +283,50 @@ export function Blackjack({ limits = LIMITS }: { limits?: { minBet: number; maxB
     } catch {
       return retry('Could not reach the table. Nothing has been staked.');
     }
-  }, []);
+  }, [landAll]);
 
   useEffect(() => { void load(); }, [load]);
 
   // A view with no seats is the empty table, not a finished round.
   const state = view && view.state.seats.length > 0 ? view.state : null;
+
+  /**
+   * True while the answer is ahead of the felt.
+   *
+   * Read off the cards rather than kept as a flag of its own: the server's
+   * reply and the first tick of the reveal are two separate updates, and a
+   * flag set on the second one leaves a frame in between where the round is
+   * settled, the cards are not down, and every verdict on the table is
+   * showing. Derived, there is no such frame — the moment a reply arrives it
+   * is by definition ahead of what is face up.
+   */
+  const dealing = Boolean(
+    state && (
+      (shown[DEALER] ?? 0) < state.dealer.length
+      || (!state.holeHidden && !holeUp && state.dealer.length >= 2)
+      || state.seats.some((seat, s) =>
+        seat.hands.some((hand, h) => (shown[pileOf(s, h)] ?? 0) < hand.cards.length))
+    ),
+  );
+
   const settled = state?.phase === 'settled';
   const playing = state?.phase === 'playing';
-  const betting = !state || settled;
+  // A settled round whose cards are still landing is not a betting table yet:
+  // swapping the panels back to chips would announce the result over the top
+  // of the dealer's last card.
+  const betting = (!state || settled) && !dealing;
 
-  const balance = view?.balance ?? 0;
+  /**
+   * The balance the player should be looking at.
+   *
+   * The server moved it the moment the round settled, so printing it straight
+   * would announce the result while the dealer is still drawing — a jump up is
+   * a win before anybody has seen one. While the cards are coming the
+   * settlement is subtracted back out, which lands on the real figure the
+   * instant the last card does, with no snapshot to keep in step.
+   */
+  const held = dealing && settled ? view?.returned ?? 0 : 0;
+  const balance = (view?.balance ?? 0) - held;
   const staged = bets.slice(0, handCount).reduce((sum, b) => sum + betTotal(b), 0);
 
   // A hand left mid-play by a refresh has more hands on the table than the
@@ -188,15 +342,17 @@ export function Blackjack({ limits = LIMITS }: { limits?: { minBet: number; maxB
   const [balanceMoved, setBalanceMoved] = useState(false);
   useEffect(() => {
     if (!view) return;
-    publishBalance(view.balance);
-    if (previousBalance.current !== null && previousBalance.current !== view.balance) {
+    // The *held* figure: publishing the settled one mid-deal would announce
+    // the result in the page header while the cards were still coming.
+    publishBalance(balance);
+    if (previousBalance.current !== null && previousBalance.current !== balance) {
       setBalanceMoved(true);
       const timer = setTimeout(() => setBalanceMoved(false), 460);
-      previousBalance.current = view.balance;
+      previousBalance.current = balance;
       return () => clearTimeout(timer);
     }
-    previousBalance.current = view.balance;
-  }, [view]);
+    previousBalance.current = balance;
+  }, [view, balance]);
 
   /* ---------------------------------------------------------------- */
 
@@ -238,14 +394,93 @@ export function Blackjack({ limits = LIMITS }: { limits?: { minBet: number; maxB
     setLastBets(placed);
     setBets(emptyBets(MAX_SEATS));
     if (soundOn) sounds.pick();
-    announce(data);
+    land(data);
   }
 
   async function act(action: Action) {
     const data = await send({ op: 'act', action });
     if (!data) return;
     if (soundOn) (action === 'double' || action === 'split' ? sounds.quickPick(2) : sounds.draw(0));
-    announce(data);
+    land(data);
+  }
+
+  /**
+   * Put a server answer on the felt, one card at a time.
+   *
+   * Everything that would give the round away is driven off the last card
+   * landing rather than off the response: the result labels, the payout line,
+   * the balance and the sound all wait for it.
+   */
+  function land(data: View) {
+    if (motionOff()) {
+      landAll(data);
+      announce(data);
+      return;
+    }
+
+    stopDealing();
+
+    // A new round sweeps the felt: the counts held are the last round's piles,
+    // and carrying them over would leave the new cards counted as already
+    // dealt. Clearing it here rather than when the bet is sent means the last
+    // round stays readable until the new one is actually on its way down.
+    const fresh = data.roundId !== roundRef.current;
+    roundRef.current = data.roundId;
+    if (fresh) {
+      holeUpRef.current = false;
+      setHoleUp(false);
+    }
+    const from = fresh ? {} : { ...shownRef.current };
+
+    // A split turns one hand into two, each keeping a card and taking a new
+    // one. Both piles go back to a single card so the two new cards land in
+    // turn — otherwise the first hand's replacement simply appears.
+    data.state.seats.forEach((seat, s) => {
+      if (seat.hands.length > 1 && from[pileOf(s, 1)] === undefined) {
+        from[pileOf(s, 0)] = 1;
+        from[pileOf(s, 1)] = 1;
+      }
+    });
+
+    const flip = !data.state.holeHidden && !holeUpRef.current && data.state.dealer.length >= 2;
+    const steps = dealSteps(data.state, from, flip);
+
+    if (steps.length === 0) {
+      landAll(data);
+      announce(data);
+      return;
+    }
+
+    shownRef.current = from;
+    setShown(from);
+    // One card is not a deal worth narrating; a hand is.
+    if (steps.length > 1) setMessage({ text: 'Dealing.', tone: 'flat' });
+
+    let at = 0;
+    steps.forEach((step, i) => {
+      at += paceOf(step);
+      dealTimers.current.push(setTimeout(() => {
+        if ('flip' in step) {
+          holeUpRef.current = true;
+          setHoleUp(true);
+          if (soundOn) sounds.pick();
+        } else {
+          const next = { ...shownRef.current };
+          next[step.pile] = (next[step.pile] ?? 0) + 1;
+          shownRef.current = next;
+          setShown(next);
+          if (soundOn) sounds.draw(Math.min(i, 6));
+        }
+        if (i === steps.length - 1) announce(data);
+      }, at));
+    });
+  }
+
+  /** Turn the rest of it over now. */
+  function skipDeal() {
+    if (!view) return;
+    landAll(view);
+    announce(view);
   }
 
   /** What the strip says about a view. Silent, so `load` can use it too. */
@@ -391,12 +626,16 @@ export function Blackjack({ limits = LIMITS }: { limits?: { minBet: number; maxB
   if (signedOut) return <SignInToPlay game="Blackjack" />;
 
   const actions = view?.actions ?? [];
-  const dealerTotal = state
-    ? handTotal(state.holeHidden ? state.dealer.slice(0, 1) : state.dealer)
-    : 0;
+
+  // Every figure on the felt is counted off the cards that are actually face
+  // up, never off the state — otherwise a total announces a card before it
+  // lands, which is the whole thing this is meant to stop.
+  const dealerUp = state ? state.dealer.slice(0, shown[DEALER] ?? 0) : [];
+  const holeDown = Boolean(state && (state.holeHidden || !holeUp));
+  const dealerTotal = handTotal(holeDown ? dealerUp.slice(0, 1) : dealerUp);
 
   const dealLabel =
-    busy ? 'Dealing…'
+    busy || dealing ? 'Dealing…'
     : !view ? 'Loading…'
     : staged === 0 ? 'Place a bet'
     : staged > balance ? 'Not enough coins'
@@ -405,7 +644,8 @@ export function Blackjack({ limits = LIMITS }: { limits?: { minBet: number; maxB
     : `Deal · ${coins(staged)} MC`;
 
   const dealBlocked =
-    busy || !view || staged < limits.minBet || staged > balance || staged > limits.maxBet;
+    busy || dealing || !view
+    || staged < limits.minBet || staged > balance || staged > limits.maxBet;
 
   return (
     <div className="bjt">
@@ -449,21 +689,28 @@ export function Blackjack({ limits = LIMITS }: { limits?: { minBet: number; maxB
         <div className="bjt-dealer">
           <div className="bjt-who">
             Dealer
-            {state?.dealer.length ? (
+            {dealerUp.length ? (
               <span className={`bjt-total${dealerTotal > 21 ? ' bust' : ''}`}>
-                {state.holeHidden ? `${dealerTotal} +` : dealerTotal}
+                {holeDown ? `${dealerTotal} +` : dealerTotal}
               </span>
+            ) : null}
+            {/* Suspense nobody wants is just waiting, so the rest of the round
+                is always one tap away. */}
+            {dealing ? (
+              <button type="button" className="bjt-mini" onClick={skipDeal}>
+                Skip
+              </button>
             ) : null}
           </div>
 
           <div className="bjt-hold">
             {state?.dealer.length ? (
-              state.dealer.map((card, i) => (
+              dealerUp.map((card, i) => (
                 <PlayingCard
                   key={`${card.r}${card.s}-${i}`}
                   card={card}
-                  faceDown={state.holeHidden && i === 1}
-                  order={i}
+                  faceDown={holeDown && i === 1}
+                  order={dealing ? 0 : i}
                   big
                 />
               ))
@@ -494,6 +741,10 @@ export function Blackjack({ limits = LIMITS }: { limits?: { minBet: number; maxB
               active={Boolean(playing) && state?.activeSeat === i}
               activeHand={state?.activeHand ?? 0}
               bumped={bumped}
+              dealing={dealing}
+              faceUp={
+                state?.seats[i]?.hands.map((_, h) => shown[pileOf(i, h)] ?? 0) ?? []
+              }
               canCopy={handCount > 1}
               onNudge={nudge}
               onClear={clearHand}
@@ -556,19 +807,19 @@ export function Blackjack({ limits = LIMITS }: { limits?: { minBet: number; maxB
           ) : (
             <>
               {actions.includes('split') ? (
-                <button type="button" className="btn" onClick={() => act('split')} disabled={busy}>
+                <button type="button" className="btn" onClick={() => act('split')} disabled={busy || dealing}>
                   Split
                 </button>
               ) : null}
               {actions.includes('double') ? (
-                <button type="button" className="btn gold" onClick={() => act('double')} disabled={busy}>
+                <button type="button" className="btn gold" onClick={() => act('double')} disabled={busy || dealing}>
                   Double
                 </button>
               ) : null}
-              <button type="button" className="btn" onClick={() => act('stand')} disabled={busy}>
+              <button type="button" className="btn" onClick={() => act('stand')} disabled={busy || dealing}>
                 Stand
               </button>
-              <button type="button" className="btn pri" onClick={() => act('hit')} disabled={busy}>
+              <button type="button" className="btn pri" onClick={() => act('hit')} disabled={busy || dealing}>
                 Hit
               </button>
             </>
@@ -634,6 +885,8 @@ function HandPanel({
   active,
   activeHand,
   bumped,
+  dealing,
+  faceUp,
   canCopy,
   onNudge,
   onClear,
@@ -648,6 +901,10 @@ function HandPanel({
   active: boolean;
   activeHand: number;
   bumped: string | null;
+  /** True while cards are still landing anywhere on the table. */
+  dealing: boolean;
+  /** How many of each of this seat's hands are face up. */
+  faceUp: number[];
   canCopy: boolean;
   onNudge: (hand: number, spot: Spot, direction: 1 | -1) => void;
   onClear: (hand: number) => void;
@@ -686,9 +943,15 @@ function HandPanel({
     ? bet
     : { main: seat?.main ?? 0, pairs: seat?.pairs ?? 0, plusThree: seat?.plusThree ?? 0 };
 
+  // A verdict is only a verdict once the cards behind it are on the felt —
+  // a hand announcing "Win" while the dealer is still drawing is exactly the
+  // thing dealing a card at a time is meant to prevent. It stays readable
+  // afterwards, through the next round's betting, which is how a player checks
+  // what they just made.
+  const decided = !dealing;
   const results = seat?.hands.map((h) => h.result) ?? [];
-  const won = !betting && results.length > 0 && results.every((r) => r === 'win');
-  const lost = !betting && results.length > 0 && results.every((r) => r === 'lose');
+  const won = decided && !betting && results.length > 0 && results.every((r) => r === 'win');
+  const lost = decided && !betting && results.length > 0 && results.every((r) => r === 'lose');
 
   const total = betTotal(shown);
 
@@ -717,23 +980,33 @@ function HandPanel({
       <div className="bjt-cards">
         {seat?.hands.length ? (
           seat.hands.map((hand, h) => {
-            const value = handTotal(hand.cards);
-            const soft = isSoft(hand.cards) && value <= 21;
+            const cards = hand.cards.slice(0, faceUp[h] ?? 0);
+            const value = handTotal(cards);
+            const soft = isSoft(cards) && value <= 21;
             const focused = active && h === activeHand;
             return (
               <div key={h} className="bjt-split">
                 <div className="row">
-                  {hand.cards.map((card, c) => (
-                    <PlayingCard key={`${card.r}${card.s}-${c}`} card={card} order={c} />
+                  {cards.map((card, c) => (
+                    /* `order` is left at zero while the round is being dealt:
+                       the cards are already arriving one at a time, and the
+                       stagger would delay each one a second time. */
+                    <PlayingCard
+                      key={`${card.r}${card.s}-${c}`}
+                      card={card}
+                      order={dealing ? 0 : c}
+                    />
                   ))}
                 </div>
                 <div className="meta">
-                  <span
-                    className={`bjt-total${value > 21 ? ' bust' : focused ? ' focus' : soft ? ' soft' : ''}`}
-                  >
-                    {soft ? `soft ${value}` : value}
-                  </span>
-                  {hand.resultLabel ? (
+                  {cards.length ? (
+                    <span
+                      className={`bjt-total${value > 21 ? ' bust' : focused ? ' focus' : soft ? ' soft' : ''}`}
+                    >
+                      {soft ? `soft ${value}` : value}
+                    </span>
+                  ) : null}
+                  {decided && hand.resultLabel ? (
                     <span className={`bjt-res ${hand.result ?? 'lose'}`}>{hand.resultLabel}</span>
                   ) : null}
                 </div>
@@ -745,7 +1018,9 @@ function HandPanel({
         )}
       </div>
 
-      {seat?.notes.length ? (
+      {/* The side bets are read off the first two cards, so they are said once
+          those two are down and not before. */}
+      {seat?.notes.length && (faceUp[0] ?? 0) >= 2 ? (
         <div className="bjt-notes">
           {seat.notes.map((note) => (
             <span key={note} className={note.includes('+') ? 'hit' : undefined}>

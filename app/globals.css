@@ -4116,6 +4116,10 @@ footer.site a:hover {
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: var(--muted);
+  /* Held open for the skip button, which is only there while the cards are
+     coming. Without it the whole felt steps down at the start of every deal
+     and back up at the end of it. */
+  min-height: 26px;
 }
 
 .bjt-total {
