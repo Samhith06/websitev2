@@ -31,7 +31,20 @@ type Refusal = { ok: false; error: string; detail?: string };
 const CHIPS = [1, 5, 10, 25, 50] as const;
 
 type Spot = 'main' | 'pairs' | 'plusThree';
-type Bet = Record<Spot, number>;
+
+/**
+ * A stake is the chips that were put on it, in the order they went down —
+ * not a running total.
+ *
+ * Keeping the chips means the spot can show a stack rather than a figure, and
+ * that taking one back removes the chip that was actually placed rather than
+ * subtracting whatever the chip in hand happens to be now. A player who put
+ * down 25 and then switched to the 5 chip would otherwise "take back" 5 of
+ * their 25, which is not a thing that happens at a table.
+ *
+ * The server is still sent three numbers, because a stake is a number to it.
+ */
+type Bet = Record<Spot, number[]>;
 
 const SPOTS: Array<{ key: Spot; label: string; hint: string }> = [
   { key: 'main', label: 'Main', hint: 'the hand itself' },
@@ -39,10 +52,55 @@ const SPOTS: Array<{ key: Spot; label: string; hint: string }> = [
   { key: 'plusThree', label: '21+3', hint: 'your two plus the upcard' },
 ];
 
-const emptyBets = (n: number): Bet[] =>
-  Array.from({ length: n }, () => ({ main: 0, pairs: 0, plusThree: 0 }));
+const emptyBet = (): Bet => ({ main: [], pairs: [], plusThree: [] });
 
-const betTotal = (b: Bet) => b.main + b.pairs + b.plusThree;
+const emptyBets = (n: number): Bet[] => Array.from({ length: n }, emptyBet);
+
+const spotTotal = (chips: number[]) => chips.reduce((sum, c) => sum + c, 0);
+
+const betTotal = (b: Bet) =>
+  spotTotal(b.main) + spotTotal(b.pairs) + spotTotal(b.plusThree);
+
+/** What the round endpoint takes: three figures, whatever they were built from. */
+const asStake = (b: Bet) => ({
+  main: spotTotal(b.main),
+  pairs: spotTotal(b.pairs),
+  plusThree: spotTotal(b.plusThree),
+});
+
+/**
+ * The line the table opens on.
+ *
+ * It says how to bet, because nothing on screen otherwise does. The spots are
+ * dashed outlines waiting for a chip, which reads as somewhere to put one but
+ * does not say that a click is what puts it there, or that a right-click is
+ * what takes it off again.
+ */
+const OPENING_LINE =
+  'Pick a chip, then click a spot to place it — Undo or a right-click takes one back.';
+
+/** A copy that can be handed to another hand without sharing its arrays. */
+const cloneBet = (b: Bet): Bet => ({
+  main: [...b.main], pairs: [...b.pairs], plusThree: [...b.plusThree],
+});
+
+/**
+ * Which spot each chip went on, in the order they went down.
+ *
+ * A right-click lifts a chip off the spot under the cursor, which is how it
+ * is done at a table and how anybody with a mouse will do it. A phone has no
+ * right-click, and "Clear" takes the whole hand — so the last chip placed
+ * anywhere has to be liftable from one control, and that control needs to
+ * know where the last chip went. The stacks themselves cannot say: they hold
+ * what is on each spot, not the order the spots were played.
+ */
+type Placement = { hand: number; spot: Spot };
+
+/** The same list rebuilt from stakes that arrived all at once — a rebet, or a
+ *  stake copied across hands — so Undo still has something to lift. */
+const placementsOf = (list: Bet[], count: number): Placement[] =>
+  list.slice(0, count).flatMap((b, hand) =>
+    SPOTS.flatMap(({ key }) => b[key].map(() => ({ hand, spot: key }))));
 
 /* -------------------------------------------------------------------------- */
 /* The deal, a card at a time                                                 */
@@ -172,9 +230,10 @@ export function Blackjack({ limits = LIMITS }: { limits?: { minBet: number; maxB
   const [handCount, setHandCount] = useState(1);
   const [chip, setChip] = useState<number>(10);
   const [bets, setBets] = useState<Bet[]>(emptyBets(MAX_SEATS));
+  const [placements, setPlacements] = useState<Placement[]>([]);
   const [lastBets, setLastBets] = useState<Bet[] | null>(null);
   const [message, setMessage] = useState<{ text: string; tone: 'flat' | 'turn' | 'good' | 'bad' }>({
-    text: 'Set a stake on each hand you want in, then deal.',
+    text: OPENING_LINE,
     tone: 'flat',
   });
 
@@ -385,14 +444,19 @@ export function Blackjack({ limits = LIMITS }: { limits?: { minBet: number; maxB
   async function deal() {
     if (dealBlocked) return;
     keyRef.current = keyRef.current ?? `bj-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const placed = bets.slice(0, handCount).map((b) => ({ ...b }));
+    const placed = bets.slice(0, handCount).map(cloneBet);
 
-    const data = await send({ op: 'deal', bets: placed, idempotencyKey: keyRef.current });
+    const data = await send({
+      op: 'deal',
+      bets: placed.map(asStake),
+      idempotencyKey: keyRef.current,
+    });
     keyRef.current = null;
     if (!data) return;
 
     setLastBets(placed);
     setBets(emptyBets(MAX_SEATS));
+    setPlacements([]);
     if (soundOn) sounds.pick();
     land(data);
   }
@@ -486,7 +550,7 @@ export function Blackjack({ limits = LIMITS }: { limits?: { minBet: number; maxB
   /** What the strip says about a view. Silent, so `load` can use it too. */
   function describe(data: View) {
     if (data.state.seats.length === 0) {
-      setMessage({ text: 'Set a stake on each hand you want in, then deal.', tone: 'flat' });
+      setMessage({ text: OPENING_LINE, tone: 'flat' });
       return;
     }
     if (data.state.phase !== 'settled') {
@@ -516,7 +580,8 @@ export function Blackjack({ limits = LIMITS }: { limits?: { minBet: number; maxB
 
   /* ---- betting, per hand, and only ever on the hand it was asked for ---- */
 
-  function nudge(hand: number, spot: Spot, direction: 1 | -1) {
+  /** Put the chip in hand down on a spot. */
+  function place(hand: number, spot: Spot) {
     if (!betting || busy) return;
     const current = bets[hand];
 
@@ -524,56 +589,82 @@ export function Blackjack({ limits = LIMITS }: { limits?: { minBet: number; maxB
     // updater that also sets error state is run twice in development and is
     // the wrong place to make a decision anyway — it should only ever be the
     // arithmetic.
-    if (direction > 0) {
-      if (staged + chip > balance) {
-        setError('Not enough coins for that chip.');
-        return;
-      }
-      // Stopped at the chip rather than at the Deal button. Letting somebody
-      // build a 300-coin spread across five hands and only then telling them
-      // the table takes 100 means unpicking it a chip at a time.
-      if (staged + chip > limits.maxBet) {
-        setError(`The table takes at most ${limits.maxBet} MC across all hands.`);
-        return;
-      }
-      // A side bet without a main bet is not a blackjack hand, and the server
-      // refuses it — so it is refused here, before a stake is placed that
-      // would only be handed back with an error.
-      if (spot !== 'main' && current.main === 0) {
-        setError(`Hand ${hand + 1} needs a main bet before a side bet.`);
-        return;
-      }
-    } else if (current[spot] === 0) {
+    if (staged + chip > balance) {
+      setError('Not enough coins for that chip.');
+      return;
+    }
+    // Stopped at the chip rather than at the Deal button. Letting somebody
+    // build a 300-coin spread across three hands and only then telling them
+    // the table takes 100 means unpicking it a chip at a time.
+    if (staged + chip > limits.maxBet) {
+      setError(`The table takes at most ${limits.maxBet} MC across all hands.`);
+      return;
+    }
+    // A side bet without a main bet is not a blackjack hand, and the server
+    // refuses it — so it is refused here, before a chip is placed that would
+    // only be handed back with an error.
+    if (spot !== 'main' && current.main.length === 0) {
+      setError(`Hand ${hand + 1} needs a main bet before a side bet.`);
       return;
     }
 
-    const step = direction > 0 ? chip : Math.min(chip, current[spot]);
-
     setBets((prev) => {
-      const next = prev.map((b) => ({ ...b }));
-      next[hand] = { ...prev[hand], [spot]: prev[hand][spot] + step * direction };
-
-      // Taking the main bet away takes its side bets with it rather than
-      // leaving stakes the server would refuse at the deal.
-      if (spot === 'main' && next[hand].main === 0) {
-        next[hand].pairs = 0;
-        next[hand].plusThree = 0;
-      }
+      const next = prev.map(cloneBet);
+      next[hand][spot] = [...next[hand][spot], chip];
       return next;
     });
+    setPlacements((prev) => [...prev, { hand, spot }]);
 
     setError(null);
     flashBump(`${hand}:${spot}`);
     if (soundOn) sounds.pick();
   }
 
+  /** Take the top chip back off a spot — the one most recently placed. */
+  function takeBack(hand: number, spot: Spot) {
+    if (!betting || busy) return;
+    if (bets[hand][spot].length === 0) return;
+
+    setBets((prev) => {
+      const next = prev.map(cloneBet);
+      next[hand][spot] = next[hand][spot].slice(0, -1);
+
+      // Lifting the last main chip lifts its side bets with it rather than
+      // leaving stakes the server would refuse at the deal.
+      if (spot === 'main' && next[hand].main.length === 0) {
+        next[hand].pairs = [];
+        next[hand].plusThree = [];
+      }
+      return next;
+    });
+
+    setPlacements((prev) => {
+      // The most recent chip on that spot, not the most recent overall.
+      const at = prev.map((e, i) => (e.hand === hand && e.spot === spot ? i : -1)).filter((i) => i >= 0).pop();
+      const next = at === undefined ? prev : prev.filter((_, i) => i !== at);
+      // Side bets that came off with the main bet leave with it.
+      const sidesWentToo = spot === 'main' && bets[hand].main.length <= 1;
+      return sidesWentToo ? next.filter((e) => e.hand !== hand) : next;
+    });
+
+    setError(null);
+    if (soundOn) sounds.unpick();
+  }
+
+  /** Lift the last chip placed anywhere. The touch-screen right-click. */
+  function undo() {
+    const last = placements[placements.length - 1];
+    if (last) takeBack(last.hand, last.spot);
+  }
+
   function clearHand(hand: number) {
     if (!betting || busy) return;
     setBets((prev) => {
-      const next = prev.map((b) => ({ ...b }));
-      next[hand] = { main: 0, pairs: 0, plusThree: 0 };
+      const next = prev.map(cloneBet);
+      next[hand] = emptyBet();
       return next;
     });
+    setPlacements((prev) => prev.filter((e) => e.hand !== hand));
     setError(null);
   }
 
@@ -601,25 +692,33 @@ export function Blackjack({ limits = LIMITS }: { limits?: { minBet: number; maxB
     }
 
     setBets((prev) => {
-      const next = prev.map((b) => ({ ...b }));
-      for (let i = 0; i < handCount; i += 1) next[i] = { ...source };
+      const next = prev.map(cloneBet);
+      for (let i = 0; i < handCount; i += 1) next[i] = cloneBet(source);
       return next;
     });
+    // Outside the updater: an updater is run twice in development and should
+    // only ever be the arithmetic.
+    setPlacements(
+      placementsOf(Array.from({ length: handCount }, () => source), handCount),
+    );
     setError(null);
     if (soundOn) sounds.quickPick(2);
   }
 
   function clearAll() {
     setBets(emptyBets(MAX_SEATS));
+    setPlacements([]);
     setError(null);
   }
 
   function rebet() {
     if (!lastBets) return;
     const next = emptyBets(MAX_SEATS);
-    lastBets.forEach((b, i) => { next[i] = { ...b }; });
+    lastBets.forEach((b, i) => { next[i] = cloneBet(b); });
+    const count = Math.max(handCount, lastBets.length);
     setBets(next);
-    setHandCount(Math.max(handCount, lastBets.length));
+    setPlacements(placementsOf(next, count));
+    setHandCount(count);
     setError(null);
   }
 
@@ -746,7 +845,8 @@ export function Blackjack({ limits = LIMITS }: { limits?: { minBet: number; maxB
                 state?.seats[i]?.hands.map((_, h) => shown[pileOf(i, h)] ?? 0) ?? []
               }
               canCopy={handCount > 1}
-              onNudge={nudge}
+              onPlace={place}
+              onTakeBack={takeBack}
               onClear={clearHand}
               onCopyToAll={copyToAll}
             />
@@ -757,13 +857,13 @@ export function Blackjack({ limits = LIMITS }: { limits?: { minBet: number; maxB
       {/* ================================================================== */}
       <div className="bjt-bar">
         <div className="bjt-group">
-          <span className="k">Chip</span>
+          <span className="k">In hand</span>
           {CHIPS.map((c) => (
             <button
               key={c}
               type="button"
-              className="bjt-chip"
-              aria-label={`${c} coin chip`}
+              className={`bjt-chip chipc-${c}`}
+              aria-label={`Take the ${c} coin chip`}
               aria-pressed={chip === c}
               onClick={() => setChip(c)}
             >
@@ -794,6 +894,14 @@ export function Blackjack({ limits = LIMITS }: { limits?: { minBet: number; maxB
         <div className="bjt-acts">
           {betting ? (
             <>
+              <button
+                type="button"
+                className="btn ghost"
+                onClick={undo}
+                disabled={busy || placements.length === 0}
+              >
+                Undo
+              </button>
               <button type="button" className="btn ghost" onClick={clearAll} disabled={busy || staged === 0}>
                 Clear all
               </button>
@@ -888,7 +996,8 @@ function HandPanel({
   dealing,
   faceUp,
   canCopy,
-  onNudge,
+  onPlace,
+  onTakeBack,
   onClear,
   onCopyToAll,
 }: {
@@ -906,7 +1015,8 @@ function HandPanel({
   /** How many of each of this seat's hands are face up. */
   faceUp: number[];
   canCopy: boolean;
-  onNudge: (hand: number, spot: Spot, direction: 1 | -1) => void;
+  onPlace: (hand: number, spot: Spot) => void;
+  onTakeBack: (hand: number, spot: Spot) => void;
   onClear: (hand: number) => void;
   onCopyToAll: (hand: number) => void;
 }) {
@@ -935,12 +1045,13 @@ function HandPanel({
     });
   }, [active]);
 
-  // While betting the stake rows show what is being built; once a round is on
-  // the table they show what that hand actually has down. The settled hand
-  // stays in `seat` until the next deal replaces it, which is what lets a
+  // While betting the spots show the chips being placed on them; once a round
+  // is on the table they show what that hand actually has down, as a figure —
+  // the server keeps totals, not the chips they were built from. The settled
+  // hand stays in `seat` until the next deal replaces it, which is what lets a
   // player read their result while staking the next round.
-  const shown: Bet = betting
-    ? bet
+  const amounts: Record<Spot, number> = betting
+    ? { main: spotTotal(bet.main), pairs: spotTotal(bet.pairs), plusThree: spotTotal(bet.plusThree) }
     : { main: seat?.main ?? 0, pairs: seat?.pairs ?? 0, plusThree: seat?.plusThree ?? 0 };
 
   // A verdict is only a verdict once the cards behind it are on the felt —
@@ -953,7 +1064,7 @@ function HandPanel({
   const won = decided && !betting && results.length > 0 && results.every((r) => r === 'win');
   const lost = decided && !betting && results.length > 0 && results.every((r) => r === 'lose');
 
-  const total = betTotal(shown);
+  const total = amounts.main + amounts.pairs + amounts.plusThree;
 
   // Between rounds the stake rows go back to zero, which loses the one figure
   // a player wants at exactly that moment: what this hand had on it. So the
@@ -1030,42 +1141,64 @@ function HandPanel({
         </div>
       ) : null}
 
-      {/* The stakes. Named, per hand, and adjustable one chip at a time — the
-          three anonymous circles are what nobody could read. */}
+      {/*
+        The stakes. Named, per hand, and bet the way they are bet at a table:
+        the spot is the target, the chip in hand is what lands on it.
+
+        Each spot is one button rather than a figure flanked by a plus and a
+        minus. The steppers were two more things to aim at per spot — nine
+        buttons on a hand — and they made placing a bet an arithmetic exercise
+        rather than putting money down.
+      */}
       <div className="bjt-bets">
         {SPOTS.map(({ key, label, hint }) => {
-          const amount = shown[key];
+          const amount = amounts[key];
+          const chips = betting ? bet[key] : [];
           const locked = !betting || busy;
+          // A stack past six is a wall of discs in a panel this wide, so the
+          // last six show and the rest are counted.
+          const facing = chips.slice(-6);
+          const buried = chips.length - facing.length;
+
           return (
-            <div key={key} className={`bjt-bet spot-${key}`}>
-              <span className="lbl" title={hint}>
+            <button
+              key={key}
+              type="button"
+              className={`bjt-spot spot-${key}${amount === 0 ? ' empty' : ''}`}
+              title={hint}
+              disabled={locked}
+              aria-label={
+                locked
+                  ? `${label} on hand ${index + 1}: ${amount} MC`
+                  : `${label} on hand ${index + 1}: ${amount} MC. Place the ${chip} chip. `
+                    + 'Backspace takes the top chip back.'
+              }
+              onClick={() => onPlace(index, key)}
+              onContextMenu={(e) => { e.preventDefault(); onTakeBack(index, key); }}
+              onKeyDown={(e) => {
+                if (e.key !== 'Backspace' && e.key !== 'Delete') return;
+                e.preventDefault();
+                onTakeBack(index, key);
+              }}
+            >
+              <span className="lbl">
                 <s aria-hidden />
                 {label}
               </span>
+
+              <span className="stack" aria-hidden>
+                {buried > 0 ? <i className="chip more">+{buried}</i> : null}
+                {facing.map((c, i) => (
+                  <i key={`${i}-${c}`} className={`chip chipc-${c}`}>{c}</i>
+                ))}
+              </span>
+
               <span
                 className={`amt${amount === 0 ? ' zero' : ''}${bumped === `${index}:${key}` ? ' bumped' : ''}`}
               >
                 {amount === 0 ? '—' : amount}
               </span>
-              <button
-                type="button"
-                className="bjt-step"
-                aria-label={`Take ${chip} off ${label} on hand ${index + 1}`}
-                disabled={locked || amount === 0}
-                onClick={() => onNudge(index, key, -1)}
-              >
-                −
-              </button>
-              <button
-                type="button"
-                className="bjt-step"
-                aria-label={`Add ${chip} to ${label} on hand ${index + 1}`}
-                disabled={locked}
-                onClick={() => onNudge(index, key, 1)}
-              >
-                +
-              </button>
-            </div>
+            </button>
           );
         })}
       </div>
