@@ -35,15 +35,18 @@ export function UserFilters({
 
   return (
     <form ref={form} className="ufilters" action="/admin/users">
-      <div className="uf-search">
+      {/* Same label-over-control shape as the selects, and the same height —
+          a taller box beside three shorter ones is the thing that made this
+          row look thrown together. */}
+      <label className="uf-pick uf-search">
+        <span>Search</span>
         <input
-          className="inp"
+          className="inp s"
           name="q"
           defaultValue={q}
-          placeholder="Search by Discord name, Kick or Razed username, or Discord id…"
-          aria-label="Search users"
+          placeholder="Discord name, Kick or Razed username, or Discord id…"
         />
-      </div>
+      </label>
 
       <label className="uf-pick">
         <span>Show</span>
