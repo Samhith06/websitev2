@@ -4,6 +4,7 @@ import { coins } from '@/lib/format';
 import { auth } from '@/auth';
 import { devBypass, roleFor } from '@/lib/admin';
 import { ShopItemForm } from '@/components/admin/ShopItemForm';
+import { ShopItemDelete } from '@/components/admin/ShopItemDelete';
 
 export const metadata = { title: 'Store' };
 export const dynamic = 'force-dynamic';
@@ -14,13 +15,19 @@ export default async function AdminStorePage() {
 
   const [items, redeemed] = await Promise.all([
     allItems(),
-    rows<{ item_id: string; n: string }>(
-      `SELECT item_id::text, COUNT(*)::text AS n
-         FROM redemptions WHERE status <> 'rejected' GROUP BY item_id`,
+    // Two counts, because they answer different questions: `n` is what the
+    // table shows, and `orders` — rejected ones included — is what decides
+    // whether the item can still be deleted at all.
+    rows<{ item_id: string; n: string; orders: string }>(
+      `SELECT item_id::text,
+              COUNT(*) FILTER (WHERE status <> 'rejected')::text AS n,
+              COUNT(*)::text AS orders
+         FROM redemptions GROUP BY item_id`,
     ),
   ]);
 
   const counts = new Map(redeemed.map((r) => [r.item_id, Number(r.n)]));
+  const orders = new Map(redeemed.map((r) => [r.item_id, Number(r.orders)]));
   const categories = new Set(items.map((i) => i.category));
 
   return (
@@ -52,7 +59,7 @@ export default async function AdminStorePage() {
                 <th>Redeemed</th>
                 <th>Review</th>
                 <th>Status</th>
-                {isOwner ? <th style={{ textAlign: 'right' }}>Edit</th> : null}
+                {isOwner ? <th style={{ textAlign: 'right' }}>Manage</th> : null}
               </tr>
             </thead>
             <tbody>
@@ -84,7 +91,19 @@ export default async function AdminStorePage() {
                   </td>
                   {isOwner ? (
                     <td style={{ textAlign: 'right' }}>
-                      <ShopItemForm item={item} />
+                      <div
+                        style={{
+                          display: 'flex',
+                          gap: 6,
+                          alignItems: 'center',
+                          justifyContent: 'flex-end',
+                        }}
+                      >
+                        <ShopItemForm item={item} />
+                        {(orders.get(item.id) ?? 0) === 0 ? (
+                          <ShopItemDelete itemId={Number(item.id)} name={item.name} />
+                        ) : null}
+                      </div>
                     </td>
                   ) : null}
                 </tr>
@@ -97,7 +116,9 @@ export default async function AdminStorePage() {
       <p className="small muted" style={{ marginTop: 14, maxWidth: '72ch' }}>
         A rejected redemption refunds the coins through a normal ledger entry and returns the stock,
         so a member&rsquo;s history reads as &ldquo;spent, then refunded&rdquo; rather than
-        &ldquo;someone edited my balance&rdquo;.
+        &ldquo;someone edited my balance&rdquo;. An item anybody has ever bought has no Delete
+        button for the same reason: switch it off in the edit form and it leaves the store with its
+        orders intact.
       </p>
     </>
   );

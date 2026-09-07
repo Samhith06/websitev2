@@ -350,3 +350,43 @@ export async function upsertItem(input: {
     );
   }
 }
+
+export class ItemInUse extends Error {
+  constructor(public readonly orders: number) {
+    super(`That item has ${orders} order${orders === 1 ? '' : 's'} against it.`);
+    this.name = 'ItemInUse';
+  }
+}
+
+/**
+ * Remove an item outright.
+ *
+ * Only ever an item nobody has bought. A redemption keeps its own copy of the
+ * name and the cost, but it still points at the row by id, and an order whose
+ * item has vanished is an order nobody can look up when the member asks where
+ * their hoodie is. So anything with history is switched off instead — it
+ * leaves the shop and every order against it stays readable.
+ *
+ * The count is taken inside the transaction that deletes, against a locked
+ * row, so an item cannot be bought in the gap between the check and the
+ * DELETE. The foreign key would refuse that race anyway; this turns it into
+ * the sentence above rather than a constraint violation.
+ */
+export async function deleteItem(itemId: number): Promise<void> {
+  await tx(async (client) => {
+    const { rows: found } = await client.query<{ id: string }>(
+      `SELECT id::text FROM shop_items WHERE id = $1 FOR UPDATE`,
+      [itemId],
+    );
+    if (!found[0]) throw new ShopError('That item no longer exists.');
+
+    const { rows: counted } = await client.query<{ n: string }>(
+      `SELECT COUNT(*)::text AS n FROM redemptions WHERE item_id = $1`,
+      [itemId],
+    );
+    const orders = Number(counted[0]?.n ?? 0);
+    if (orders > 0) throw new ItemInUse(orders);
+
+    await client.query('DELETE FROM shop_items WHERE id = $1', [itemId]);
+  });
+}

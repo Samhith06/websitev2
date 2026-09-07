@@ -16,7 +16,13 @@ import {
   upsertTier,
 } from '@/lib/store/milestones';
 import { createRaffle, drawRaffle, setRaffleStatus } from '@/lib/store/raffles';
-import { ShopError, resolveRedemption, upsertItem } from '@/lib/store/shop';
+import {
+  ItemInUse,
+  ShopError,
+  deleteItem as deleteShopItem,
+  resolveRedemption,
+  upsertItem,
+} from '@/lib/store/shop';
 import type { ShopCategory } from '@/lib/types';
 import { syncLifetime, syncPeriod } from '@/lib/store/razed-snapshots';
 import { award, revoke } from '@/lib/store/badges';
@@ -757,6 +763,45 @@ export async function saveShopItem(formData: FormData): Promise<Outcome> {
       ? `Saved "${name}". Existing orders keep the price they were bought at.`
       : `Added "${name}" at ${coins(cost)}.${active ? '' : ' It is hidden until you switch it live.'}`,
   };
+}
+
+/**
+ * Deleting an item.
+ *
+ * Refused the moment anybody has bought it, because a redemption points at the
+ * row by id and an order whose item has gone is an order nobody can answer a
+ * question about. The button is hidden in that case too, so this refusal is the
+ * backstop rather than the explanation — and it names the alternative, which is
+ * switching the item off in the edit form.
+ */
+export async function removeShopItem(itemId: number, name: string): Promise<Outcome> {
+  const who = await staff('owner');
+  if (!who) return DENIED;
+
+  try {
+    await deleteShopItem(itemId);
+  } catch (error) {
+    if (error instanceof ItemInUse) {
+      return {
+        ok: false,
+        error: `${name} has ${error.orders} order${error.orders === 1 ? '' : 's'} against it, so it cannot be deleted. Untick "Live in the store" instead — it leaves the shop and the orders stay.`,
+      };
+    }
+    if (error instanceof ShopError) return { ok: false, error: error.message };
+    throw error;
+  }
+
+  await record_({
+    actor: who.name,
+    actorDiscordId: who.discordId,
+    action: 'shop.item.deleted',
+    target: String(itemId),
+    detail: { name },
+  });
+
+  revalidatePath('/admin/store');
+  revalidatePath('/store');
+  return { ok: true, message: `Deleted "${name}".` };
 }
 
 /* -------------------------------------------------------------------------- */
