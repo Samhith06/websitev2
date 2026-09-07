@@ -39,7 +39,14 @@ export { RANKS, SUITS, isRed, type Card, type Rank, type Suit } from './cards';
 
 export const DECKS = 6;
 export const SHOE_SIZE = DECKS * 52;
-export const MAX_SEATS = 5;
+/*
+ * Three hands, not five. Five fit the arithmetic but never fit the screen:
+ * the panels either squeezed until nothing in them could be read or scrolled
+ * so far that the hand being played was off to the right. Three is as many as
+ * a player can actually follow, and the server slices incoming bets to it, so
+ * a client asking for more simply does not get them.
+ */
+export const MAX_SEATS = 3;
 export const MAX_HANDS_PER_SEAT = 2;
 
 /** Aces count 11 here; `handTotal` demotes them as needed. */
