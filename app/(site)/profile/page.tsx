@@ -9,6 +9,7 @@ import { badgesFor } from '@/lib/store/badges';
 import { pokerHandleFor, settingsFor } from '@/lib/store/profile';
 import { claimsFor } from '@/lib/store/milestones';
 import { wagerStateFor } from '@/lib/store/wager';
+import { feedHealth } from '@/lib/store/razed-snapshots';
 import { coins, dateShort, money, relativeTime } from '@/lib/format';
 import { KickVerify } from '@/components/site/KickVerify';
 import {
@@ -36,7 +37,7 @@ export default async function ProfilePage() {
   const viewer = await currentViewer();
   if (!viewer) return <SignedOut />;
 
-  const [verification, ledger, redemptions, badges, settings, poker, claims, wager] =
+  const [verification, ledger, redemptions, badges, settings, poker, claims, wager, feed] =
     await Promise.all([
       verificationStateFor(user.id),
       ledgerFor(user.id, 40),
@@ -46,6 +47,7 @@ export default async function ProfilePage() {
       pokerHandleFor(user.id),
       claimsFor(user.id),
       wagerStateFor(user.id),
+      feedHealth(),
     ]);
 
   const pinned = badges.filter((b) => b.pinned);
@@ -192,9 +194,27 @@ export default async function ProfilePage() {
             <Stat label="Lifetime coins" value={coins(viewer.lifetimeEarned)} />
             <Stat label="Hours watched" value={String(hoursWatched)} />
             <Stat label="Multiplier" value={`${viewer.multiplier.value}×`} tone="b" />
+            {/* The age belongs next to the figure, because the figure is a
+                snapshot and the leaderboard beside it is not. Someone whose
+                wagering is all inside the current month has a lifetime total
+                barely above their monthly one, so a board read minutes later
+                can legitimately show more than this does — which looks like an
+                error until you can see that these two were read at different
+                times. */}
             <Stat
               label="Lifetime wagered"
               value={wager.lifetime == null ? '—' : money(wager.lifetime)}
+              /* Only when there is a figure to qualify. Against a dash the
+                 timestamp reads as "the feed is fine and you still get
+                 nothing", when the real reason is an unlinked account — which
+                 the form directly below this already asks for. */
+              note={
+                wager.lifetime == null
+                  ? undefined
+                  : feed.lastSyncAt
+                    ? `Read from Razed ${relativeTime(feed.lastSyncAt)}`
+                    : 'Not read from Razed yet'
+              }
             />
             <Stat label="Milestones claimed" value={String(claims.length)} />
           </div>
@@ -295,11 +315,23 @@ export default async function ProfilePage() {
   );
 }
 
-function Stat({ label, value, tone }: { label: string; value: string; tone?: 'g' | 'b' }) {
+function Stat({
+  label,
+  value,
+  tone,
+  note,
+}: {
+  label: string;
+  value: string;
+  tone?: 'g' | 'b';
+  /** A line under the figure, for when the figure needs a caveat to be read right. */
+  note?: string;
+}) {
   return (
     <div className="sbox">
       <div className="sl">{label}</div>
       <div className={`sv ${tone ?? ''}`}>{value}</div>
+      {note ? <div className="sn">{note}</div> : null}
     </div>
   );
 }

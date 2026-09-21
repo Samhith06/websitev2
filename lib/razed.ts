@@ -57,6 +57,16 @@ const MAX_TOP = 100;
  */
 const MAX_PAGES = 100;
 
+/**
+ * How long a page render may reuse an answer.
+ *
+ * Right for the leaderboard, which asks Razed on every request and would
+ * otherwise hammer it. Wrong for the snapshot sync, which writes a durable
+ * record on its own ten-minute timer and passes 0 so that it can never rebuild
+ * a snapshot out of the previous run's answers.
+ */
+const DEFAULT_REVALIDATE_SECONDS = 600;
+
 export type RazedResult =
   | {
       ok: true;
@@ -139,11 +149,18 @@ export async function fetchRazedLeaderboard({
   from,
   to,
   top = MAX_TOP,
+  revalidate = DEFAULT_REVALIDATE_SECONDS,
 }: {
   from: string;
   to: string;
   /** Rows to read in total. Requests are still paged at 100 apiece. */
   top?: number;
+  /**
+   * Seconds a cached answer stays good for. 0 reads past the cache entirely,
+   * which is what a caller writing a snapshot wants — a retry served the same
+   * cached failure is not a retry.
+   */
+  revalidate?: number;
 }): Promise<RazedResult> {
   const fetchedAt = new Date().toISOString();
   const key = process.env.RAZED_REFERRAL_KEY;
@@ -174,8 +191,11 @@ export async function fetchRazedLeaderboard({
 
       const response = await fetch(url, {
         headers: { 'X-Referral-Key': key, accept: 'application/json' },
-        // Poll every ten minutes rather than on every page view.
-        next: { revalidate: 600 },
+        // Poll every ten minutes rather than on every page view — unless the
+        // caller asked for a read that goes all the way to Razed.
+        ...(revalidate > 0
+          ? { next: { revalidate } }
+          : { cache: 'no-store' as const }),
       });
 
       if (!response.ok) {

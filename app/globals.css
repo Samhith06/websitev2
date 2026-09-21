@@ -3059,6 +3059,15 @@ nav.mainnav a.on::after {
   color: var(--blue);
 }
 
+/* A caveat under a figure — when it was read, what it does not include. Sized
+   to be findable without competing with the number it qualifies. */
+.sbox .sn {
+  margin-top: 5px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
 .verifybox {
   border: 1px dashed var(--edge-hot);
   border-radius: 12px;

@@ -34,6 +34,30 @@ const EMPTY_RUN_TO_STOP = 3;
 /** A backstop so a bad clock cannot walk the API for ever. */
 const MAX_WINDOWS = 60;
 
+/**
+ * How many times one window is read before the walk gives up on it.
+ *
+ * The walk is all-or-nothing, so every request in it is load-bearing: one 429
+ * or dropped connection anywhere in a dozen-odd sequential requests used to
+ * cost the whole cycle, and with the sync on a ten-minute timer, "the whole
+ * cycle" is how long the milestone ladder stayed frozen. The leaderboard never
+ * had this problem because it has exactly one request to lose and re-asks on
+ * the next page view.
+ */
+const WINDOW_ATTEMPTS = 3;
+
+/** Backoff between attempts on one window. Short: the walk has windows left. */
+const RETRY_BACKOFF_MS = [500, 2_000];
+
+/**
+ * Reasons worth a second attempt.
+ *
+ * `no-key` is configuration and `shape` means Razed changed its payload.
+ * Neither improves by asking again, and retrying them would only delay an
+ * error that needs a person.
+ */
+const RETRYABLE = new Set(['http', 'network']);
+
 export const LIFETIME_PERIOD = 'lifetime';
 
 function today(): string {
@@ -63,7 +87,15 @@ export type SyncOutcome =
  * throw that away.
  */
 export async function syncPeriod(period: string, from: string, to: string): Promise<SyncOutcome> {
-  const result: RazedResult = await fetchRazedLeaderboard({ from, to, top: 1000 });
+  // `revalidate: 0` for the same reason the lifetime walk uses it: this writes
+  // a durable snapshot, and a snapshot built from a cached answer is stamped
+  // fresh while carrying figures that are not.
+  const result: RazedResult = await fetchRazedLeaderboard({
+    from,
+    to,
+    top: 1000,
+    revalidate: 0,
+  });
   if (!result.ok) {
     return { ok: false, reason: result.reason, detail: result.detail };
   }
@@ -125,6 +157,41 @@ async function storeSnapshot(
   });
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Read one window, retrying what is worth retrying.
+ *
+ * Reads past the fetch cache on every attempt. A retry handed the same cached
+ * failure is not a retry, and a snapshot rebuilt from the previous run's
+ * cached answers is a fresh timestamp over unchanged figures — which is the
+ * shape of "the ladder says it synced but the number never moves".
+ */
+async function readWindow(
+  from: string,
+  to: string,
+): Promise<{ result: RazedResult; attempts: number }> {
+  let last: RazedResult = {
+    ok: false,
+    reason: 'network',
+    detail: 'The window was never attempted.',
+    fetchedAt: new Date().toISOString(),
+  };
+
+  for (let attempt = 1; attempt <= WINDOW_ATTEMPTS; attempt += 1) {
+    const result = await fetchRazedLeaderboard({ from, to, top: 1000, revalidate: 0 });
+    if (result.ok || !RETRYABLE.has(result.reason)) return { result, attempts: attempt };
+
+    last = result;
+    const backoff = RETRY_BACKOFF_MS[attempt - 1];
+    if (backoff != null) await sleep(backoff);
+  }
+
+  return { result: last, attempts: WINDOW_ATTEMPTS };
+}
+
 /**
  * Rebuild the lifetime totals.
  *
@@ -132,9 +199,14 @@ async function storeSnapshot(
  * stops once three consecutive windows come back empty — the referral code has
  * a start date and past it there is nothing to find.
  *
- * A failure part-way through aborts without writing. Storing a partial walk
- * would publish a lifetime total that is quietly too low, and someone would
- * claim a milestone against it — the one outcome worse than not syncing.
+ * A failure part-way through still aborts without writing. Storing a partial
+ * walk would publish a lifetime total that is quietly too low, and a progress
+ * bar that goes backwards is worse than one that has not moved yet.
+ *
+ * What has changed is how easily that happens. Each window is read through
+ * `readWindow`, so it now takes a window that is genuinely unreadable — rather
+ * than one unlucky response out of a dozen — to hold the ladder at its last
+ * figures for another ten minutes.
  */
 export async function syncLifetime(): Promise<SyncOutcome> {
   const totals = new Map<string, { username: string; wagered: number }>();
@@ -145,17 +217,22 @@ export async function syncLifetime(): Promise<SyncOutcome> {
   while (windows < MAX_WINDOWS && emptyRun < EMPTY_RUN_TO_STOP) {
     const start = new Date(end);
     start.setUTCDate(start.getUTCDate() - (MAX_WINDOW_DAYS - 1));
+    const from = isoDay(start);
+    const to = isoDay(end);
 
-    const result = await fetchRazedLeaderboard({
-      from: isoDay(start),
-      to: isoDay(end),
-      top: 1000,
-    });
+    const { result, attempts } = await readWindow(from, to);
 
     if (!result.ok) {
-      // `no-key` is a configuration problem, not a transient one, so it is
-      // reported as-is rather than retried across sixty windows.
-      return { ok: false, reason: result.reason, detail: result.detail };
+      // Naming the window matters. "Razed returned 500" on its own does not
+      // say whether the feed is down or one stretch of history is unreadable,
+      // and those are different problems with different fixes.
+      return {
+        ok: false,
+        reason: result.reason,
+        detail:
+          `${result.detail} (window ${from} to ${to}, ` +
+          `${attempts} attempt${attempts === 1 ? '' : 's'})`,
+      };
     }
 
     if (result.rows.length === 0) emptyRun += 1;
@@ -199,29 +276,35 @@ export async function latestSnapshot(period: string): Promise<Snapshot | null> {
 /**
  * Lifetime wagered for one Razed username, from the newest lifetime snapshot.
  *
+ * "Newest snapshot" is meant literally, and the LEFT JOIN is what makes it so.
+ * Driving from the wagers instead and taking the newest *match* reads as the
+ * same query and is not: anyone missing from the latest snapshot — a username
+ * changed on Razed, a window that came back short — would silently fall back
+ * to an older one and keep reading a figure from weeks ago, while the feed
+ * reported itself perfectly healthy. Anchoring on the snapshot row means an
+ * absence is seen as an absence rather than papered over with history.
+ *
  * Returns null — not zero — when there is no snapshot to read. A zero would
  * render as "you have wagered nothing", which is a different and wrong claim
  * from "we have not managed to ask Razed yet".
  */
 export async function lifetimeWagered(username: string | null): Promise<number | null> {
   if (!username) return null;
-  const row = await one<{ wagered: string }>(
+  const row = await one<{ wagered: string | null }>(
     `SELECT w.wagered::text
-       FROM razed_wagers w
-       JOIN razed_snapshots s ON s.id = w.snapshot_id
-      WHERE s.period = $1 AND lower(w.username) = lower($2)
+       FROM razed_snapshots s
+       LEFT JOIN razed_wagers w
+              ON w.snapshot_id = s.id AND lower(w.username) = lower($2)
+      WHERE s.period = $1
       ORDER BY s.fetched_at DESC
       LIMIT 1`,
     [LIFETIME_PERIOD, username],
   );
-  if (!row) {
-    // Present in no snapshot means they have not wagered under the code, which
-    // is a real zero — but only if we actually have a snapshot to be absent
-    // from.
-    const snapshot = await latestSnapshot(LIFETIME_PERIOD);
-    return snapshot ? 0 : null;
-  }
-  return Number(row.wagered);
+  // No row at all means there is no snapshot yet, so we cannot say anything.
+  if (!row) return null;
+  // A snapshot row with nothing joined to it is a real zero: we asked, and
+  // they were not in the answer.
+  return row.wagered == null ? 0 : Number(row.wagered);
 }
 
 /** Whether a username appears in the referral data at all, for link submission. */

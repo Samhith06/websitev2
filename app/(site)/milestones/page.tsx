@@ -3,7 +3,8 @@ import type { Metadata } from 'next';
 import { currentUser } from '@/lib/player';
 import { buildLadder, claimsFor, listTiers, nextTier, progressTo } from '@/lib/store/milestones';
 import { wagerStateFor } from '@/lib/store/wager';
-import { dateShort, money } from '@/lib/format';
+import { feedHealth } from '@/lib/store/razed-snapshots';
+import { dateShort, money, relativeTime } from '@/lib/format';
 import { ClaimButton } from '@/components/site/ClaimButton';
 
 export const metadata: Metadata = {
@@ -16,10 +17,19 @@ export const dynamic = 'force-dynamic';
 
 export default async function MilestonesPage() {
   const user = await currentUser();
-  const [tiers, wager, claims] = await Promise.all([
+  /**
+   * `feed` is the age of the figures, not of the page.
+   *
+   * The leaderboard asks Razed on every request, so its numbers are as current
+   * as the page itself. The ladder reads a stored snapshot that a background
+   * job refreshes, so `force-dynamic` re-renders the same figures until that
+   * job writes a new one — and the gap is invisible unless the page says it.
+   */
+  const [tiers, wager, claims, feed] = await Promise.all([
     listTiers(),
     wagerStateFor(user?.id ?? null),
     user ? claimsFor(user.id) : Promise.resolve([]),
+    feedHealth(),
   ]);
 
   const lifetime = wager.lifetime ?? 0;
@@ -36,7 +46,12 @@ export default async function MilestonesPage() {
         <div>
           <span className="eyebrow">Claim once, keep forever</span>
           <h1>Wager Milestones</h1>
-          <div className="sh-sub">Lifetime totals — these never reset at month end</div>
+          <div className="sh-sub">
+            Lifetime totals — these never reset at month end
+            {feed.lastSyncAt
+              ? ` · figures read from Razed ${relativeTime(feed.lastSyncAt)}`
+              : ' · figures not read from Razed yet'}
+          </div>
         </div>
       </div>
 
@@ -109,6 +124,31 @@ export default async function MilestonesPage() {
           </div>
         </div>
       )}
+
+      {/* ------------------------------------------------------------------ */}
+      {/* When the figures are old, say so                                    */}
+      {/* ------------------------------------------------------------------ */}
+      {/* Wagering that has not been read yet looks exactly like wagering that
+          did not count, and the second reading is the one people reach for.
+          Only shown to somebody with a linked username: they are the ones
+          looking at a number about themselves. */}
+      {user && wager.link && feed.stale ? (
+        <div
+          className="card"
+          style={{ marginBottom: 18, borderColor: 'rgba(255,179,71,.4)' }}
+        >
+          <div style={{ display: 'flex', gap: 13, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span className="tag warn">Figures may be behind</span>
+            <div className="small muted" style={{ flex: 1, minWidth: 220 }}>
+              {feed.lastSyncAt
+                ? `The lifetime wager data was last read from Razed ${relativeTime(
+                    feed.lastSyncAt,
+                  )}. Anything wagered since then is not counted below yet — it is not lost, and it lands on the next sync.`
+                : 'The lifetime wager data has never been read from Razed, so there is nothing for the ladder to measure against yet.'}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {/* The link state, when it is the thing standing between someone and a
           claim. Shown separately from the header so it reads as an action
