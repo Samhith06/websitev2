@@ -9,6 +9,8 @@ import {
   userIdByKickId,
 } from '@/lib/store/accounts';
 import { openWindow, streamWentLive, streamWentOffline } from '@/lib/store/presence';
+import { parseHuntCommand } from '@/lib/hunt-commands';
+import { submitGuess, submitRequest } from '@/lib/store/hunts';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -112,6 +114,8 @@ async function onChatMessage(payload: unknown): Promise<void> {
     return;
   }
 
+  await onHuntCommand(message);
+
   const code = findVerificationCode(message.content);
   if (code) {
     const outcome = await redeemVerificationCode({
@@ -136,6 +140,31 @@ async function onChatMessage(payload: unknown): Promise<void> {
   await refreshKickUsername(message.senderId, message.senderUsername);
   await applyBadges(userId, message);
   await openWindow(userId, 'chat');
+}
+
+/**
+ * `!sr` and `!gtb` for the bonus hunt. Any chatter can use them — a linked
+ * account is only needed to be paid for a winning guess.
+ *
+ * A failure here is logged and swallowed rather than thrown: the message still
+ * has to open a presence window, and a thrown error would make Kick retry the
+ * whole delivery for the sake of a slot suggestion.
+ */
+async function onHuntCommand(message: { senderId: string; senderUsername: string; content: string }) {
+  const command = parseHuntCommand(message.content);
+  if (!command) return;
+  try {
+    const sender = { kickUserId: message.senderId, kickUsername: message.senderUsername };
+    const outcome =
+      command.kind === 'request'
+        ? await submitRequest({ ...sender, query: command.slot })
+        : await submitGuess({ ...sender, amount: command.amount });
+    console.log(
+      `[kick] ${command.kind} from ${message.senderUsername}: ${outcome.ok ? outcome.detail : `refused (${outcome.reason})`}`,
+    );
+  } catch (error) {
+    console.error(`[kick] ${command.kind} from ${message.senderUsername} failed`, error);
+  }
 }
 
 /** Badge state is instant but not authoritative; the webhooks correct it. */

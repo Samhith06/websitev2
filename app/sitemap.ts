@@ -16,6 +16,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
     ['/leaderboard', 'hourly', 0.9],
     ['/milestones', 'daily', 0.8],
     ['/community', 'daily', 0.8],
+    ['/hunt', 'daily', 0.7],
+    ['/slots', 'daily', 0.6],
     ['/raffles', 'daily', 0.7],
     ['/store', 'weekly', 0.7],
     ['/games', 'weekly', 0.7],

@@ -5489,3 +5489,244 @@ footer.site a:hover {
     scroll-snap-align: start;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Bonus hunt and the slot catalog
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* A slot as one line: art, name, and a quieter second line. Used in the hunt
+   tables, the request queue and the admin picker. */
+.slotcell {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+}
+
+.slotcell img,
+.slotcell .ph {
+  width: 34px;
+  height: 45px;
+  flex: none;
+  border-radius: 6px;
+  object-fit: cover;
+  background: var(--panel-2);
+  border: 1px solid var(--edge);
+}
+
+.slotcell > span:last-child {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.slotcell b {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slotcell small {
+  color: var(--muted);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The admin type-ahead, hung under its input. */
+.slot-suggest {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  margin-top: 4px;
+  background: var(--panel-2);
+  border: 1px solid var(--edge-2);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+}
+
+.slot-suggest button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 10px;
+  background: none;
+  border: 0;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.slot-suggest button:hover,
+.slot-suggest button:focus-visible {
+  background: var(--panel);
+  outline: none;
+}
+
+.slot-suggest img,
+.slot-suggest .ph {
+  width: 26px;
+  height: 34px;
+  border-radius: 4px;
+  object-fit: cover;
+  background: var(--panel);
+  flex: none;
+}
+
+.slot-suggest span:last-child {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.slot-suggest small {
+  color: var(--muted);
+  font-size: 11.5px;
+}
+
+/* The two ways chat takes part, side by side. */
+.huntjoin {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 13px;
+  margin-bottom: 24px;
+}
+
+.huntjoin > * {
+  min-width: 0;
+}
+
+.hj-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.hj-head h3 {
+  font-size: 15px;
+}
+
+.huntjoin code,
+.sh-sub code {
+  font-family: var(--mono);
+  font-size: 0.92em;
+  color: var(--blue);
+}
+
+/* The bonus being opened right now. */
+.tw tr.huntnow td {
+  background: rgba(34, 211, 255, 0.06);
+}
+
+.reqgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.reqcard {
+  border: 1px solid var(--edge);
+  border-radius: 10px;
+  background: var(--panel);
+  padding: 9px 11px;
+}
+
+/* The catalog grid: portrait art the way casinos show it. */
+.slotgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 13px;
+}
+
+.slotgrid > * {
+  min-width: 0;
+}
+
+.slotcard {
+  border: 1px solid var(--edge);
+  border-radius: var(--r);
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.sc-art {
+  position: relative;
+  aspect-ratio: 3 / 4;
+  background: var(--panel-2);
+}
+
+.sc-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.sc-none {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--display);
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--muted-2);
+}
+
+.sc-tags {
+  position: absolute;
+  top: 7px;
+  left: 7px;
+  display: flex;
+  gap: 5px;
+}
+
+.sc-tags .tag {
+  backdrop-filter: blur(6px);
+}
+
+.sc-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 9px 11px 11px;
+  min-width: 0;
+}
+
+.sc-body b {
+  font-size: 13.5px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sc-body small {
+  color: var(--muted);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sc-body .sc-casinos {
+  color: var(--muted-2);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+@media (max-width: 480px) {
+  .slotgrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+}

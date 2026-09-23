@@ -5,7 +5,7 @@ import { auth } from '@/auth';
 import { devBypass, roleFor, type AdminRole } from '@/lib/admin';
 import { record as record_ } from '@/lib/store/audit';
 import { InsufficientCoins, balanceOf, record } from '@/lib/store/coins';
-import { coins, isWholeCalendarMonth } from '@/lib/format';
+import { coins, isWholeCalendarMonth, money } from '@/lib/format';
 import { approveLink, rejectLink } from '@/lib/store/razed-links';
 import {
   TierInUse,
@@ -55,6 +55,28 @@ import {
   upsertTier as upsertPrizeTier,
 } from '@/lib/store/periods';
 import { fetchRazedLeaderboard, toBoardRows } from '@/lib/razed';
+import {
+  HuntError,
+  addBonus,
+  createHunt,
+  dismissRequest,
+  removeBonus,
+  setGuessing,
+  setHuntStatus,
+  setPayout,
+  setRequestsOpen,
+  settleGuessing,
+  updateHunt,
+  type HuntStatus,
+} from '@/lib/store/hunts';
+import {
+  SlotError,
+  addManualSlot,
+  deleteSlot,
+  searchSlots,
+  syncCatalog,
+  type Slot,
+} from '@/lib/store/slots';
 
 export type Outcome = { ok: true; message: string } | { ok: false; error: string };
 
@@ -1496,4 +1518,248 @@ export async function adjustBalance(formData: FormData): Promise<Outcome> {
     }
     throw error;
   }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Bonus hunts                                                                */
+/* -------------------------------------------------------------------------- */
+
+/** Mods may put up a guess-the-balance prize to this size; owners, any size. */
+const MOD_GTB_PRIZE_CAP = 500;
+const MAX_HUNT_MONEY = 10_000_000;
+
+function revalidateHunt(): void {
+  revalidatePath('/admin/hunt');
+  revalidatePath('/hunt');
+}
+
+/** A money figure from a form: non-negative, at most two decimal places. */
+function moneyField(value: FormDataEntryValue | null): number | null {
+  const text = String(value ?? '').replace(/[$,\s]/g, '');
+  if (!/^\d+(\.\d{1,2})?$/.test(text)) return null;
+  const amount = Number(text);
+  return amount <= MAX_HUNT_MONEY ? amount : null;
+}
+
+/**
+ * Every hunt action has the same shape — staff check, one store call, audit,
+ * revalidate — and the same failure: a HuntError is a sentence for the mod,
+ * anything else is a bug and is rethrown.
+ */
+async function huntAction(
+  action: string,
+  target: string,
+  detail: Record<string, unknown>,
+  run: () => Promise<string>,
+): Promise<Outcome> {
+  const who = await staff();
+  if (!who) return DENIED;
+  try {
+    const message = await run();
+    await record_({ actor: who.name, actorDiscordId: who.discordId, action, target, detail });
+    revalidateHunt();
+    return { ok: true, message };
+  } catch (error) {
+    if (error instanceof HuntError) return { ok: false, error: error.message };
+    throw error;
+  }
+}
+
+export async function startHunt(formData: FormData): Promise<Outcome> {
+  const title = String(formData.get('title') ?? '').trim();
+  const startCost = moneyField(formData.get('startCost'));
+  if (!title) return { ok: false, error: 'Give the hunt a name.' };
+  if (startCost == null) return { ok: false, error: 'Enter the start balance, e.g. 1000 or 1000.50.' };
+  return huntAction('hunt.created', title, { startCost }, async () => {
+    await createHunt({ title, startCost });
+    return `"${title}" is live. Chat can !sr now.`;
+  });
+}
+
+export async function saveHunt(formData: FormData): Promise<Outcome> {
+  const huntId = Number(formData.get('huntId'));
+  const title = String(formData.get('title') ?? '').trim();
+  const startCost = moneyField(formData.get('startCost'));
+  if (!title) return { ok: false, error: 'Give the hunt a name.' };
+  if (startCost == null) return { ok: false, error: 'Enter the start balance, e.g. 1000 or 1000.50.' };
+  return huntAction('hunt.edited', String(huntId), { title, startCost }, async () => {
+    await updateHunt(huntId, { title, startCost });
+    return 'Saved.';
+  });
+}
+
+export async function moveHunt(huntId: number, next: HuntStatus): Promise<Outcome> {
+  return huntAction('hunt.status', String(huntId), { next }, async () => {
+    await setHuntStatus(huntId, next);
+    return next === 'opening'
+      ? 'Opening. Requests are closed and guessing is locked.'
+      : next === 'finished'
+        ? 'Hunt finished. Settle guess the balance to pay the winner.'
+        : 'Back to collecting.';
+  });
+}
+
+export async function toggleRequests(huntId: number, open: boolean): Promise<Outcome> {
+  return huntAction('hunt.requests', String(huntId), { open }, async () => {
+    await setRequestsOpen(huntId, open);
+    return open ? '!sr is open.' : '!sr is closed.';
+  });
+}
+
+export async function openGuessing(formData: FormData): Promise<Outcome> {
+  const who = await staff();
+  if (!who) return DENIED;
+  const huntId = Number(formData.get('huntId'));
+  const prize = Number(formData.get('prize') ?? 0);
+  if (!Number.isInteger(prize) || prize < 0 || prize > MAX_ADJUSTMENT) {
+    return { ok: false, error: 'The prize is a whole number of coins, or zero.' };
+  }
+  if (who.role !== 'owner' && prize > MOD_GTB_PRIZE_CAP) {
+    return { ok: false, error: `Prizes over ${coins(MOD_GTB_PRIZE_CAP)} MC need an owner.` };
+  }
+  return huntAction('hunt.gtb.opened', String(huntId), { prize }, async () => {
+    await setGuessing(huntId, 'open', prize);
+    return `Guessing is open${prize ? ` for ${coins(prize)} MC` : ''}. Chat types !gtb <amount>.`;
+  });
+}
+
+export async function lockGuessing(huntId: number): Promise<Outcome> {
+  return huntAction('hunt.gtb.locked', String(huntId), {}, async () => {
+    await setGuessing(huntId, 'locked');
+    return 'Guessing is locked.';
+  });
+}
+
+export async function addHuntBonus(formData: FormData): Promise<Outcome> {
+  const huntId = Number(formData.get('huntId'));
+  const bet = moneyField(formData.get('bet'));
+  const slotId = Number(formData.get('slotId')) || null;
+  const requestId = Number(formData.get('requestId')) || null;
+  const name = String(formData.get('name') ?? '').trim();
+  const provider = String(formData.get('provider') ?? '').trim();
+  if (bet == null || bet <= 0) return { ok: false, error: 'Enter the bet size, e.g. 2 or 0.40.' };
+  return huntAction('hunt.bonus.added', String(huntId), { slotId, requestId, name, bet }, async () => {
+    await addBonus({ huntId, bet, slotId, requestId, name, provider });
+    return 'Added.';
+  });
+}
+
+export async function saveBonusPayout(formData: FormData): Promise<Outcome> {
+  const bonusId = Number(formData.get('bonusId'));
+  const raw = String(formData.get('payout') ?? '').trim();
+  const payout = raw === '' ? null : moneyField(raw);
+  if (raw !== '' && payout == null) return { ok: false, error: 'Enter what it paid, e.g. 246.80.' };
+  return huntAction('hunt.bonus.payout', String(bonusId), { payout }, async () => {
+    await setPayout(bonusId, payout);
+    return payout == null ? 'Cleared.' : 'Saved.';
+  });
+}
+
+export async function deleteBonus(bonusId: number): Promise<Outcome> {
+  return huntAction('hunt.bonus.removed', String(bonusId), {}, async () => {
+    await removeBonus(bonusId);
+    return 'Removed.';
+  });
+}
+
+export async function dismissSlotRequest(requestId: number): Promise<Outcome> {
+  return huntAction('hunt.request.dismissed', String(requestId), {}, async () => {
+    await dismissRequest(requestId);
+    return 'Dismissed.';
+  });
+}
+
+/** Settlement writes its own audit row inside the payout transaction. */
+export async function settleHunt(huntId: number): Promise<Outcome> {
+  const who = await staff();
+  if (!who) return DENIED;
+  try {
+    const result = await settleGuessing(huntId, who.name);
+    revalidateHunt();
+    if (!result.winner) {
+      return {
+        ok: true,
+        message: `Final balance ${money(result.finalBalance)}. No linked account guessed, so nobody is paid.`,
+      };
+    }
+    return {
+      ok: true,
+      message: `Final balance ${money(result.finalBalance)}. ${result.winner.name} guessed ${money(result.winner.guess)}${result.paid ? ` and was paid ${coins(result.paid)} MC` : ''}.`,
+    };
+  } catch (error) {
+    if (error instanceof HuntError) return { ok: false, error: error.message };
+    throw error;
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Slot catalog                                                               */
+/* -------------------------------------------------------------------------- */
+
+/** The add-bonus picker's type-ahead. Staff only, and a handful of rows. */
+export async function findSlots(q: string): Promise<Slot[]> {
+  const who = await staff();
+  if (!who || q.trim().length < 2) return [];
+  const { slots } = await searchSlots({ q, sort: 'az', perPage: 8 });
+  return slots;
+}
+
+export async function syncSlots(): Promise<Outcome> {
+  const who = await staff();
+  if (!who) return DENIED;
+  const result = await syncCatalog();
+  if (!result.ok) return { ok: false, error: result.detail };
+  await record_({
+    actor: who.name,
+    actorDiscordId: who.discordId,
+    action: 'slots.synced',
+    detail: { seen: result.seen, total: result.total },
+  });
+  revalidatePath('/admin/slots');
+  revalidatePath('/slots');
+  return {
+    ok: true,
+    message: `Read ${coins(result.seen)} slots from BonusHunt${result.truncated ? ' (stopped at the page limit)' : ''}. The catalog holds ${coins(result.total)}.`,
+  };
+}
+
+export async function addSlot(formData: FormData): Promise<Outcome> {
+  const who = await staff();
+  if (!who) return DENIED;
+  const name = String(formData.get('name') ?? '');
+  const provider = String(formData.get('provider') ?? '');
+  const imageUrl = String(formData.get('imageUrl') ?? '').trim() || null;
+  const bonusBuy = formData.get('bonusBuy') === 'on' ? true : null;
+  try {
+    const slot = await addManualSlot({ name, provider, imageUrl, bonusBuy });
+    await record_({
+      actor: who.name,
+      actorDiscordId: who.discordId,
+      action: 'slots.added',
+      target: String(slot.id),
+      detail: { name: slot.name, provider: slot.provider },
+    });
+    revalidatePath('/admin/slots');
+    revalidatePath('/slots');
+    return { ok: true, message: `${slot.name} is in the catalog.` };
+  } catch (error) {
+    if (error instanceof SlotError) return { ok: false, error: error.message };
+    throw error;
+  }
+}
+
+export async function removeSlot(slotId: number, name: string): Promise<Outcome> {
+  const who = await staff();
+  if (!who) return DENIED;
+  await deleteSlot(slotId);
+  await record_({
+    actor: who.name,
+    actorDiscordId: who.discordId,
+    action: 'slots.removed',
+    target: String(slotId),
+    detail: { name },
+  });
+  revalidatePath('/admin/slots');
+  revalidatePath('/slots');
+  return { ok: true, message: `Removed ${name}.` };
 }

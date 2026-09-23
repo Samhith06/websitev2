@@ -1,5 +1,6 @@
 /**
- * The six primary destinations, in the order the design fixes them.
+ * The seven primary destinations. Bonus Hunt sits beside Games because on
+ * stream nights it is where chat is sent.
  *
  * The same table drives the desktop row and the mobile tab bar, which is why
  * each entry carries both a full label and a short one — "Leaderboard" does
@@ -16,6 +17,7 @@ export const NAV: NavItem[] = [
   { href: '/', label: 'Home', short: 'Home', icon: '⌂' },
   { href: '/leaderboard', label: 'Leaderboard', short: 'Board', icon: '≡' },
   { href: '/milestones', label: 'Milestones', short: 'Tiers', icon: '◆' },
+  { href: '/hunt', label: 'Bonus Hunt', short: 'Hunt', icon: '◎' },
   { href: '/games', label: 'Games', short: 'Games', icon: '⬢' },
   { href: '/raffles', label: 'Raffles', short: 'Raffles', icon: '✦' },
   { href: '/store', label: 'Store', short: 'Store', icon: '▣' },

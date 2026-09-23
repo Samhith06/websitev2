@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { NAV, activeNav } from '@/lib/nav';
 
 /**
- * The phone tab bar. Same six destinations as the desktop row, in the same
+ * The phone tab bar. Same seven destinations as the desktop row, in the same
  * order, so the two never disagree about where something lives.
  *
  * Hidden above 760px by CSS rather than by a media query in JavaScript, so it

@@ -100,6 +100,20 @@ that is boring rather than clever.
 > is still the right destination. Every rule — the streak, the hourly ceiling, the ban
 > freeze — lives in `lib/store/presence.ts`, which a worker can lift wholesale.
 
+### 4b. The slot catalog sync
+
+The bonus hunt (`/hunt`, run from `/admin/hunt`) picks slots from a catalog filled from
+BonusHunt.gg's public new-slots feed. That feed only covers the last seven days, so the
+catalog accumulates — sync it daily and it misses nothing:
+
+```
+POST https://your-domain.up.railway.app/api/slots/sync
+Authorization: Bearer YOUR_CRON_SECRET
+```
+
+Anything older than the feed (the classics) can be added by hand on `/admin/slots`. Chat's
+`!sr` still accepts a slot the catalog does not know; it is kept as typed.
+
 ### 5. Before it goes public
 
 - **Rotate the Razed key.** It has been pasted into a chat.
