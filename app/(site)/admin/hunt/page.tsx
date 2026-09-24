@@ -1,4 +1,6 @@
 import Link from 'next/link';
+import { headers } from 'next/headers';
+import { CopyButton } from '@/components/ui/CopyButton';
 import {
   bonusesFor,
   featuredHunt,
@@ -29,6 +31,7 @@ const GTB_LABEL = {
 } as const;
 
 export default async function AdminHuntPage() {
+  const origin = await siteOrigin();
   const hunt = await featuredHunt();
   const [bonuses, requests, guesses] = hunt
     ? await Promise.all([bonusesFor(hunt.id), requestsFor(hunt.id, 'pending'), guessesFor(hunt.id)])
@@ -60,6 +63,8 @@ export default async function AdminHuntPage() {
       {!hunt || (hunt.status === 'finished' && (hunt.gtbStatus === 'closed' || hunt.gtbStatus === 'settled')) ? (
         <StartHuntForm />
       ) : null}
+
+      <OverlayLinks origin={origin} />
 
       {!hunt ? (
         <div className="emptyq">No hunt yet.</div>
@@ -255,6 +260,55 @@ export default async function AdminHuntPage() {
         </>
       )}
     </>
+  );
+}
+
+/** AUTH_URL is the deployed origin; locally, whatever host served this page. */
+async function siteOrigin(): Promise<string> {
+  if (process.env.AUTH_URL) return process.env.AUTH_URL.replace(/\/+$/, '');
+  const h = await headers();
+  const host = h.get('host') ?? 'localhost:3000';
+  const proto = h.get('x-forwarded-proto') ?? (host.startsWith('localhost') ? 'http' : 'https');
+  return `${proto}://${host}`;
+}
+
+const OVERLAYS: Array<[string, string, string]> = [
+  ['Everything', '', '420 × 1080'],
+  ['Stats strip', '?panel=stats', '1200 × 90, or 420 × 170'],
+  ['Now opening', '?panel=now', '460 × 150'],
+  ['Bonus list', '?panel=bonuses&rows=10', '420 × 560'],
+  ['Guess the balance', '?panel=gtb', '420 × 130'],
+];
+
+/**
+ * The URLs to paste into OBS. Collapsed, because it is set-up-once
+ * information on a screen that is otherwise used live.
+ */
+function OverlayLinks({ origin }: { origin: string }) {
+  return (
+    <details className="card" style={{ marginBottom: 16 }}>
+      <summary style={{ cursor: 'pointer', fontWeight: 600 }}>OBS overlays</summary>
+      <p className="small muted" style={{ margin: '10px 0 12px' }}>
+        Add each as a <b>Browser</b> source in OBS at the size shown (it can be resized after). The
+        background is transparent, it updates itself every few seconds, and it shows nothing
+        between hunts.
+      </p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {OVERLAYS.map(([label, query, size]) => {
+          const url = `${origin}/overlay/hunt${query}`;
+          return (
+            <div key={label} style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              <b style={{ width: 140, fontSize: 13.5 }}>{label}</b>
+              <code className="small" style={{ flex: '1 1 260px', wordBreak: 'break-all', color: 'var(--blue)' }}>
+                {url}
+              </code>
+              <span className="small muted" style={{ width: 170 }}>{size}</span>
+              <CopyButton value={url} compact />
+            </div>
+          );
+        })}
+      </div>
+    </details>
   );
 }
 

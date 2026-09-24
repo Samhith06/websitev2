@@ -77,6 +77,10 @@ export function middleware(request: NextRequest) {
   // password becomes impossible — Discord cannot send a Basic auth header.
   if (request.nextUrl.pathname.startsWith('/api/auth/')) return NextResponse.next();
 
+  // The stream overlays too: an OBS browser source has no way to answer a
+  // password prompt, and everything they show is already on stream.
+  if (request.nextUrl.pathname.startsWith('/overlay/')) return NextResponse.next();
+
   if (!passwordMatches(request, sitePassword)) return unauthorized();
   return NextResponse.next();
 }

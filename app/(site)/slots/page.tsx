@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { catalogStats, providers as listProviders, searchSlots } from '@/lib/store/slots';
 import { coins, relativeTime } from '@/lib/format';
 import { SlotFilters } from '@/components/site/SlotFilters';
+import { SlotArt } from '@/components/site/SlotArt';
 
 export const metadata: Metadata = {
   title: 'Slot Catalog',
@@ -78,13 +79,7 @@ export default async function SlotsPage({
             return (
               <div className="slotcard" key={slot.id}>
                 <div className="sc-art">
-                  {slot.imageUrl ? (
-                    <img src={slot.imageUrl} alt={slot.name} loading="lazy" />
-                  ) : (
-                    <span className="sc-none" aria-hidden>
-                      {slot.name.slice(0, 2).toUpperCase()}
-                    </span>
-                  )}
+                  <SlotArt src={slot.imageUrl} name={slot.name} fallbackClassName="sc-none" lazy />
                   <div className="sc-tags">
                     {isNew ? <span className="tag blue">New</span> : null}
                     {slot.bonusBuy ? <span className="tag gold">Buy</span> : null}

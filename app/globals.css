@@ -5730,3 +5730,336 @@ footer.site a:hover {
     gap: 10px;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   OBS overlay — /overlay/hunt
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Transparent so the source sits over the game capture. Scoped with :has so
+   only the overlay route loses the site's background. */
+html:has(.ovl),
+body:has(.ovl) {
+  background: transparent !important;
+  min-height: 0;
+}
+
+.ovl {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+  color: var(--text);
+  font-family: var(--body);
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.ovl-card {
+  background: rgba(8, 9, 13, 0.84);
+  border: 1px solid rgba(34, 211, 255, 0.28);
+  border-radius: 12px;
+  padding: 12px 14px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+}
+
+.ovl .gold { color: var(--gold); }
+.ovl .green { color: var(--green); }
+.ovl .red { color: var(--red); }
+.ovl .blue { color: var(--blue); }
+
+.ovl-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.ovl code {
+  font-family: var(--mono);
+  color: var(--blue);
+  background: rgba(34, 211, 255, 0.1);
+  border-radius: 5px;
+  padding: 1px 6px;
+}
+
+.ovl small {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+/* Header ------------------------------------------------------------------ */
+.ovl-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+}
+
+.ovl-head b {
+  font-family: var(--display);
+  font-size: 18px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ovl-phase {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 5px;
+  border: 1px solid var(--edge-2);
+  color: var(--muted);
+}
+
+.ovl-phase.opening {
+  color: var(--blue);
+  border-color: rgba(34, 211, 255, 0.5);
+}
+
+.ovl-phase.collecting {
+  color: var(--gold);
+  border-color: rgba(255, 209, 102, 0.45);
+}
+
+/* Stats — wraps into a block in a narrow source, a strip in a wide one ---- */
+.ovl-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 10px 14px;
+}
+
+.ovl-stats > div {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ovl-stats span {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.ovl-stats b {
+  font-family: var(--mono);
+  font-size: 20px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Now opening ------------------------------------------------------------- */
+.ovl-now {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  border-color: rgba(34, 211, 255, 0.55);
+}
+
+.ovl-now-text {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.ovl-now-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ovl-now-name {
+  font-family: var(--display);
+  font-size: 22px;
+  line-height: 1.15;
+}
+
+.ovl-now-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: 6px;
+  font-size: 13.5px;
+  color: var(--muted);
+}
+
+.ovl-now-meta b {
+  color: var(--text);
+  font-family: var(--mono);
+}
+
+.ovl-cta {
+  font-size: 14px;
+  margin-top: 4px;
+}
+
+/* Slot art ---------------------------------------------------------------- */
+.ovl-art {
+  flex: none;
+  width: 30px;
+  height: 40px;
+  border-radius: 5px;
+  object-fit: cover;
+  background: var(--panel-2);
+}
+
+.ovl-art.big {
+  width: 72px;
+  height: 96px;
+  border-radius: 8px;
+}
+
+.ovl-art.ph {
+  display: grid;
+  place-items: center;
+  font-family: var(--display);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted-2);
+}
+
+.ovl-art.big.ph {
+  font-size: 22px;
+}
+
+/* Bonus list -------------------------------------------------------------- */
+.ovl-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px;
+}
+
+.ovl-row {
+  display: grid;
+  grid-template-columns: 22px 30px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 4px 6px;
+  border-radius: 7px;
+  transition: background-color 0.4s ease;
+}
+
+.ovl-row.now {
+  background: rgba(34, 211, 255, 0.14);
+  box-shadow: inset 3px 0 0 var(--blue);
+}
+
+.ovl-row.pending:not(.now) {
+  opacity: 0.62;
+}
+
+.ovl-n {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted-2);
+  text-align: right;
+}
+
+.ovl-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ovl-name b {
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ovl-name small {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ovl-x {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ovl-x small {
+  font-weight: 400;
+  font-size: 11px;
+}
+
+.ovl-x.dim { color: var(--muted); }
+.ovl-x.gold { color: var(--gold); }
+
+.ovl-x.best {
+  color: var(--gold);
+  text-shadow: 0 0 12px rgba(255, 209, 102, 0.55);
+}
+
+.ovl-more {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted-2);
+  text-align: center;
+  padding-top: 4px;
+}
+
+/* Guess the balance ------------------------------------------------------- */
+.ovl-gtb {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ovl-gtb.open {
+  border-color: rgba(61, 220, 151, 0.55);
+}
+
+.ovl-gtb.settled {
+  border-color: rgba(255, 209, 102, 0.55);
+}
+
+.ovl-gtb-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.ovl-gtb-head b {
+  font-family: var(--mono);
+}
+
+.ovl-winner {
+  display: flex;
+  flex-direction: column;
+}
+
+.ovl-winner span {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.ovl-winner b {
+  font-family: var(--display);
+  font-size: 22px;
+  color: var(--gold);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ovl-row {
+    transition: none;
+  }
+}
