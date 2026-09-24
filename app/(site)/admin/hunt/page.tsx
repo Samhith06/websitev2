@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { SlotArt } from '@/components/site/SlotArt';
 import { headers } from 'next/headers';
 import { CopyButton } from '@/components/ui/CopyButton';
 import {
@@ -150,7 +151,7 @@ export default async function AdminHuntPage() {
                         <td className="n" style={{ color: 'var(--muted)' }}>{i + 1}</td>
                         <td>
                           <div className="slotcell">
-                            {b.imageUrl ? <img src={b.imageUrl} alt="" /> : <span className="ph" />}
+                            <SlotArt src={b.imageUrl} name={b.slotName} fallbackClassName="ph" />
                             <span>
                               <b>{b.slotName}</b>
                               <small>
@@ -195,7 +196,7 @@ export default async function AdminHuntPage() {
                 requests.map((r) => (
                   <div className="qrow" key={r.id}>
                     <div className="slotcell">
-                      {r.imageUrl ? <img src={r.imageUrl} alt="" /> : <span className="ph" />}
+                      <SlotArt src={r.imageUrl} name={r.slotName ?? r.query} fallbackClassName="ph" />
                       <span>
                         <b>{r.slotName ?? r.query}</b>
                         <small>

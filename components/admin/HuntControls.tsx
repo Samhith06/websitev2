@@ -17,6 +17,7 @@ import {
   type Outcome,
 } from '@/app/(site)/admin/actions';
 import type { Slot } from '@/lib/store/slots';
+import { SlotArt } from '@/components/site/SlotArt';
 
 type Note = { ok: boolean; text: string } | null;
 
@@ -284,7 +285,7 @@ export function AddBonusForm({ huntId }: { huntId: number }) {
                     betRef.current?.focus();
                   }}
                 >
-                  {slot.imageUrl ? <img src={slot.imageUrl} alt="" /> : <span className="ph" />}
+                  <SlotArt src={slot.imageUrl} name={slot.name} fallbackClassName="ph" />
                   <span>
                     <b>{slot.name}</b>
                     <small>{slot.provider || 'Unknown provider'}</small>

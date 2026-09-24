@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { SlotArt } from '@/components/site/SlotArt';
 import {
   bonusesFor,
   featuredHunt,
@@ -161,7 +162,7 @@ export default async function HuntPage() {
                           <td className="n" style={{ color: 'var(--muted)' }}>{i + 1}</td>
                           <td>
                             <div className="slotcell">
-                              {b.imageUrl ? <img src={b.imageUrl} alt="" loading="lazy" /> : <span className="ph" />}
+                              <SlotArt src={b.imageUrl} name={b.slotName} fallbackClassName="ph" />
                               <span>
                                 <b>
                                   {b.slotName}
@@ -207,7 +208,7 @@ export default async function HuntPage() {
               <div className="reqgrid">
                 {requests.map((r) => (
                   <div className="slotcell reqcard" key={r.id}>
-                    {r.imageUrl ? <img src={r.imageUrl} alt="" loading="lazy" /> : <span className="ph" />}
+                    <SlotArt src={r.imageUrl} name={r.slotName ?? r.query} fallbackClassName="ph" />
                     <span>
                       <b>{r.slotName ?? r.query}</b>
                       <small>{r.kickUsername}</small>

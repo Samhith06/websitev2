@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { SlotArt } from '@/components/site/SlotArt';
 import { catalogStats, searchSlots } from '@/lib/store/slots';
 import { coins, dateShort, relativeTime } from '@/lib/format';
 import { AddSlotForm, RemoveSlotButton, SyncSlotsButton } from '@/components/admin/SlotControls';
@@ -78,7 +79,7 @@ export default async function AdminSlotsPage({
                 <tr key={slot.id}>
                   <td>
                     <div className="slotcell">
-                      {slot.imageUrl ? <img src={slot.imageUrl} alt="" loading="lazy" /> : <span className="ph" />}
+                      <SlotArt src={slot.imageUrl} name={slot.name} fallbackClassName="ph" />
                       <span>
                         <b>{slot.name}</b>
                         <small>
