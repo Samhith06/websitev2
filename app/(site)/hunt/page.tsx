@@ -57,7 +57,7 @@ export default async function HuntPage() {
               : hunt
                 ? `Finished ${hunt.finishedAt ? dateShort(hunt.finishedAt) : ''}. The next hunt starts on stream.`
                 : 'No hunt has run yet. The next one starts on stream.'}{' '}
-            Browse the <Link href="/slots">slot catalog</Link>.
+            Browse the <Link href="/slots">slot catalog</Link>, or follow <Link href="/bingo">slot bingo</Link>.
           </div>
         </div>
       </div>

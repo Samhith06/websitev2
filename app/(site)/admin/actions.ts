@@ -77,6 +77,18 @@ import {
   syncCatalog,
   type Slot,
 } from '@/lib/store/slots';
+import {
+  BingoError,
+  createCard,
+  dismissEntry,
+  drawTurn,
+  finishCard,
+  resolveTurn,
+  setBingoRequestsOpen,
+  skipTurn,
+  undoLastResult,
+} from '@/lib/store/bingo';
+import { BINGO_SIZES } from '@/lib/bingo';
 
 export type Outcome = { ok: true; message: string } | { ok: false; error: string };
 
@@ -1762,4 +1774,122 @@ export async function removeSlot(slotId: number, name: string): Promise<Outcome>
   revalidatePath('/admin/slots');
   revalidatePath('/slots');
   return { ok: true, message: `Removed ${name}.` };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Slot bingo                                                                 */
+/* -------------------------------------------------------------------------- */
+
+function revalidateBingo(): void {
+  revalidatePath('/admin/bingo');
+  revalidatePath('/bingo');
+}
+
+/** The bingo twin of `huntAction`: a BingoError is a sentence for the mod. */
+async function bingoAction(
+  action: string,
+  target: string,
+  detail: Record<string, unknown>,
+  run: () => Promise<string>,
+): Promise<Outcome> {
+  const who = await staff();
+  if (!who) return DENIED;
+  try {
+    const message = await run();
+    await record_({ actor: who.name, actorDiscordId: who.discordId, action, target, detail });
+    revalidateBingo();
+    return { ok: true, message };
+  } catch (error) {
+    if (error instanceof BingoError) return { ok: false, error: error.message };
+    throw error;
+  }
+}
+
+export async function startBingo(formData: FormData): Promise<Outcome> {
+  const who = await staff();
+  if (!who) return DENIED;
+  const title = String(formData.get('title') ?? '').trim();
+  const size = Number(formData.get('size'));
+  const squarePrize = Number(formData.get('squarePrize') ?? 0);
+  if (!title) return { ok: false, error: 'Give the bingo a name.' };
+  if (!(BINGO_SIZES as readonly number[]).includes(size)) return { ok: false, error: 'Pick a card size.' };
+  if (!Number.isInteger(squarePrize) || squarePrize < 0 || squarePrize > MAX_ADJUSTMENT) {
+    return { ok: false, error: 'The prize is a whole number of coins, or zero.' };
+  }
+  if (who.role !== 'owner' && squarePrize > MOD_GTB_PRIZE_CAP) {
+    return { ok: false, error: `Prizes over ${coins(MOD_GTB_PRIZE_CAP)} MC a square need an owner.` };
+  }
+  return bingoAction('bingo.created', title, { size, squarePrize }, async () => {
+    await createCard({ title, size, squarePrize });
+    return `"${title}" is live. Chat joins with !sr <slot>.`;
+  });
+}
+
+export async function toggleBingoRequests(cardId: number, open: boolean): Promise<Outcome> {
+  return bingoAction('bingo.requests', String(cardId), { open }, async () => {
+    await setBingoRequestsOpen(cardId, open);
+    return open ? '!sr is open.' : '!sr is closed.';
+  });
+}
+
+export async function drawBingo(cardId: number): Promise<Outcome> {
+  let detail: Record<string, unknown> = {};
+  return bingoAction('bingo.drawn', String(cardId), detail, async () => {
+    const draw = await drawTurn(cardId);
+    detail = Object.assign(detail, draw);
+    return `${draw.viewer} is up: ${draw.slot} on ${draw.square}.`;
+  });
+}
+
+export async function resolveBingoTurn(formData: FormData): Promise<Outcome> {
+  const turnId = Number(formData.get('turnId'));
+  const buyCost = moneyField(formData.get('buyCost'));
+  const payout = moneyField(formData.get('payout'));
+  if (buyCost == null || buyCost <= 0) return { ok: false, error: 'Enter what the bonus buy cost, e.g. 200.' };
+  if (payout == null) return { ok: false, error: 'Enter what it paid, e.g. 246.80 (0 if nothing).' };
+  return bingoAction('bingo.result', String(turnId), { buyCost, payout }, async () => {
+    const r = await resolveTurn(turnId, buyCost, payout);
+    if (r.bingo) return `BINGO! ${r.viewer} turned ${r.square} green and completed a line. End the bingo to pay out.`;
+    return r.won
+      ? `${r.square} is green for ${r.viewer}. Draw the next viewer.`
+      : `No profit — ${r.square} stays open. Draw the next viewer.`;
+  });
+}
+
+export async function skipBingoTurn(turnId: number): Promise<Outcome> {
+  return bingoAction('bingo.skipped', String(turnId), {}, async () => {
+    await skipTurn(turnId);
+    return 'Skipped. The square stays open; draw again.';
+  });
+}
+
+export async function undoBingoResult(cardId: number): Promise<Outcome> {
+  return bingoAction('bingo.undone', String(cardId), {}, async () => {
+    const square = await undoLastResult(cardId);
+    return `${square} is back in play. Record its result again.`;
+  });
+}
+
+export async function dismissBingoEntry(entryId: number): Promise<Outcome> {
+  return bingoAction('bingo.entry.dismissed', String(entryId), {}, async () => {
+    await dismissEntry(entryId);
+    return 'Removed from the pool.';
+  });
+}
+
+/** Ending writes its own audit row inside the payout transaction. */
+export async function endBingo(cardId: number): Promise<Outcome> {
+  const who = await staff();
+  if (!who) return DENIED;
+  try {
+    const r = await finishCard(cardId, who.name);
+    revalidateBingo();
+    const head = r.result === 'bingo' ? 'BINGO settled.' : 'Bingo ended without a line.';
+    const paid = r.totalPaid ? ` Paid ${coins(r.totalPaid)} MC to ${r.paidViewers} viewer${r.paidViewers === 1 ? '' : 's'}.` : '';
+    const unpaid = r.unpaid.length ? ` Not linked, so not paid: ${r.unpaid.join(', ')}.` : '';
+    return { ok: true, message: `${head} ${r.green} green square${r.green === 1 ? '' : 's'}.${paid}${unpaid}` };
+  } catch (error) {
+    if (error instanceof BingoError) return { ok: false, error: error.message };
+    throw error;
+  }
 }

@@ -11,6 +11,7 @@ import {
 import { openWindow, streamWentLive, streamWentOffline } from '@/lib/store/presence';
 import { parseHuntCommand } from '@/lib/hunt-commands';
 import { submitGuess, submitRequest } from '@/lib/store/hunts';
+import { liveCard, submitBingoRequest } from '@/lib/store/bingo';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -143,8 +144,8 @@ async function onChatMessage(payload: unknown): Promise<void> {
 }
 
 /**
- * `!sr` and `!gtb` for the bonus hunt. Any chatter can use them — a linked
- * account is only needed to be paid for a winning guess.
+ * `!sr` and `!gtb` for the bonus hunt, and `!sr` for slot bingo. Any chatter
+ * can use them — a linked account is only needed to be paid.
  *
  * A failure here is logged and swallowed rather than thrown: the message still
  * has to open a presence window, and a thrown error would make Kick retry the
@@ -155,10 +156,13 @@ async function onHuntCommand(message: { senderId: string; senderUsername: string
   if (!command) return;
   try {
     const sender = { kickUserId: message.senderId, kickUsername: message.senderUsername };
+    // While a slot bingo is running, !sr joins its pool instead of the hunt.
     const outcome =
-      command.kind === 'request'
-        ? await submitRequest({ ...sender, query: command.slot })
-        : await submitGuess({ ...sender, amount: command.amount });
+      command.kind === 'guess'
+        ? await submitGuess({ ...sender, amount: command.amount })
+        : (await liveCard())
+          ? await submitBingoRequest({ ...sender, query: command.slot })
+          : await submitRequest({ ...sender, query: command.slot });
     console.log(
       `[kick] ${command.kind} from ${message.senderUsername}: ${outcome.ok ? outcome.detail : `refused (${outcome.reason})`}`,
     );

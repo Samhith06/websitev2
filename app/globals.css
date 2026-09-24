@@ -6077,3 +6077,271 @@ body:has(.ovl) {
     transition: none;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Slot bingo
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* The card: --n squares a side. An open square is just its label; a drawn
+   or green one shows the slot's art under a scrim, with the slot and the
+   viewer who called it. */
+.bingo {
+  display: grid;
+  grid-template-columns: repeat(var(--n), minmax(0, 1fr));
+  gap: 7px;
+}
+
+.bg-sq {
+  position: relative;
+  aspect-ratio: 3 / 4;
+  border-radius: 9px;
+  overflow: hidden;
+  background: var(--panel-2);
+  border: 1px solid var(--edge);
+  color: var(--text);
+  isolation: isolate;
+}
+
+.bg-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: -2;
+}
+
+.bg-art.ph {
+  display: grid;
+  place-items: center;
+  font-family: var(--display);
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--muted-2);
+  padding-bottom: 30%;
+}
+
+/* A scrim so the text reads on any art, however bright. */
+.bg-sq.won::after,
+.bg-sq.live::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(180deg, rgba(5, 5, 7, 0.55) 0%, rgba(5, 5, 7, 0) 30%, rgba(5, 5, 7, 0.2) 50%, rgba(5, 5, 7, 0.92) 100%);
+}
+
+.bg-pos {
+  position: absolute;
+  top: 5px;
+  left: 6px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+/* An open square: its label, large and quiet, in the middle. */
+.bg-sq.open {
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.015);
+  border-style: dashed;
+  border-color: var(--edge-2);
+}
+
+.bg-sq.open .bg-pos {
+  position: static;
+  font-size: 15px;
+  color: var(--muted-2);
+}
+
+.bg-body {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px 7px 7px;
+  min-width: 0;
+}
+
+.bg-name {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bg-who {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Green: won by a viewer whose buy made a profit. */
+.bg-sq.won {
+  border-color: var(--green);
+  box-shadow: inset 0 0 0 1px var(--green);
+}
+
+.bg-sq.won::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: rgba(61, 220, 151, 0.22);
+}
+
+.bg-sq.won .bg-pos,
+.bg-sq.won .bg-who {
+  color: var(--green);
+}
+
+.bg-sq.won .bg-who b {
+  color: var(--text);
+}
+
+/* On the completed line — the BINGO. */
+.bg-sq.line {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px var(--gold), 0 0 20px rgba(255, 209, 102, 0.45);
+}
+
+.bg-sq.line .bg-pos {
+  color: var(--gold);
+}
+
+/* Drawn and being bought right now. */
+.bg-sq.live {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 2px var(--blue), 0 0 22px rgba(34, 211, 255, 0.4);
+  animation: bingo-live 1.6s ease-in-out infinite;
+}
+
+.bg-sq.live .bg-who {
+  color: var(--blue);
+}
+
+@keyframes bingo-live {
+  50% {
+    box-shadow: 0 0 0 2px var(--blue), 0 0 8px rgba(34, 211, 255, 0.15);
+  }
+}
+
+.bingo-banner {
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 209, 102, 0.55);
+  background: rgba(255, 209, 102, 0.08);
+  color: var(--gold);
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.bingo-now {
+  border-color: rgba(34, 211, 255, 0.45);
+}
+
+.bingo-winner {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 0;
+  border-top: 1px solid var(--edge);
+  min-width: 0;
+}
+
+.bingo-winner small {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bg-chip {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--green);
+  border: 1px solid rgba(61, 220, 151, 0.5);
+  border-radius: 5px;
+  padding: 1px 6px;
+}
+
+/* Page layouts: the card beside what goes with it, stacked when narrow. */
+.bingo-page,
+.bingo-admin {
+  display: grid;
+  gap: 18px;
+  align-items: start;
+}
+
+.bingo-page {
+  grid-template-columns: minmax(0, 560px) minmax(260px, 1fr);
+  margin-bottom: 8px;
+}
+
+.bingo-admin {
+  grid-template-columns: minmax(0, 440px) minmax(0, 1fr);
+  margin-top: 18px;
+}
+
+@media (max-width: 900px) {
+  .bingo-page,
+  .bingo-admin {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 520px) {
+  .bingo {
+    gap: 4px;
+  }
+  .bg-name {
+    font-size: 10.5px;
+  }
+  .bg-who {
+    font-size: 9.5px;
+  }
+  .bg-body {
+    padding: 4px 5px 5px;
+  }
+  .bg-pos {
+    font-size: 9px;
+  }
+}
+
+/* On stream. */
+.bingo-ovl .bg-name {
+  font-size: 13px;
+}
+
+.bingo-ovl .bg-who {
+  font-size: 12px;
+}
+
+.ovl-bingo-win {
+  border-color: rgba(255, 209, 102, 0.7);
+}
+
+.ovl-bingo-win .ovl-now-name {
+  font-size: 34px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bg-sq.live {
+    animation: none;
+  }
+}
