@@ -5699,7 +5699,10 @@ footer.site a:hover {
   gap: 5px;
 }
 
+/* Solid backing: the art behind these is often bright, and the site's
+   translucent tag style disappears into it. */
 .sc-tags .tag {
+  background: rgba(5, 5, 7, 0.82);
   backdrop-filter: blur(6px);
 }
 
