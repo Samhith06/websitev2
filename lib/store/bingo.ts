@@ -497,6 +497,8 @@ export async function undoLastResult(cardId: number): Promise<string> {
 export type FinishResult = {
   result: 'bingo' | 'stopped';
   green: number;
+  /** Viewers whose green square sits on a completed line — the only ones paid. */
+  lineViewers: number;
   paidViewers: number;
   unpaid: string[];
   totalPaid: number;
@@ -504,8 +506,10 @@ export type FinishResult = {
 
 /**
  * Ending the card. With a line it is BINGO; without, the streamer stopped
- * it. Either way every green square's viewer is paid the per-square prize if
- * their Kick account is linked — coins can only go to an account. Payments
+ * it. Only the viewers whose green squares make up a completed line win: each
+ * is paid the prize once (a square on two lines is still one square), if their
+ * Kick account is linked — coins can only go to an account. A card stopped
+ * without a line pays nobody. Payments
  * and the finished mark are one transaction under the card's row lock, so a
  * second click is a refusal, not a second payment.
  */
@@ -536,11 +540,14 @@ export async function finishCard(cardId: number, by: string): Promise<FinishResu
         ORDER BY t.position`,
       [cardId],
     );
-    const result = completedLines(card.size, winners.map((w) => w.position)).length > 0 ? 'bingo' : 'stopped';
+    const lines = completedLines(card.size, winners.map((w) => w.position));
+    const result = lines.length > 0 ? 'bingo' : 'stopped';
+    const onLine = new Set(lines.flatMap((l) => l.positions));
+    const lineWinners = winners.filter((w) => onLine.has(w.position));
 
     let paidViewers = 0;
     const unpaid: string[] = [];
-    for (const w of winners) {
+    for (const w of lineWinners) {
       if (card.square_prize <= 0) continue;
       if (!w.user_id) {
         unpaid.push(w.kick_username);
@@ -550,7 +557,7 @@ export async function finishCard(cardId: number, by: string): Promise<FinishResu
         userId: Number(w.user_id),
         delta: card.square_prize,
         kind: 'giveaway',
-        reason: `Slot bingo square ${cellLabel(w.position, card.size)} — ${card.title}`,
+        reason: `Slot bingo line, square ${cellLabel(w.position, card.size)} — ${card.title}`,
         refType: 'slot_bingo',
         refId: `${cardId}:${w.position}`,
       });
@@ -568,12 +575,13 @@ export async function finishCard(cardId: number, by: string): Promise<FinishResu
     );
     await client.query(
       `INSERT INTO audit_log (admin_name, action, target, detail) VALUES ($1, 'bingo.finished', $2, $3)`,
-      [by, String(cardId), JSON.stringify({ result, green: winners.length, paidViewers, unpaid, prize: card.square_prize })],
+      [by, String(cardId), JSON.stringify({ result, green: winners.length, lineViewers: lineWinners.length, paidViewers, unpaid, prize: card.square_prize })],
     );
 
     return {
       result,
       green: winners.length,
+      lineViewers: lineWinners.length,
       paidViewers,
       unpaid,
       totalPaid: paidViewers * card.square_prize,

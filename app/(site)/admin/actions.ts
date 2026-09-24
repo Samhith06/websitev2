@@ -1884,10 +1884,12 @@ export async function endBingo(cardId: number): Promise<Outcome> {
   try {
     const r = await finishCard(cardId, who.name);
     revalidateBingo();
-    const head = r.result === 'bingo' ? 'BINGO settled.' : 'Bingo ended without a line.';
-    const paid = r.totalPaid ? ` Paid ${coins(r.totalPaid)} MC to ${r.paidViewers} viewer${r.paidViewers === 1 ? '' : 's'}.` : '';
+    if (r.result === 'stopped') return { ok: true, message: 'Bingo ended without a line, so nobody is paid.' };
+    const paid = r.totalPaid
+      ? ` Paid ${coins(r.totalPaid)} MC to ${r.paidViewers} line winner${r.paidViewers === 1 ? '' : 's'}.`
+      : '';
     const unpaid = r.unpaid.length ? ` Not linked, so not paid: ${r.unpaid.join(', ')}.` : '';
-    return { ok: true, message: `${head} ${r.green} green square${r.green === 1 ? '' : 's'}.${paid}${unpaid}` };
+    return { ok: true, message: `BINGO settled.${paid}${unpaid}` };
   } catch (error) {
     if (error instanceof BingoError) return { ok: false, error: error.message };
     throw error;

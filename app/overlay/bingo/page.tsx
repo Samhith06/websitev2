@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { AutoRefresh } from '@/components/site/AutoRefresh';
 import { BingoGrid } from '@/components/site/BingoGrid';
 import { SlotArt } from '@/components/site/SlotArt';
-import { cellLabel, completedLines, lineLabel } from '@/lib/bingo';
+import { cellLabel, completedLines, lineLabel, type BingoLine } from '@/lib/bingo';
 import { entriesFor, featuredCard, summarise, turnsFor, type BingoCard, type BingoSummary } from '@/lib/store/bingo';
 import { coins, money } from '@/lib/format';
 
@@ -58,7 +58,7 @@ export default async function BingoOverlay({ searchParams }: { searchParams: Pro
           <b>{card.title}</b>
         </div>
       ) : null}
-      {show('now') ? <Now card={card} s={s} waiting={waiting.length} lines={lines.map((l) => lineLabel(l, card.size))} /> : null}
+      {show('now') ? <Now card={card} s={s} waiting={waiting.length} lines={lines} /> : null}
       {show('card') ? (
         <div className="ovl-card">
           <BingoGrid
@@ -76,15 +76,17 @@ export default async function BingoOverlay({ searchParams }: { searchParams: Pro
 }
 
 /** The headline: BINGO, the viewer being played, or the call to join. */
-function Now({ card, s, waiting, lines }: { card: BingoCard; s: BingoSummary; waiting: number; lines: string[] }) {
+function Now({ card, s, waiting, lines }: { card: BingoCard; s: BingoSummary; waiting: number; lines: BingoLine[] }) {
   if (lines.length > 0) {
+    const onLine = new Set(lines.flatMap((l) => l.positions));
+    const winners = [...s.green.values()].filter((t) => onLine.has(t.position)).map((t) => t.kickUsername);
     return (
       <div className="ovl-card ovl-now ovl-now-text ovl-bingo-win">
-        <span className="ovl-label">{lines.join(' · ')}</span>
+        <span className="ovl-label">{lines.map((l) => lineLabel(l, card.size)).join(' · ')}</span>
         <b className="ovl-now-name gold">BINGO!</b>
         {card.squarePrize ? (
           <small>
-            {s.green.size} green square{s.green.size === 1 ? '' : 's'} · {coins(card.squarePrize)} MC each
+            {winners.join(', ')} · {coins(card.squarePrize)} MC each
           </small>
         ) : null}
       </div>

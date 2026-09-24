@@ -12,8 +12,8 @@
  *      buy cost, the square turns green and belongs to that viewer. If not,
  *      the square stays open and the next viewer is drawn.
  *   5. The first full row, column or diagonal of green squares is BINGO, and
- *      the card ends. Every viewer who turned a square green is paid the
- *      card's per-square prize.
+ *      the card ends. The viewers whose squares make up that line are each
+ *      paid the card's prize; other green squares win nothing.
  *
  * Only one card is ever running, so `!sr` never has to say which one.
  */
@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS bingo_cards (
   id              bigserial     PRIMARY KEY,
   title           text          NOT NULL,
   size            integer       NOT NULL CHECK (size BETWEEN 3 AND 5),
-  -- MC paid to each viewer who turned a square green, fixed when the card
+  -- MC paid to each viewer whose square is on the BINGO line, fixed when the card
   -- starts so nobody plays for one prize and is paid another.
   square_prize    integer       NOT NULL DEFAULT 0 CHECK (square_prize >= 0),
   -- 'running' | 'finished'

@@ -26,8 +26,10 @@ export default async function AdminBingoPage() {
   const lines = card ? completedLines(card.size, s.green.keys()) : [];
   const running = card?.status === 'running';
   const last = turns[turns.length - 1];
-  const paidTurns = [...s.green.values()].filter((t) => t.paid > 0);
-  const unpaidTurns = [...s.green.values()].filter((t) => t.paid === 0);
+  const onLine = new Set(lines.flatMap((l) => l.positions));
+  const lineTurns = [...s.green.values()].filter((t) => onLine.has(t.position));
+  const paidTurns = lineTurns.filter((t) => t.paid > 0);
+  const unpaidTurns = lineTurns.filter((t) => t.paid === 0);
   const lastResolved = [...turns].reverse().find((t) => t.status === 'won' || t.status === 'lost');
 
   return (
@@ -59,7 +61,7 @@ export default async function AdminBingoPage() {
               </span>
               <span className="tag">{card.size} × {card.size}</span>
               {running ? <span className="tag">{card.requestsOpen ? '!sr open' : '!sr closed'}</span> : null}
-              {card.squarePrize ? <span className="tag gold">{coins(card.squarePrize)} MC per green square</span> : null}
+              {card.squarePrize ? <span className="tag gold">{coins(card.squarePrize)} MC per line winner</span> : null}
             </div>
 
             {lines.length > 0 ? (
@@ -80,7 +82,11 @@ export default async function AdminBingoPage() {
               </p>
             ) : null}
 
-            {!running && s.green.size > 0 ? (
+            {!running && card.result === 'stopped' ? (
+              <p className="small muted" style={{ marginBottom: 0 }}>Ended without a line, so nobody was paid.</p>
+            ) : null}
+
+            {!running && lineTurns.length > 0 ? (
               <p className="small" style={{ marginBottom: 0 }}>
                 {paidTurns.length > 0 ? (
                   <>
@@ -119,7 +125,7 @@ export default async function AdminBingoPage() {
               size={card.size}
               green={s.green}
               playing={s.playing}
-              onLine={new Set(lines.flatMap((l) => l.positions))}
+              onLine={onLine}
             />
 
             <div style={{ minWidth: 0 }}>
@@ -219,8 +225,8 @@ export default async function AdminBingoPage() {
               </div>
             )}
             <p className="small muted" style={{ marginTop: 10, maxWidth: '72ch' }}>
-              Prizes are paid when the bingo ends, to viewers with a verified Kick link; until then a mistyped
-              result can be undone. A viewer who lost can !sr again; one who won a square is done for this card.
+              Only the viewers whose squares make up the completed line are paid, when the bingo ends and only
+              with a verified Kick link; until then a mistyped result can be undone. A viewer who lost can !sr again; one who won a square is done for this card.
             </p>
           </div>
         </>

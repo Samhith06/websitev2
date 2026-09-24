@@ -48,7 +48,7 @@ export function StartBingoForm() {
       <p className="small muted" style={{ marginBottom: 14 }}>
         Chat joins with <b>!sr &lt;slot&gt;</b> the moment it starts. Each draw picks a random viewer and a
         random open square; a profitable buy turns the square green. The first full line is BINGO, and
-        every green-square viewer gets the prize.
+        the viewers whose squares make up that line win the prize.
       </p>
       <div style={row}>
         <div className="field" style={{ flex: '2 1 220px', marginBottom: 0 }}>
@@ -64,7 +64,7 @@ export function StartBingoForm() {
           </select>
         </div>
         <div className="field" style={{ flex: '1 1 140px', marginBottom: 0 }}>
-          <label htmlFor="bingo-prize">Prize per green square (MC)</label>
+          <label htmlFor="bingo-prize">Prize per line winner (MC)</label>
           <input id="bingo-prize" name="squarePrize" className="inp" type="number" min="0" step="1" defaultValue="100" required />
         </div>
         <button className="btn gold sm" type="submit" disabled={pending}>
@@ -125,7 +125,7 @@ export function BingoSwitches({
           disabled={pending || inPlay}
           title={inPlay ? 'Record or skip the buy in play first' : undefined}
           onClick={() => {
-            if (bingo || window.confirm('End this bingo without a line? Green squares are still paid.')) {
+            if (bingo || window.confirm('End this bingo without a line? Nobody will be paid.')) {
               run(() => endBingo(cardId));
             }
           }}

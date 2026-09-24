@@ -22,6 +22,7 @@ export default async function BingoPage() {
   const lines = card ? completedLines(card.size, s.green.keys()) : [];
   const running = card?.status === 'running';
   const past = history.filter((c) => c.id !== card?.id);
+  const onLine = new Set(lines.flatMap((l) => l.positions));
   const winners = [...s.green.values()].sort((a, b) => a.position - b.position);
 
   return (
@@ -54,7 +55,7 @@ export default async function BingoPage() {
                 size={card.size}
                 green={s.green}
                 playing={s.playing}
-                onLine={new Set(lines.flatMap((l) => l.positions))}
+                onLine={onLine}
               />
             </div>
 
@@ -82,14 +83,15 @@ export default async function BingoPage() {
                 <p className="small muted">
                   Type <code>!sr slot name</code> in Kick chat to join. Each round a random viewer and a random
                   open square are drawn, and your slot is bonus-bought. If it pays back more than it cost, the
-                  square turns green and it&apos;s yours
+                  square turns green and it&apos;s yours. If not, you can <code>!sr</code> again. The first full row,
+                  column or diagonal is BINGO
                   {card.squarePrize ? (
                     <>
-                      {' '}— worth <b style={{ color: 'var(--gold)' }}>{coins(card.squarePrize)} MC</b> when the bingo ends
+                      , and everyone whose square is on that line wins{' '}
+                      <b style={{ color: 'var(--gold)' }}>{coins(card.squarePrize)} MC</b>
                     </>
                   ) : null}
-                  . If not, you can <code>!sr</code> again. The first full row, column or diagonal is BINGO. To be
-                  paid, your Kick account has to be <Link href="/profile">linked</Link>.
+                  . To be paid, your Kick account has to be <Link href="/profile">linked</Link>.
                 </p>
                 <p className="small" style={{ marginTop: 8 }}>
                   <b>{waiting.length}</b> waiting to be drawn · <b>{s.green.size}</b> of {card.size * card.size}{' '}
@@ -105,7 +107,11 @@ export default async function BingoPage() {
                       <span className="bg-chip">{cellLabel(t.position, card.size)}</span>
                       <b>{t.kickUsername}</b>
                       <small className="muted">{t.slotName}</small>
-                      {t.paid ? <span className="tag gold">+{coins(t.paid)} MC</span> : null}
+                      {t.paid ? (
+                        <span className="tag gold">+{coins(t.paid)} MC</span>
+                      ) : onLine.has(t.position) ? (
+                        <span className="tag gold">on the line</span>
+                      ) : null}
                     </div>
                   ))}
                 </div>
@@ -113,9 +119,9 @@ export default async function BingoPage() {
             </div>
           </div>
 
-          {!running && winners.length > 0 && card.squarePrize && winners.some((t) => !t.paid) ? (
+          {!running && card.squarePrize && winners.some((t) => onLine.has(t.position) && !t.paid) ? (
             <p className="small muted" style={{ marginTop: 10 }}>
-              Squares without a prize tag belonged to viewers whose Kick account wasn&apos;t linked.
+              Line squares without a prize tag belonged to viewers whose Kick account wasn&apos;t linked.
             </p>
           ) : null}
         </>
