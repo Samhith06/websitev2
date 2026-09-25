@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { SlotArt } from '@/components/site/SlotArt';
+import { AutoRefresh } from '@/components/site/AutoRefresh';
 import { headers } from 'next/headers';
 import { CopyButton } from '@/components/ui/CopyButton';
 import {
@@ -50,6 +51,9 @@ export default async function AdminHuntPage() {
 
   return (
     <>
+      {/* While a hunt runs, chat's !sr requests and guesses arrive on their own;
+          the screen picks them up without the streamer reloading it. */}
+      {hunt && hunt.status !== 'finished' ? <AutoRefresh seconds={5} /> : null}
       <div className="sec-head">
         <div>
           <span className="eyebrow">Stream games</span>

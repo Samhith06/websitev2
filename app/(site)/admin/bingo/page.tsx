@@ -3,6 +3,7 @@ import { headers } from 'next/headers';
 import { CopyButton } from '@/components/ui/CopyButton';
 import { SlotArt } from '@/components/site/SlotArt';
 import { BingoGrid } from '@/components/site/BingoGrid';
+import { AutoRefresh } from '@/components/site/AutoRefresh';
 import { cellLabel, completedLines, lineLabel } from '@/lib/bingo';
 import { entriesFor, featuredCard, summarise, turnsFor } from '@/lib/store/bingo';
 import { coins, dateTime, money, mult } from '@/lib/format';
@@ -34,6 +35,8 @@ export default async function AdminBingoPage() {
 
   return (
     <>
+      {/* The pool fills from chat on its own; keep it current without a reload. */}
+      {running ? <AutoRefresh seconds={5} /> : null}
       <div className="sec-head">
         <div>
           <span className="eyebrow">Stream games</span>
