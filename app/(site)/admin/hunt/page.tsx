@@ -51,7 +51,7 @@ export default async function AdminHuntPage() {
     <>
       <div className="sec-head">
         <div>
-          <span className="eyebrow">Stream tools</span>
+          <span className="eyebrow">Stream games</span>
           <h1>Bonus hunt</h1>
           <div className="sh-sub">
             Chat suggests with <b>!sr &lt;slot&gt;</b> and guesses with <b>!gtb &lt;amount&gt;</b>. The

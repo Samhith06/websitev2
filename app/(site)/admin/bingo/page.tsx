@@ -36,7 +36,7 @@ export default async function AdminBingoPage() {
     <>
       <div className="sec-head">
         <div>
-          <span className="eyebrow">Stream tools</span>
+          <span className="eyebrow">Stream games</span>
           <h1>Slot bingo</h1>
           <div className="sh-sub">
             Chat joins with <b>!sr &lt;slot&gt;</b> — while a bingo runs, !sr goes here instead of the{' '}
