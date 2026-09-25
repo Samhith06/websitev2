@@ -12,6 +12,7 @@ import {
 import { coins, dateTime, money, mult } from '@/lib/format';
 import {
   AddBonusForm,
+  DeleteHuntButton,
   HuntSettings,
   HuntSwitches,
   PayoutInput,
@@ -111,6 +112,14 @@ export default async function AdminHuntPage() {
                 )}
               </p>
             ) : null}
+
+            {/* A hunt that paid a prize is the record of that payment, so it
+                has no delete button (the store refuses it too). */}
+            {hunt.gtbStatus === 'settled' && hunt.gtbWinner?.userId && hunt.gtbPrize > 0 ? null : (
+              <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--edge)' }}>
+                <DeleteHuntButton huntId={hunt.id} title={hunt.title} />
+              </div>
+            )}
           </div>
 
           <div className="kpis">

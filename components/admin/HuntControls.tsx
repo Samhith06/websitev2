@@ -8,6 +8,7 @@ import {
   findSlots,
   lockGuessing,
   moveHunt,
+  removeHunt,
   openGuessing,
   saveBonusPayout,
   saveHunt,
@@ -347,6 +348,31 @@ export function PayoutInput({ bonusId, payout }: { bonusId: number; payout: numb
       </button>
       {note && !note.ok ? <NoteText note={note} /> : null}
     </form>
+  );
+}
+
+/**
+ * Deleting the whole hunt — for test runs. Asks first, and names the hunt, so
+ * a slip of the mouse on stream cannot take a real hunt with it.
+ */
+export function DeleteHuntButton({ huntId, title }: { huntId: number; title: string }) {
+  const { note, pending, run } = useAction();
+  return (
+    <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+      <button
+        className="btn ghost sm"
+        style={{ color: 'var(--red)', borderColor: 'rgba(255, 92, 92, 0.35)' }}
+        disabled={pending}
+        onClick={() => {
+          if (window.confirm(`Delete "${title}" and all its bonuses, requests and guesses? This cannot be undone.`)) {
+            run(() => removeHunt(huntId));
+          }
+        }}
+      >
+        {pending ? 'Deleting…' : 'Delete hunt'}
+      </button>
+      {note && !note.ok ? <NoteText note={note} /> : null}
+    </div>
   );
 }
 

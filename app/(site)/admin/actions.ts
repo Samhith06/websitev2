@@ -59,6 +59,7 @@ import {
   HuntError,
   addBonus,
   createHunt,
+  deleteHunt,
   dismissRequest,
   removeBonus,
   setGuessing,
@@ -1671,6 +1672,16 @@ export async function deleteBonus(bonusId: number): Promise<Outcome> {
   return huntAction('hunt.bonus.removed', String(bonusId), {}, async () => {
     await removeBonus(bonusId);
     return 'Removed.';
+  });
+}
+
+export async function removeHunt(huntId: number): Promise<Outcome> {
+  // Filled in by the delete, so the audit row names the hunt that went.
+  const detail: Record<string, unknown> = {};
+  return huntAction('hunt.deleted', String(huntId), detail, async () => {
+    const { title } = await deleteHunt(huntId);
+    detail.title = title;
+    return `Deleted "${title}".`;
   });
 }
 

@@ -607,6 +607,29 @@ export async function dismissRequest(requestId: number): Promise<void> {
   );
 }
 
+/**
+ * Deleting a hunt — for test runs and mistakes. Its bonuses, requests and
+ * guesses go with it (the foreign keys cascade). A hunt whose guess the
+ * balance already paid a prize is refused: those coins are real, and the hunt
+ * is the record of why they were paid.
+ */
+export async function deleteHunt(huntId: number): Promise<{ title: string }> {
+  const done = await write<{ title: string }>(
+    `DELETE FROM bonus_hunts
+      WHERE id = $1
+        AND NOT (gtb_status = 'settled' AND gtb_winner_user_id IS NOT NULL AND gtb_prize > 0)
+      RETURNING title`,
+    [huntId],
+  );
+  if (done.length > 0) return done[0];
+  const exists = await one<{ id: string }>('SELECT id::text FROM bonus_hunts WHERE id = $1', [huntId]);
+  throw new HuntError(
+    exists
+      ? 'This hunt paid a guess-the-balance prize, so it stays as the record of that payment.'
+      : 'That hunt does not exist.',
+  );
+}
+
 export type SettleResult = {
   finalBalance: number;
   winner: { name: string; guess: number; userId: number } | null;
