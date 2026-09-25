@@ -1,7 +1,7 @@
 import 'server-only';
 import { one, rows, tx, write } from '@/lib/db';
 import { apply } from './coins';
-import { matchSlot, slotById } from './slots';
+import { matchSlot } from './slots';
 
 /**
  * Bonus hunts, run on this site.
@@ -308,12 +308,15 @@ export function huntStats(hunt: Hunt, bonuses: Bonus[]): HuntStats {
 
 export type ChatOutcome =
   | { ok: true; detail: string }
-  | { ok: false; reason: 'no-hunt' | 'closed' | 'already-added' };
+  | { ok: false; reason: 'no-hunt' | 'closed' | 'duplicate' };
 
 /**
- * `!sr <slot>`. One pending request per chatter per hunt; a second replaces
- * the first. A request that staff already added to the hunt stays put — a
- * replacement then would silently undo something that happened on stream.
+ * `!sr <slot>`. A viewer can request as many slots as they like; each is its
+ * own row, so the queue shows them all. The one thing ignored is the same
+ * viewer asking for the same slot again while that request is still waiting —
+ * the same catalog slot, or the same typed name when there was no match — so
+ * repeating a command cannot flood the queue. The check and the insert are
+ * one statement, so two copies of one message cannot both land.
  */
 export async function submitRequest(input: {
   kickUserId: string;
@@ -327,15 +330,19 @@ export async function submitRequest(input: {
   const slot = await matchSlot(input.query);
   const saved = await write<{ id: string }>(
     `INSERT INTO slot_requests (hunt_id, kick_user_id, kick_username, query, slot_id)
-     VALUES ($1, $2, $3, $4, $5)
-     ON CONFLICT (hunt_id, kick_user_id) DO UPDATE
-       SET kick_username = EXCLUDED.kick_username, query = EXCLUDED.query,
-           slot_id = EXCLUDED.slot_id, status = 'pending', created_at = now()
-       WHERE slot_requests.status <> 'added'
+     SELECT $1, $2, $3, $4, $5
+      WHERE NOT EXISTS (
+        SELECT 1 FROM slot_requests r
+         WHERE r.hunt_id = $1 AND r.kick_user_id = $2 AND r.status = 'pending'
+           AND (CASE WHEN $5::bigint IS NOT NULL THEN r.slot_id = $5::bigint
+                     ELSE r.slot_id IS NULL
+                          AND regexp_replace(lower(r.query), '[^a-z0-9]', '', 'g')
+                            = regexp_replace(lower($4::text), '[^a-z0-9]', '', 'g')
+                END))
      RETURNING id::text`,
     [hunt.id, input.kickUserId, input.kickUsername, input.query, slot?.id ?? null],
   );
-  if (saved.length === 0) return { ok: false, reason: 'already-added' };
+  if (saved.length === 0) return { ok: false, reason: 'duplicate' };
   return { ok: true, detail: slot ? `matched ${slot.name}` : 'no catalog match, kept as typed' };
 }
 
@@ -560,11 +567,15 @@ export async function addBonus(input: {
 
     let imageUrl: string | null = null;
     if (slotId) {
-      const slot = await slotById(slotId);
-      if (!slot) throw new HuntError('That slot is no longer in the catalog.');
-      name = slot.name;
-      provider = slot.provider;
-      imageUrl = slot.imageUrl;
+      // Read through the transaction's own connection rather than the pool.
+      const { rows: slot } = await client.query<{ name: string; provider: string; image_url: string | null }>(
+        'SELECT name, provider, image_url FROM slots WHERE id = $1',
+        [slotId],
+      );
+      if (!slot[0]) throw new HuntError('That slot is no longer in the catalog.');
+      name = slot[0].name;
+      provider = slot[0].provider;
+      imageUrl = slot[0].image_url;
     }
     if (!name) throw new HuntError('Pick a slot or type its name.');
 

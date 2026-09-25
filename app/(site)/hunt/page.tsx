@@ -100,8 +100,8 @@ export default async function HuntPage() {
                 <h3>Suggest a slot</h3>
               </div>
               <p className="small muted">
-                Type <code>!sr slot name</code> in Kick chat while bonuses are being collected. One
-                suggestion each; sending another replaces yours until it is picked.
+                Type <code>!sr slot name</code> in Kick chat while bonuses are being collected.
+                Suggest as many slots as you like — each one joins the queue.
               </p>
             </div>
             <div className="card">
