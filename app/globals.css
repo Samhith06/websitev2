@@ -370,6 +370,64 @@ nav.mainnav {
   display: flex;
   gap: 2px;
   flex: 1;
+  /* Six to eight links, depending on which stream games are live. Tightened in
+     steps below; past that the row scrolls rather than pushing the coin pill
+     and avatar off the page. */
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+nav.mainnav::-webkit-scrollbar {
+  display: none;
+}
+
+nav.mainnav .ns {
+  display: none;
+}
+
+@media (max-width: 1180px) {
+  nav.mainnav .nl {
+    display: none;
+  }
+  nav.mainnav .ns {
+    display: inline;
+  }
+  nav.mainnav a {
+    padding: 8px 9px;
+    font-size: 13px;
+  }
+  nav.mainnav a.on::after {
+    left: 9px;
+    right: 9px;
+  }
+}
+
+@media (max-width: 980px) {
+  .brand .bt {
+    display: none;
+  }
+  .hd {
+    gap: 12px;
+  }
+  .hd-right {
+    gap: 6px;
+  }
+  /* The staff button keeps its ◆; its title still says what it is. */
+  .hd-right .stf {
+    display: none;
+  }
+  nav.mainnav {
+    gap: 0;
+  }
+  nav.mainnav a {
+    padding: 8px 6px;
+    font-size: 12.5px;
+  }
+  nav.mainnav a.on::after {
+    left: 6px;
+    right: 6px;
+  }
 }
 
 nav.mainnav a {

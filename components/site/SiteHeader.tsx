@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
-import { NAV, activeNav } from '@/lib/nav';
+import { activeNav, type NavItem } from '@/lib/nav';
 import { coins } from '@/lib/format';
 import { onBalance } from '@/lib/balance-bus';
 import type { Viewer } from '@/lib/types';
@@ -27,9 +27,9 @@ export function Logo() {
  * is the only place the earn rate is visible at a glance, which is why it
  * survives on every screen except the narrowest phones.
  */
-export function SiteHeader({ viewer }: { viewer: Viewer }) {
+export function SiteHeader({ viewer, nav }: { viewer: Viewer; nav: NavItem[] }) {
   const pathname = usePathname();
-  const active = activeNav(pathname);
+  const active = activeNav(pathname, nav);
   const staff = viewer.role === 'mod' || viewer.role === 'owner';
   const initial = (viewer.discordUsername || '?').charAt(0).toUpperCase();
 
@@ -54,14 +54,18 @@ export function SiteHeader({ viewer }: { viewer: Viewer }) {
           </Link>
 
           <nav className="mainnav" aria-label="Primary">
-            {NAV.map((item) => (
+            {nav.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
                 className={active === item.href ? 'on' : ''}
                 aria-current={active === item.href ? 'page' : undefined}
+                title={item.label}
               >
-                {item.label}
+                {/* The short name takes over on narrower screens, where eight
+                    full labels would not fit beside the coin pill. */}
+                <span className="nl">{item.label}</span>
+                <span className="ns">{item.short}</span>
               </Link>
             ))}
           </nav>
@@ -86,7 +90,7 @@ export function SiteHeader({ viewer }: { viewer: Viewer }) {
                     title="Staff area"
                     style={{ borderColor: 'rgba(255,179,71,.35)', color: 'var(--warn)' }}
                   >
-                    ◆ Staff
+                    ◆<span className="stf"> Staff</span>
                   </Link>
                 ) : null}
 

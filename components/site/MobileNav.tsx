@@ -2,23 +2,24 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { NAV, activeNav } from '@/lib/nav';
+import { activeNav, type NavItem } from '@/lib/nav';
 
 /**
- * The phone tab bar. Same seven destinations as the desktop row, in the same
- * order, so the two never disagree about where something lives.
+ * The phone tab bar. Same destinations as the desktop row, in the same order,
+ * so the two never disagree about where something lives — six always, seven or
+ * eight while a stream game runs, which the flex row absorbs.
  *
  * Hidden above 760px by CSS rather than by a media query in JavaScript, so it
  * costs nothing on desktop and never flashes in on a slow hydration.
  */
-export function MobileNav() {
+export function MobileNav({ nav }: { nav: NavItem[] }) {
   const pathname = usePathname();
-  const active = activeNav(pathname);
+  const active = activeNav(pathname, nav);
 
   return (
     <nav className="mobnav" aria-label="Primary, compact">
       <div className="mn">
-        {NAV.map((item) => (
+        {nav.map((item) => (
           <Link
             key={item.href}
             href={item.href}
