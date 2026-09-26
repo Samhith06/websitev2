@@ -59,6 +59,8 @@ export type BingoEntry = {
   createdAt: string;
   /** Whether this chatter has a verified Kick link — only they can be paid. */
   linked: boolean;
+  /** Buys already played for this viewer on this card (skips not counted). */
+  turns: number;
 };
 
 type CardRow = {
@@ -159,9 +161,13 @@ export async function entriesFor(cardId: number, status?: EntryStatus): Promise<
     status: EntryStatus;
     created_at: Date;
     linked: boolean;
+    turns: number;
   }>(
     `SELECT e.id::text, e.kick_user_id, e.kick_username, e.query, s.name, s.provider, s.image_url,
-            e.status, e.created_at, (k.user_id IS NOT NULL) AS linked
+            e.status, e.created_at, (k.user_id IS NOT NULL) AS linked,
+            (SELECT COUNT(*)::int FROM bingo_turns t
+              WHERE t.card_id = e.card_id AND t.kick_user_id = e.kick_user_id
+                AND t.status IN ('won', 'lost')) AS turns
        FROM bingo_entries e
        LEFT JOIN slots s ON s.id = e.slot_id
        LEFT JOIN kick_links k ON k.kick_user_id = e.kick_user_id
@@ -180,6 +186,7 @@ export async function entriesFor(cardId: number, status?: EntryStatus): Promise<
     status: r.status,
     createdAt: r.created_at.toISOString(),
     linked: r.linked,
+    turns: r.turns,
   }));
 }
 
@@ -355,17 +362,27 @@ export async function drawTurn(cardId: number): Promise<Draw> {
       kick_username: string;
       query: string;
       slot_id: string | null;
+      turns: number;
     }>(
-      `SELECT id::text, kick_user_id, kick_username, query, slot_id::text
-         FROM bingo_entries WHERE card_id = $1 AND status = 'waiting'
-        ORDER BY id FOR UPDATE`,
+      `SELECT e.id::text, e.kick_user_id, e.kick_username, e.query, e.slot_id::text,
+              (SELECT COUNT(*)::int FROM bingo_turns t
+                WHERE t.card_id = e.card_id AND t.kick_user_id = e.kick_user_id
+                  AND t.status IN ('won', 'lost')) AS turns
+         FROM bingo_entries e WHERE e.card_id = $1 AND e.status = 'waiting'
+        ORDER BY e.id FOR UPDATE OF e`,
       [cardId],
     );
     if (pool.length === 0) throw new BingoError('Nobody is waiting. Chat joins with !sr <slot>.');
 
+    // Rounds: only the waiting viewers with the fewest buys so far are in the
+    // draw, so everybody gets a go before anybody who lost gets a second one.
+    // A skipped turn (the slot could not be played) does not count as a go.
+    const fewest = Math.min(...pool.map((e) => e.turns));
+    const eligible = pool.filter((e) => e.turns === fewest);
+
     const taken = new Set(green);
     const open = [...Array(card.size * card.size).keys()].filter((p) => !taken.has(p));
-    const entry = pool[randomInt(pool.length)];
+    const entry = eligible[randomInt(eligible.length)];
     const position = open[randomInt(open.length)];
 
     let slotId = entry.slot_id == null ? null : Number(entry.slot_id);

@@ -46,8 +46,9 @@ export function StartBingoForm() {
     <form className="card" style={{ marginBottom: 18 }} action={(data: FormData) => run(() => startBingo(data))}>
       <h3 style={{ fontSize: 15, marginBottom: 4 }}>Start a slot bingo</h3>
       <p className="small muted" style={{ marginBottom: 14 }}>
-        Chat joins with <b>!sr &lt;slot&gt;</b> the moment it starts. Each draw picks a random viewer and a
-        random open square; a profitable buy turns the square green. The first full line is BINGO, and
+        Chat joins with <b>!sr &lt;slot&gt;</b> the moment it starts. Each draw picks a random viewer —
+        everyone gets a go before anyone gets a second — and a random open square; a profitable buy
+        turns the square green. The first full line is BINGO, and
         the viewers whose squares make up that line win the prize.
       </p>
       <div style={row}>

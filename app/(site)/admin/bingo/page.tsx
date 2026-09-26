@@ -31,6 +31,9 @@ export default async function AdminBingoPage() {
   const lineTurns = [...s.green.values()].filter((t) => onLine.has(t.position));
   const paidTurns = lineTurns.filter((t) => t.paid > 0);
   const unpaidTurns = lineTurns.filter((t) => t.paid === 0);
+  // Who the next draw picks from: the waiting viewers with the fewest goes.
+  const fewestGoes = waiting.length ? Math.min(...waiting.map((e) => e.turns)) : 0;
+  const roundSize = waiting.filter((e) => e.turns === fewestGoes).length;
   const lastResolved = [...turns].reverse().find((t) => t.status === 'won' || t.status === 'lost');
 
   return (
@@ -154,6 +157,12 @@ export default async function AdminBingoPage() {
                   <h2 style={{ fontSize: 15, marginBottom: 10 }}>
                     The pool <span className="muted small">({waiting.length} waiting)</span>
                   </h2>
+                  {roundSize < waiting.length ? (
+                    <p className="small muted" style={{ marginBottom: 10 }}>
+                      The next draw is between the <b>{roundSize}</b> who have had the fewest goes; the rest
+                      are back in once everyone has had one.
+                    </p>
+                  ) : null}
                   {waiting.length === 0 ? (
                     <div className="emptyq">{card.requestsOpen ? 'Nobody has typed !sr yet.' : 'Empty.'}</div>
                   ) : (
@@ -166,6 +175,7 @@ export default async function AdminBingoPage() {
                             <small>
                               {e.slotName ?? `“${e.query}” (not in catalog)`}
                               {e.linked ? '' : ' · not linked'}
+                              {e.turns > 0 ? ` · ${e.turns} go${e.turns === 1 ? '' : 'es'} so far` : ''}
                             </small>
                           </span>
                         </div>

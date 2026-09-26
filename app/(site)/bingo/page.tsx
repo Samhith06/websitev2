@@ -83,7 +83,8 @@ export default async function BingoPage() {
                 <p className="small muted">
                   Type <code>!sr slot name</code> in Kick chat to join. Each round a random viewer and a random
                   open square are drawn, and your slot is bonus-bought. If it pays back more than it cost, the
-                  square turns green and it&apos;s yours. If not, you can <code>!sr</code> again. The first full row,
+                  square turns green and it&apos;s yours. If not, you can <code>!sr</code> again — you go back
+                  in once everyone waiting has had a go. The first full row,
                   column or diagonal is BINGO
                   {card.squarePrize ? (
                     <>
