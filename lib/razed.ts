@@ -25,8 +25,15 @@ import type { FeedHealth, LeaderboardRow } from './types';
  *      else. There is no rank field — rows arrive sorted by wagered descending
  *      and rank is that position. `wagered` is a *string* carrying 18 decimal
  *      places, so it is parsed rather than used directly.
- *   2. **`to` is inclusive.** A single-day window (`from` = `to`) returns that
- *      day's wagering, and two halves of a month sum to the whole.
+ *   2. **`from` and `to` are timestamps, not days.** A bare date is read as
+ *      00:00:00 of that day, so `to=2026-09-30` stops at the very start of the
+ *      30th and drops the whole final day of the board, and `from` = `to`
+ *      returns only the sliver stamped at midnight. (This line used to say
+ *      `to` was inclusive; re-probed on 2026-09-30, `[28, 29]` + `[29, 30]`
+ *      summed exactly to `[28, 30]`, and a month's two halves came up short.)
+ *      `windowBounds` below turns our calendar days into `00:00:00` and
+ *      `23:59:59`, so callers keep passing plain dates and mean whole days.
+ *      Razed reads them as UTC — the same answer with or without a `Z`.
  *   3. **`top` does exceed 25** — it maps to `per_page`, and `top=100` returned
  *      all 33 rows on one page.
  *
@@ -95,6 +102,22 @@ export type RazedRow = {
  * showing the same person two different ways.
  */
 export const mask = maskUsername;
+
+/**
+ * A calendar-day window as the timestamps Razed actually reads.
+ *
+ * Every caller thinks in whole days — a board runs "1 to 30 September" — and
+ * Razed thinks in instants, where "30 September" is its first second. Left
+ * alone, that gap silently drops each board's last day, which is the day of
+ * the closest finish. Anything already carrying a time is passed through.
+ */
+function windowBounds(from: string, to: string): { from: string; to: string } {
+  const DAY = /^\d{4}-\d{2}-\d{2}$/;
+  return {
+    from: DAY.test(from) ? `${from} 00:00:00` : from,
+    to: DAY.test(to) ? `${to} 23:59:59` : to,
+  };
+}
 
 /**
  * Turns Razed's payload into our own rows.
@@ -175,6 +198,7 @@ export async function fetchRazedLeaderboard({
   }
 
   const perPage = Math.min(top, MAX_TOP);
+  const bounds = windowBounds(from, to);
   const collected: Array<{ username: string; wagered: number }> = [];
   let total = 0;
   let page = 1;
@@ -184,8 +208,8 @@ export async function fetchRazedLeaderboard({
     do {
       const url = new URL(ENDPOINT);
       url.searchParams.set('referral_code', REFERRAL_CODE);
-      url.searchParams.set('from', from);
-      url.searchParams.set('to', to);
+      url.searchParams.set('from', bounds.from);
+      url.searchParams.set('to', bounds.to);
       url.searchParams.set('top', String(perPage));
       url.searchParams.set('page', String(page));
 
