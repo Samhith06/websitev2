@@ -102,6 +102,19 @@ import {
   skipChallenge,
   undoLastChallenge,
 } from '@/lib/store/koth';
+import {
+  RaidError,
+  createRaid,
+  deleteRaid,
+  dismissRaidEntry,
+  drawRaider,
+  finishRaid,
+  resolveRaidTurn,
+  setRaidRequestsOpen,
+  skipRaidTurn,
+  undoLastRaidTurn,
+} from '@/lib/store/raid';
+import { hp } from '@/lib/raid';
 
 export type Outcome = { ok: true; message: string } | { ok: false; error: string };
 
@@ -2040,6 +2053,138 @@ export async function endKoth(gameId: number): Promise<Outcome> {
     return { ok: true, message: `${r.king} is king${x}.` };
   } catch (error) {
     if (error instanceof KothError) return { ok: false, error: error.message };
+    throw error;
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Boss raid                                                                  */
+/* -------------------------------------------------------------------------- */
+
+/** The most HP a boss can start with: well past any single buy, short of a typo. */
+const MAX_BOSS_HP = 100_000;
+
+function revalidateRaid(): void {
+  revalidatePath('/admin/raid');
+  revalidatePath('/raid');
+}
+
+/** The boss raid twin of `kothAction`: a RaidError is a sentence for the mod. */
+async function raidAction(
+  action: string,
+  target: string,
+  detail: Record<string, unknown>,
+  run: () => Promise<string>,
+): Promise<Outcome> {
+  const who = await staff();
+  if (!who) return DENIED;
+  try {
+    const message = await run();
+    await record_({ actor: who.name, actorDiscordId: who.discordId, action, target, detail });
+    revalidateRaid();
+    return { ok: true, message };
+  } catch (error) {
+    if (error instanceof RaidError) return { ok: false, error: error.message };
+    throw error;
+  }
+}
+
+export async function startRaid(formData: FormData): Promise<Outcome> {
+  const who = await staff();
+  if (!who) return DENIED;
+  const boss = String(formData.get('boss') ?? '').trim();
+  const maxHp = Number(formData.get('maxHp'));
+  const prize = Number(formData.get('prize') ?? 0);
+  if (!boss) return { ok: false, error: 'Give the boss a name.' };
+  if (boss.length > 60) return { ok: false, error: 'Keep the boss name under 60 characters.' };
+  if (!Number.isInteger(maxHp) || maxHp < 1 || maxHp > MAX_BOSS_HP) {
+    return { ok: false, error: `HP is a whole number from 1 to ${MAX_BOSS_HP.toLocaleString('en-US')}.` };
+  }
+  if (!Number.isInteger(prize) || prize < 0 || prize > MAX_ADJUSTMENT) {
+    return { ok: false, error: 'The prize is a whole number of coins, or zero.' };
+  }
+  if (who.role !== 'owner' && prize > MOD_GTB_PRIZE_CAP) {
+    return { ok: false, error: `Prizes over ${coins(MOD_GTB_PRIZE_CAP)} MC need an owner.` };
+  }
+  return raidAction('raid.created', boss, { maxHp, prize }, async () => {
+    await createRaid({ boss, maxHp, prize });
+    return `${boss} is up with ${maxHp.toLocaleString('en-US')} HP. Chat joins with !sr <slot>.`;
+  });
+}
+
+export async function toggleRaidRequests(gameId: number, open: boolean): Promise<Outcome> {
+  return raidAction('raid.requests', String(gameId), { open }, async () => {
+    await setRaidRequestsOpen(gameId, open);
+    return open ? '!sr is open.' : '!sr is closed.';
+  });
+}
+
+export async function drawRaid(gameId: number): Promise<Outcome> {
+  const detail: Record<string, unknown> = {};
+  return raidAction('raid.drawn', String(gameId), detail, async () => {
+    const draw = await drawRaider(gameId);
+    Object.assign(detail, draw);
+    return `${draw.viewer} attacks with ${draw.slot}.`;
+  });
+}
+
+export async function resolveRaid(formData: FormData): Promise<Outcome> {
+  const turnId = Number(formData.get('turnId'));
+  const buyCost = moneyField(formData.get('buyCost'));
+  const payout = moneyField(formData.get('payout'));
+  if (buyCost == null || buyCost <= 0) return { ok: false, error: 'Enter what the bonus buy cost, e.g. 200.' };
+  if (payout == null) return { ok: false, error: 'Enter what it paid, e.g. 246.80 (0 if nothing).' };
+  return raidAction('raid.result', String(turnId), { buyCost, payout }, async () => {
+    const r = await resolveRaidTurn(turnId, buyCost, payout);
+    if (r.slain) return `${r.viewer} lands the killing blow with ${hp(r.damage)} damage! End the raid to pay out.`;
+    return `${r.viewer} hits for ${hp(r.damage)}. The boss has ${hp(r.hpLeft)} HP left. Draw the next raider.`;
+  });
+}
+
+export async function skipRaid(turnId: number): Promise<Outcome> {
+  return raidAction('raid.skipped', String(turnId), {}, async () => {
+    await skipRaidTurn(turnId);
+    return 'Skipped. The boss is untouched; draw again.';
+  });
+}
+
+export async function undoRaidResult(gameId: number): Promise<Outcome> {
+  return raidAction('raid.undone', String(gameId), {}, async () => {
+    const viewer = await undoLastRaidTurn(gameId);
+    return `${viewer}'s hit is back in play. Record its result again.`;
+  });
+}
+
+export async function dismissRaidPoolEntry(entryId: number): Promise<Outcome> {
+  return raidAction('raid.entry.dismissed', String(entryId), {}, async () => {
+    await dismissRaidEntry(entryId);
+    return 'Removed from the pool.';
+  });
+}
+
+export async function removeRaid(gameId: number): Promise<Outcome> {
+  const detail: Record<string, unknown> = {};
+  return raidAction('raid.deleted', String(gameId), detail, async () => {
+    detail.boss = await deleteRaid(gameId);
+    return `Deleted the raid on ${detail.boss}.`;
+  });
+}
+
+/** Ending writes its own audit row inside the payout transaction. */
+export async function endRaid(gameId: number): Promise<Outcome> {
+  const who = await staff();
+  if (!who) return DENIED;
+  try {
+    const r = await finishRaid(gameId, who.name);
+    revalidateRaid();
+    if (r.result === 'stopped') {
+      return { ok: true, message: `Raid ended with the boss on ${hp(r.hpLeft)} HP, so nobody is paid.` };
+    }
+    if (r.paid) return { ok: true, message: `Boss slain by ${r.killer}. Paid ${coins(r.paid)} MC.` };
+    if (r.unpaid) return { ok: true, message: `Boss slain by ${r.killer}, but their Kick account is not linked, so nothing was paid.` };
+    return { ok: true, message: `Boss slain by ${r.killer}.` };
+  } catch (error) {
+    if (error instanceof RaidError) return { ok: false, error: error.message };
     throw error;
   }
 }

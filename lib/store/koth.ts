@@ -5,6 +5,7 @@ import { one, rows, tx, write } from '@/lib/db';
 import { kingOf, score } from '@/lib/koth';
 import { apply } from './coins';
 import { matchSlot } from './slots';
+import { noOtherSrGame, otherSrGameMessage } from './stream-games';
 
 /**
  * King of the hill, run on this site (see migration 019 for the rules).
@@ -318,18 +319,18 @@ export async function submitKothRequest(input: {
 export class KothError extends Error {}
 
 /**
- * Starting a game. Refused while a slot bingo runs: both take `!sr`, and chat
- * cannot say which one it meant.
+ * Starting a game. Refused while another `!sr` game runs: chat cannot say
+ * which one it meant.
  */
 export async function createGame(input: { title: string; prize: number }): Promise<void> {
   try {
     const made = await write<{ id: string }>(
       `INSERT INTO koth_games (title, prize)
-       SELECT $1, $2 WHERE NOT EXISTS (SELECT 1 FROM bingo_cards WHERE status = 'running')
+       SELECT $1, $2 WHERE ${noOtherSrGame('koth')}
        RETURNING id::text`,
       [input.title, input.prize],
     );
-    if (made.length === 0) throw new KothError('A slot bingo is running and takes !sr. End it first.');
+    if (made.length === 0) throw new KothError(await otherSrGameMessage('koth'));
   } catch (error) {
     if (error instanceof Error && error.message.includes('koth_games_one_live_idx')) {
       throw new KothError('A king of the hill is already running. End it before starting another.');

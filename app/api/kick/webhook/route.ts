@@ -13,6 +13,7 @@ import { parseHuntCommand } from '@/lib/hunt-commands';
 import { submitGuess, submitRequest } from '@/lib/store/hunts';
 import { liveCard, submitBingoRequest } from '@/lib/store/bingo';
 import { liveGame, submitKothRequest } from '@/lib/store/koth';
+import { liveRaid, submitRaidRequest } from '@/lib/store/raid';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -145,9 +146,9 @@ async function onChatMessage(payload: unknown): Promise<void> {
 }
 
 /**
- * `!sr` and `!gtb` for the bonus hunt, and `!sr` for slot bingo and king of
- * the hill. Any chatter can use them — a linked account is only needed to be
- * paid.
+ * `!sr` and `!gtb` for the bonus hunt, and `!sr` for slot bingo, king of the
+ * hill and the boss raid. Any chatter can use them — a linked account is only
+ * needed to be paid.
  *
  * A failure here is logged and swallowed rather than thrown: the message still
  * has to open a presence window, and a thrown error would make Kick retry the
@@ -158,22 +159,27 @@ async function onHuntCommand(message: { senderId: string; senderUsername: string
   if (!command) return;
   try {
     const sender = { kickUserId: message.senderId, kickUsername: message.senderUsername };
-    // While a king of the hill or a slot bingo is running (never both), !sr
-    // joins its pool instead of the hunt.
     const outcome =
       command.kind === 'guess'
         ? await submitGuess({ ...sender, amount: command.amount })
-        : (await liveGame())
-          ? await submitKothRequest({ ...sender, query: command.slot })
-          : (await liveCard())
-            ? await submitBingoRequest({ ...sender, query: command.slot })
-            : await submitRequest({ ...sender, query: command.slot });
+        : await onSlotRequest({ ...sender, query: command.slot });
     console.log(
       `[kick] ${command.kind} from ${message.senderUsername}: ${outcome.ok ? outcome.detail : `refused (${outcome.reason})`}`,
     );
   } catch (error) {
     console.error(`[kick] ${command.kind} from ${message.senderUsername} failed`, error);
   }
+}
+
+/**
+ * Where `!sr` goes: to whichever of slot bingo, king of the hill or the boss
+ * raid is running (at most one ever is), else to the bonus hunt.
+ */
+async function onSlotRequest(input: { kickUserId: string; kickUsername: string; query: string }) {
+  if (await liveRaid()) return submitRaidRequest(input);
+  if (await liveGame()) return submitKothRequest(input);
+  if (await liveCard()) return submitBingoRequest(input);
+  return submitRequest(input);
 }
 
 /** Badge state is instant but not authoritative; the webhooks correct it. */

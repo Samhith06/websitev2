@@ -5,6 +5,7 @@ import { one, rows, tx, write } from '@/lib/db';
 import { cellLabel, completedLines, isProfit } from '@/lib/bingo';
 import { apply } from './coins';
 import { matchSlot } from './slots';
+import { noOtherSrGame, otherSrGameMessage } from './stream-games';
 
 /**
  * Slot bingo, run on this site (see migration 016 for the rules).
@@ -294,18 +295,18 @@ export async function submitBingoRequest(input: {
 export class BingoError extends Error {}
 
 /**
- * Starting a card. Refused while a king of the hill runs: both take `!sr`,
- * and chat cannot say which one it meant.
+ * Starting a card. Refused while another `!sr` game runs: chat cannot say
+ * which one it meant.
  */
 export async function createCard(input: { title: string; size: number; squarePrize: number }): Promise<void> {
   try {
     const made = await write(
       `INSERT INTO bingo_cards (title, size, square_prize)
-       SELECT $1, $2, $3 WHERE NOT EXISTS (SELECT 1 FROM koth_games WHERE status = 'running')
+       SELECT $1, $2, $3 WHERE ${noOtherSrGame('bingo')}
        RETURNING id`,
       [input.title, input.size, input.squarePrize],
     );
-    if (made.length === 0) throw new BingoError('A king of the hill is running and takes !sr. End it first.');
+    if (made.length === 0) throw new BingoError(await otherSrGameMessage('bingo'));
   } catch (error) {
     if (error instanceof Error && error.message.includes('bingo_cards_one_live_idx')) {
       throw new BingoError('A bingo is already running. End it before starting another.');

@@ -6628,3 +6628,358 @@ body:has(.ovl) {
     animation: none;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Boss raid
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* The boss: a horned glyph beside its name and a health bar that drains as
+   chat's buys land. The bar reddens as the boss weakens and pulses when it is
+   nearly down; once slain the card goes grey and the name is struck through. */
+.raid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.boss {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 92, 122, 0.55);
+  background: radial-gradient(120% 140% at 0% 0%, rgba(255, 92, 122, 0.14), rgba(255, 92, 122, 0) 55%), var(--panel);
+  box-shadow: 0 0 26px rgba(255, 92, 122, 0.12);
+  min-width: 0;
+}
+
+.boss-glyph {
+  flex: none;
+  width: 104px;
+  height: 104px;
+  color: var(--red);
+  filter: drop-shadow(0 0 14px rgba(255, 92, 122, 0.35));
+}
+
+.boss-horn {
+  fill: var(--panel-3);
+  stroke: currentColor;
+  stroke-width: 3;
+  stroke-linejoin: round;
+}
+
+.boss-head {
+  fill: var(--panel-2);
+  stroke: currentColor;
+  stroke-width: 3.5;
+  stroke-linejoin: round;
+}
+
+.boss-eye {
+  fill: var(--gold);
+}
+
+.boss-mouth {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 3;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.boss-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+
+.boss-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--red);
+}
+
+.boss-name {
+  font-family: var(--display);
+  font-size: 24px;
+  line-height: 1.15;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.boss-bar {
+  position: relative;
+  height: 16px;
+  margin-top: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--edge-2);
+  overflow: hidden;
+}
+
+.boss-bar > span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--hp);
+  border-radius: inherit;
+  background: linear-gradient(90deg, #c7324f, var(--red));
+  box-shadow: 0 0 12px rgba(255, 92, 122, 0.55);
+  transition: width 0.6s ease;
+}
+
+.boss-mid .boss-bar > span {
+  background: linear-gradient(90deg, #c7324f, var(--warn));
+}
+
+.boss-low .boss-bar > span {
+  animation: boss-low 1.1s ease-in-out infinite;
+}
+
+@keyframes boss-low {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.boss-hp {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.boss-hp b {
+  color: var(--text);
+  font-size: 16px;
+}
+
+.boss-note {
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.boss-note b {
+  color: var(--text);
+}
+
+/* Slain. */
+.boss-dead {
+  border-color: rgba(255, 209, 102, 0.6);
+  background: radial-gradient(120% 140% at 0% 0%, rgba(255, 209, 102, 0.1), rgba(255, 209, 102, 0) 55%), var(--panel);
+  box-shadow: 0 0 24px rgba(255, 209, 102, 0.12);
+}
+
+.boss-dead .boss-glyph {
+  color: var(--muted-2);
+  filter: grayscale(1);
+  opacity: 0.7;
+}
+
+.boss-dead .boss-eye {
+  fill: var(--muted-2);
+}
+
+.boss-dead .boss-label {
+  color: var(--gold);
+}
+
+.boss-dead .boss-name {
+  text-decoration: line-through;
+  text-decoration-color: var(--gold);
+  text-decoration-thickness: 3px;
+  color: var(--muted);
+}
+
+/* The raider attacking right now. */
+.raid-atk {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--panel);
+  border: 1px solid var(--blue);
+  box-shadow: 0 0 0 1px var(--blue), 0 0 22px rgba(34, 211, 255, 0.3);
+  animation: koth-live 1.6s ease-in-out infinite;
+  min-width: 0;
+}
+
+.raid-atk .boss-label {
+  color: var(--blue);
+}
+
+.raid-atk-art {
+  flex: none;
+  width: 60px;
+  aspect-ratio: 3 / 4;
+  height: auto;
+  border-radius: 8px;
+  object-fit: cover;
+  background: var(--panel-2);
+}
+
+.raid-atk-art.ph {
+  display: grid;
+  place-items: center;
+  font-family: var(--display);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--muted-2);
+}
+
+.raid-atk-who {
+  font-family: var(--display);
+  font-size: 18px;
+  line-height: 1.15;
+}
+
+.raid-atk-need {
+  margin-top: 3px;
+  font-size: 13.5px;
+  color: var(--muted);
+}
+
+.raid-atk-need b {
+  font-family: var(--mono);
+  color: var(--gold);
+}
+
+/* Damage by viewer. */
+.raid-board {
+  display: flex;
+  flex-direction: column;
+}
+
+.raid-board-row {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 8em) minmax(40px, 1fr) 4.5em;
+  gap: 10px;
+  align-items: center;
+  padding: 6px 0;
+  border-top: 1px solid var(--edge);
+  font-size: 14px;
+}
+
+.raid-board-row b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.raid-board-rank {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.raid-board-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+}
+
+.raid-board-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--red);
+}
+
+.raid-board-row.killer b {
+  color: var(--gold);
+}
+
+.raid-board-row.killer .raid-board-bar > span {
+  background: var(--gold);
+}
+
+.raid-board-dmg {
+  text-align: right;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.bg-chip.raid-chip {
+  color: var(--red);
+  border-color: rgba(255, 92, 122, 0.5);
+}
+
+.raid-page,
+.raid-admin {
+  display: grid;
+  gap: 18px;
+  align-items: start;
+}
+
+.raid-page {
+  grid-template-columns: minmax(0, 560px) minmax(260px, 1fr);
+  margin-bottom: 8px;
+}
+
+.raid-admin {
+  grid-template-columns: minmax(0, 480px) minmax(0, 1fr);
+  margin-top: 18px;
+}
+
+@media (max-width: 900px) {
+  .raid-page,
+  .raid-admin {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 520px) {
+  .boss {
+    gap: 12px;
+    padding: 12px;
+  }
+  .boss-glyph {
+    width: 72px;
+    height: 72px;
+  }
+  .boss-name {
+    font-size: 20px;
+  }
+  .raid-board-row {
+    grid-template-columns: 16px minmax(0, 7em) minmax(30px, 1fr) 4em;
+  }
+}
+
+/* On stream. */
+.raid-ovl .boss,
+.raid-ovl .raid-atk {
+  background-color: rgba(8, 9, 13, 0.6);
+}
+
+.raid-ovl .boss-name {
+  font-size: 28px;
+}
+
+.raid-ovl .boss-bar {
+  height: 20px;
+}
+
+.ovl-raid .raid-board {
+  margin-top: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .raid-atk,
+  .boss-low .boss-bar > span {
+    animation: none;
+  }
+  .boss-bar > span {
+    transition: none;
+  }
+}
