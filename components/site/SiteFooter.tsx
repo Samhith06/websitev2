@@ -42,6 +42,7 @@ export function SiteFooter() {
             <Link href="/koth">King of the hill</Link>
             <Link href="/raid">Boss raid</Link>
             <Link href="/battle">Team battle</Link>
+            <Link href="/tournament">Slot tournament</Link>
             <Link href="/slots">Slot catalog</Link>
             <Link href="/community">Clips &amp; wall of fame</Link>
             <Link href="/verify">Verify a round</Link>

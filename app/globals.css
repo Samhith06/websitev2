@@ -6987,19 +6987,19 @@ body:has(.ovl) {
 /* The stream games' stats strip, on its own: five figures always on one row,
    so it fits the 520 × 90 source the admin screens tell staff to make. (The
    hunt's strip keeps wrapping into a block, which its own screen expects.) */
-.ovl-p-stats:is(.ovl-bingo, .ovl-koth, .ovl-raid, .ovl-battle) .ovl-stats {
+.ovl-p-stats:is(.ovl-bingo, .ovl-koth, .ovl-raid, .ovl-battle, .ovl-tourney) .ovl-stats {
   grid-template-columns: none;
   grid-auto-flow: column;
   grid-auto-columns: minmax(0, 1fr);
   gap: 8px;
 }
 
-.ovl-p-stats:is(.ovl-bingo, .ovl-koth, .ovl-raid, .ovl-battle) .ovl-stats span {
+.ovl-p-stats:is(.ovl-bingo, .ovl-koth, .ovl-raid, .ovl-battle, .ovl-tourney) .ovl-stats span {
   font-size: 9.5px;
   letter-spacing: 0.08em;
 }
 
-.ovl-p-stats:is(.ovl-bingo, .ovl-koth, .ovl-raid, .ovl-battle) .ovl-stats b {
+.ovl-p-stats:is(.ovl-bingo, .ovl-koth, .ovl-raid, .ovl-battle, .ovl-tourney) .ovl-stats b {
   font-size: 16px;
 }
 
@@ -7223,4 +7223,240 @@ body:has(.ovl) {
   .bt-tug-a {
     transition: none;
   }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Slot tournament
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* The bracket: a column per round. Each column spreads its matches evenly
+   down the same height, so a later round's match sits level with the pair
+   that feeds it. */
+.tb {
+  display: grid;
+  grid-template-columns: repeat(var(--rounds), minmax(150px, 1fr));
+  gap: 18px;
+  min-width: calc(var(--rounds) * 168px);
+}
+
+.tb-round {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.tb-round-name {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+.tb-matches {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  gap: 10px;
+}
+
+.tb-match {
+  position: relative;
+  border-radius: 9px;
+  border: 1px solid var(--edge-2);
+  background: var(--panel-2);
+  overflow: hidden;
+}
+
+/* A short stub off each match toward the next round. */
+.tb-round:not(:last-child) .tb-match::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: -19px;
+  width: 18px;
+  border-top: 1px solid var(--edge-2);
+}
+
+.tb-match.current {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 1px var(--blue), 0 0 18px rgba(34, 211, 255, 0.3);
+}
+
+.tb-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 9px;
+  font-size: 13px;
+  min-width: 0;
+}
+
+.tb-row + .tb-row {
+  border-top: 1px solid var(--edge);
+}
+
+.tb-row b {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tb-score {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.tb-row.empty {
+  color: var(--muted-2);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  justify-content: center;
+}
+
+.tb-row.won {
+  background: rgba(255, 209, 102, 0.1);
+}
+
+.tb-row.won b,
+.tb-row.won .tb-score {
+  color: var(--gold);
+}
+
+.tb-row.lost {
+  opacity: 0.45;
+}
+
+.tb-row.live {
+  background: rgba(34, 211, 255, 0.1);
+}
+
+.tb-row.live b {
+  color: var(--blue);
+}
+
+/* The match being played, head to head. */
+.tv {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid var(--edge-2);
+  background:
+    radial-gradient(80% 140% at 50% 0%, rgba(34, 211, 255, 0.1), transparent 60%),
+    var(--panel);
+  min-width: 0;
+}
+
+.tv-round {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gold);
+  text-align: center;
+}
+
+.tv-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.tv-vs {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 20px;
+  color: var(--muted);
+}
+
+.tv-side {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid var(--edge);
+  min-width: 0;
+}
+
+.tv-side.live {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 1px var(--blue), 0 0 18px rgba(34, 211, 255, 0.3);
+}
+
+.tv-side .boss-label {
+  color: var(--muted);
+}
+
+.tv-side.live .boss-label {
+  color: var(--blue);
+}
+
+.tv-score {
+  margin-top: 3px;
+  font-family: var(--mono);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+
+.tv-note {
+  margin: 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--warn);
+}
+
+@media (max-width: 520px) {
+  .tv-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .tv-vs {
+    text-align: center;
+    font-size: 15px;
+  }
+}
+
+/* On stream: the bracket fills the source and reads from across the room. */
+.tb-ovl {
+  min-width: 0;
+}
+
+.tb-ovl .tb-row {
+  font-size: 14px;
+  padding: 7px 10px;
+}
+
+.tb-ovl .tb-match {
+  background: rgba(18, 20, 27, 0.85);
+}
+
+.ovl-tourney .tv {
+  background-color: rgba(8, 9, 13, 0.6);
+  border: 0;
+  padding: 4px;
+}
+
+/* An OBS source is sized by staff, not a phone: the two players always face
+   each other, whatever the source's width. */
+.ovl-tourney .tv-grid {
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+}
+
+.ovl-tourney .tv-vs {
+  font-size: 20px;
 }

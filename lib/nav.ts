@@ -1,9 +1,9 @@
 /**
  * The primary destinations: six that are always there, plus a stream game —
- * Bonus Hunt, Slot Bingo, King of the Hill, Boss Raid, Team Battle — only
- * while one is running. They sit beside Games because on stream nights that
- * is where chat is sent, and between games a link to a finished hunt is not a
- * destination anyone needs.
+ * Bonus Hunt, Slot Bingo, King of the Hill, Boss Raid, Team Battle, Slot
+ * Tournament — only while one is running. They sit beside Games because on
+ * stream nights that is where chat is sent, and between games a link to a
+ * finished hunt is not a destination anyone needs.
  *
  * The same list drives the desktop row and the mobile tab bar, which is why
  * each entry carries both a full label and a short one — "Leaderboard" does
@@ -28,13 +28,21 @@ const BINGO: NavItem = { href: '/bingo', label: 'Slot Bingo', short: 'Bingo', ic
 const KOTH: NavItem = { href: '/koth', label: 'King of the Hill', short: 'KOTH', icon: '♛' };
 const RAID: NavItem = { href: '/raid', label: 'Boss Raid', short: 'Raid', icon: '⚔' };
 const BATTLE: NavItem = { href: '/battle', label: 'Team Battle', short: 'Battle', icon: '⚑' };
+const TOURNEY: NavItem = { href: '/tournament', label: 'Tournament', short: 'Cup', icon: '♜' };
 
 /**
  * Which stream games are running right now. Bingo, king of the hill, the boss
- * raid and the team battle all take !sr, so at most one of them runs: the row
- * never holds more than eight.
+ * raid, the team battle and the tournament all take !sr, so at most one of
+ * them runs: the row never holds more than eight.
  */
-export type LiveGames = { hunt: boolean; bingo: boolean; koth: boolean; raid: boolean; battle: boolean };
+export type LiveGames = {
+  hunt: boolean;
+  bingo: boolean;
+  koth: boolean;
+  raid: boolean;
+  battle: boolean;
+  tourney: boolean;
+};
 
 export function navFor(live: LiveGames): NavItem[] {
   return [
@@ -46,6 +54,7 @@ export function navFor(live: LiveGames): NavItem[] {
     ...(live.koth ? [KOTH] : []),
     ...(live.raid ? [RAID] : []),
     ...(live.battle ? [BATTLE] : []),
+    ...(live.tourney ? [TOURNEY] : []),
     GAMES,
     RAFFLES,
     STORE,
