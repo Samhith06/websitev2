@@ -6403,3 +6403,228 @@ body:has(.ovl) {
     animation: none;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   King of the hill
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* The hill: the king's slot art as a tall tile beside who holds it and the
+   multiplier to beat; the challenger, while one plays, in the same shape in
+   blue beneath. */
+.koth {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.kt {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  min-width: 0;
+}
+
+.kt-king {
+  border-color: rgba(255, 209, 102, 0.6);
+  background: linear-gradient(135deg, rgba(255, 209, 102, 0.1), rgba(255, 209, 102, 0) 60%), var(--panel);
+  box-shadow: 0 0 24px rgba(255, 209, 102, 0.12);
+}
+
+.kt-challenger {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 1px var(--blue), 0 0 22px rgba(34, 211, 255, 0.3);
+  animation: koth-live 1.6s ease-in-out infinite;
+}
+
+@keyframes koth-live {
+  50% {
+    box-shadow: 0 0 0 1px var(--blue), 0 0 8px rgba(34, 211, 255, 0.1);
+  }
+}
+
+.kt-empty {
+  border-style: dashed;
+  border-color: var(--edge-2);
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.kt-art {
+  flex: none;
+  width: 96px;
+  aspect-ratio: 3 / 4;
+  height: auto;
+  border-radius: 9px;
+  object-fit: cover;
+  background: var(--panel-2);
+}
+
+.kt-art.ph {
+  display: grid;
+  place-items: center;
+  font-family: var(--display);
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--muted-2);
+}
+
+.kt-challenger .kt-art {
+  width: 72px;
+}
+
+.kt-crown {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 72px;
+  aspect-ratio: 3 / 4;
+  border-radius: 9px;
+  border: 1px dashed var(--edge-2);
+  font-size: 30px;
+  color: var(--muted-2);
+}
+
+.kt-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.kt-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.kt-king .kt-label {
+  color: var(--gold);
+}
+
+.kt-challenger .kt-label {
+  color: var(--blue);
+}
+
+.kt-who {
+  font-family: var(--display);
+  font-size: 22px;
+  line-height: 1.15;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kt-challenger .kt-who {
+  font-size: 18px;
+}
+
+.kt-slot,
+.kt-meta {
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kt-x {
+  margin-top: 4px;
+  font-family: var(--mono);
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+
+.kt-need {
+  margin-top: 4px;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.kt-need b {
+  font-family: var(--mono);
+  color: var(--gold);
+}
+
+/* The challenger list: the multiplier chip is gold for the king, green for
+   a buy that took the hill in its time, grey for one that fell short. */
+.bg-chip.koth-chip-king {
+  color: var(--gold);
+  border-color: rgba(255, 209, 102, 0.6);
+}
+
+.bg-chip.koth-chip-short {
+  color: var(--muted);
+  border-color: var(--edge-2);
+}
+
+.koth-page,
+.koth-admin {
+  display: grid;
+  gap: 18px;
+  align-items: start;
+}
+
+.koth-page {
+  grid-template-columns: minmax(0, 560px) minmax(260px, 1fr);
+  margin-bottom: 8px;
+}
+
+.koth-admin {
+  grid-template-columns: minmax(0, 440px) minmax(0, 1fr);
+  margin-top: 18px;
+}
+
+@media (max-width: 900px) {
+  .koth-page,
+  .koth-admin {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 520px) {
+  .kt {
+    gap: 12px;
+    padding: 12px;
+  }
+  .kt-art {
+    width: 72px;
+  }
+  .kt-challenger .kt-art,
+  .kt-crown {
+    width: 56px;
+  }
+  .kt-who {
+    font-size: 18px;
+  }
+  .kt-x {
+    font-size: 24px;
+  }
+}
+
+/* On stream: the panel is the card already, so the hill drops its own frame
+   colour a touch and reads larger. */
+.koth-ovl .kt {
+  background: rgba(8, 9, 13, 0.6);
+}
+
+.koth-ovl .kt-who {
+  font-size: 26px;
+}
+
+.koth-ovl .kt-x {
+  font-size: 36px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kt-challenger {
+    animation: none;
+  }
+}

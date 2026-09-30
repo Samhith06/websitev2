@@ -1,6 +1,6 @@
 /**
  * The primary destinations: six that are always there, plus a stream game —
- * Bonus Hunt, Slot Bingo — only while one is running. They sit beside Games
+ * Bonus Hunt, Slot Bingo, King of the Hill — only while one is running. They sit beside Games
  * because on stream nights that is where chat is sent, and between games a
  * link to a finished hunt is not a destination anyone needs.
  *
@@ -24,9 +24,13 @@ const STORE: NavItem = { href: '/store', label: 'Store', short: 'Store', icon: '
 
 const HUNT: NavItem = { href: '/hunt', label: 'Bonus Hunt', short: 'Hunt', icon: '◎' };
 const BINGO: NavItem = { href: '/bingo', label: 'Slot Bingo', short: 'Bingo', icon: '▦' };
+const KOTH: NavItem = { href: '/koth', label: 'King of the Hill', short: 'KOTH', icon: '♛' };
 
-/** Which stream games are running right now. */
-export type LiveGames = { hunt: boolean; bingo: boolean };
+/**
+ * Which stream games are running right now. Bingo and king of the hill both
+ * take !sr, so at most one of them runs: the row never holds more than eight.
+ */
+export type LiveGames = { hunt: boolean; bingo: boolean; koth: boolean };
 
 export function navFor(live: LiveGames): NavItem[] {
   return [
@@ -35,6 +39,7 @@ export function navFor(live: LiveGames): NavItem[] {
     MILESTONES,
     ...(live.hunt ? [HUNT] : []),
     ...(live.bingo ? [BINGO] : []),
+    ...(live.koth ? [KOTH] : []),
     GAMES,
     RAFFLES,
     STORE,

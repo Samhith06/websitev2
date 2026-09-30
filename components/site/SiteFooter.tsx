@@ -39,6 +39,7 @@ export function SiteFooter() {
             <Link href="/store">Store</Link>
             <Link href="/hunt">Bonus hunt</Link>
             <Link href="/bingo">Slot bingo</Link>
+            <Link href="/koth">King of the hill</Link>
             <Link href="/slots">Slot catalog</Link>
             <Link href="/community">Clips &amp; wall of fame</Link>
             <Link href="/verify">Verify a round</Link>

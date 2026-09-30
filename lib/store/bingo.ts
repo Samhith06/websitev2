@@ -293,13 +293,19 @@ export async function submitBingoRequest(input: {
 
 export class BingoError extends Error {}
 
+/**
+ * Starting a card. Refused while a king of the hill runs: both take `!sr`,
+ * and chat cannot say which one it meant.
+ */
 export async function createCard(input: { title: string; size: number; squarePrize: number }): Promise<void> {
   try {
-    await write(`INSERT INTO bingo_cards (title, size, square_prize) VALUES ($1, $2, $3) RETURNING id`, [
-      input.title,
-      input.size,
-      input.squarePrize,
-    ]);
+    const made = await write(
+      `INSERT INTO bingo_cards (title, size, square_prize)
+       SELECT $1, $2, $3 WHERE NOT EXISTS (SELECT 1 FROM koth_games WHERE status = 'running')
+       RETURNING id`,
+      [input.title, input.size, input.squarePrize],
+    );
+    if (made.length === 0) throw new BingoError('A king of the hill is running and takes !sr. End it first.');
   } catch (error) {
     if (error instanceof Error && error.message.includes('bingo_cards_one_live_idx')) {
       throw new BingoError('A bingo is already running. End it before starting another.');

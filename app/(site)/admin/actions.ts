@@ -5,7 +5,7 @@ import { auth } from '@/auth';
 import { devBypass, roleFor, type AdminRole } from '@/lib/admin';
 import { record as record_ } from '@/lib/store/audit';
 import { InsufficientCoins, balanceOf, record } from '@/lib/store/coins';
-import { coins, isWholeCalendarMonth, money } from '@/lib/format';
+import { coins, isWholeCalendarMonth, money, mult } from '@/lib/format';
 import { approveLink, rejectLink } from '@/lib/store/razed-links';
 import {
   TierInUse,
@@ -90,6 +90,18 @@ import {
   undoLastResult,
 } from '@/lib/store/bingo';
 import { BINGO_SIZES } from '@/lib/bingo';
+import {
+  KothError,
+  createGame,
+  deleteGame,
+  dismissKothEntry,
+  drawChallenger,
+  finishGame,
+  resolveChallenge,
+  setKothRequestsOpen,
+  skipChallenge,
+  undoLastChallenge,
+} from '@/lib/store/koth';
 
 export type Outcome = { ok: true; message: string } | { ok: false; error: string };
 
@@ -1903,6 +1915,131 @@ export async function endBingo(cardId: number): Promise<Outcome> {
     return { ok: true, message: `BINGO settled.${paid}${unpaid}` };
   } catch (error) {
     if (error instanceof BingoError) return { ok: false, error: error.message };
+    throw error;
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* King of the hill                                                           */
+/* -------------------------------------------------------------------------- */
+
+function revalidateKoth(): void {
+  revalidatePath('/admin/koth');
+  revalidatePath('/koth');
+}
+
+/** The king of the hill twin of `bingoAction`: a KothError is a sentence for the mod. */
+async function kothAction(
+  action: string,
+  target: string,
+  detail: Record<string, unknown>,
+  run: () => Promise<string>,
+): Promise<Outcome> {
+  const who = await staff();
+  if (!who) return DENIED;
+  try {
+    const message = await run();
+    await record_({ actor: who.name, actorDiscordId: who.discordId, action, target, detail });
+    revalidateKoth();
+    return { ok: true, message };
+  } catch (error) {
+    if (error instanceof KothError) return { ok: false, error: error.message };
+    throw error;
+  }
+}
+
+export async function startKoth(formData: FormData): Promise<Outcome> {
+  const who = await staff();
+  if (!who) return DENIED;
+  const title = String(formData.get('title') ?? '').trim();
+  const prize = Number(formData.get('prize') ?? 0);
+  if (!title) return { ok: false, error: 'Give the game a name.' };
+  if (!Number.isInteger(prize) || prize < 0 || prize > MAX_ADJUSTMENT) {
+    return { ok: false, error: 'The prize is a whole number of coins, or zero.' };
+  }
+  if (who.role !== 'owner' && prize > MOD_GTB_PRIZE_CAP) {
+    return { ok: false, error: `Prizes over ${coins(MOD_GTB_PRIZE_CAP)} MC need an owner.` };
+  }
+  return kothAction('koth.created', title, { prize }, async () => {
+    await createGame({ title, prize });
+    return `"${title}" is live. Chat joins with !sr <slot>.`;
+  });
+}
+
+export async function toggleKothRequests(gameId: number, open: boolean): Promise<Outcome> {
+  return kothAction('koth.requests', String(gameId), { open }, async () => {
+    await setKothRequestsOpen(gameId, open);
+    return open ? '!sr is open.' : '!sr is closed.';
+  });
+}
+
+export async function drawKoth(gameId: number): Promise<Outcome> {
+  const detail: Record<string, unknown> = {};
+  return kothAction('koth.drawn', String(gameId), detail, async () => {
+    const draw = await drawChallenger(gameId);
+    Object.assign(detail, draw);
+    return `${draw.viewer} is up with ${draw.slot}.`;
+  });
+}
+
+export async function resolveKothTurn(formData: FormData): Promise<Outcome> {
+  const turnId = Number(formData.get('turnId'));
+  const buyCost = moneyField(formData.get('buyCost'));
+  const payout = moneyField(formData.get('payout'));
+  if (buyCost == null || buyCost <= 0) return { ok: false, error: 'Enter what the bonus buy cost, e.g. 200.' };
+  if (payout == null) return { ok: false, error: 'Enter what it paid, e.g. 246.80 (0 if nothing).' };
+  return kothAction('koth.result', String(turnId), { buyCost, payout }, async () => {
+    const r = await resolveChallenge(turnId, buyCost, payout);
+    if (!r.crowned) return `${mult(r.multiplier)} falls short of ${mult(r.toBeat)}. The king holds. Draw the next challenger.`;
+    return r.previous && r.previous !== r.viewer
+      ? `${r.viewer} takes the hill from ${r.previous} with ${mult(r.multiplier)}.`
+      : `${r.viewer} holds the hill with ${mult(r.multiplier)}.`;
+  });
+}
+
+export async function skipKothTurn(turnId: number): Promise<Outcome> {
+  return kothAction('koth.skipped', String(turnId), {}, async () => {
+    await skipChallenge(turnId);
+    return 'Skipped. The hill is unchanged; draw again.';
+  });
+}
+
+export async function undoKothResult(gameId: number): Promise<Outcome> {
+  return kothAction('koth.undone', String(gameId), {}, async () => {
+    const viewer = await undoLastChallenge(gameId);
+    return `${viewer}'s buy is back in play. Record its result again.`;
+  });
+}
+
+export async function dismissKothPoolEntry(entryId: number): Promise<Outcome> {
+  return kothAction('koth.entry.dismissed', String(entryId), {}, async () => {
+    await dismissKothEntry(entryId);
+    return 'Removed from the pool.';
+  });
+}
+
+export async function removeKoth(gameId: number): Promise<Outcome> {
+  const detail: Record<string, unknown> = {};
+  return kothAction('koth.deleted', String(gameId), detail, async () => {
+    detail.title = await deleteGame(gameId);
+    return `Deleted "${detail.title}".`;
+  });
+}
+
+/** Ending writes its own audit row inside the payout transaction. */
+export async function endKoth(gameId: number): Promise<Outcome> {
+  const who = await staff();
+  if (!who) return DENIED;
+  try {
+    const r = await finishGame(gameId, who.name);
+    revalidateKoth();
+    if (!r.king) return { ok: true, message: 'Ended with nobody on the hill, so nobody is paid.' };
+    const x = r.multiplier == null ? '' : ` with ${mult(r.multiplier)}`;
+    if (r.paid) return { ok: true, message: `${r.king} is king${x}. Paid ${coins(r.paid)} MC.` };
+    if (r.unpaid) return { ok: true, message: `${r.king} is king${x}, but their Kick account is not linked, so nothing was paid.` };
+    return { ok: true, message: `${r.king} is king${x}.` };
+  } catch (error) {
+    if (error instanceof KothError) return { ok: false, error: error.message };
     throw error;
   }
 }
