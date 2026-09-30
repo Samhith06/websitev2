@@ -6983,3 +6983,244 @@ body:has(.ovl) {
     transition: none;
   }
 }
+
+/* The stream games' stats strip, on its own: five figures always on one row,
+   so it fits the 520 × 90 source the admin screens tell staff to make. (The
+   hunt's strip keeps wrapping into a block, which its own screen expects.) */
+.ovl-p-stats:is(.ovl-bingo, .ovl-koth, .ovl-raid, .ovl-battle) .ovl-stats {
+  grid-template-columns: none;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+
+.ovl-p-stats:is(.ovl-bingo, .ovl-koth, .ovl-raid, .ovl-battle) .ovl-stats span {
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+}
+
+.ovl-p-stats:is(.ovl-bingo, .ovl-koth, .ovl-raid, .ovl-battle) .ovl-stats b {
+  font-size: 16px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Team battle
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Two teams facing each other: the first in blue on the left, the second in
+   red on the right, and a tug-of-war bar between them whose split is each
+   team's share of the points. */
+.battle {
+  --bt-a: var(--blue);
+  --bt-b: var(--red);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.bt-c-a { color: var(--blue); }
+.bt-c-b { color: var(--red); }
+
+.bt-board {
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid var(--edge-2);
+  background:
+    radial-gradient(90% 140% at 0% 0%, rgba(34, 211, 255, 0.12), transparent 55%),
+    radial-gradient(90% 140% at 100% 0%, rgba(255, 92, 122, 0.12), transparent 55%),
+    var(--panel);
+}
+
+.bt-teams {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.bt-team {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.bt-team.bt-b {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.bt-name {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.bt-a .bt-name { color: var(--bt-a, var(--blue)); }
+.bt-b .bt-name { color: var(--bt-b, var(--red)); }
+
+.bt-total {
+  font-family: var(--mono);
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.bt-sub {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.bt-team.won .bt-total {
+  color: var(--gold);
+  text-shadow: 0 0 18px rgba(255, 209, 102, 0.45);
+}
+
+.bt-team.lost {
+  opacity: 0.55;
+}
+
+.bt-tug {
+  display: flex;
+  height: 14px;
+  margin: 12px 0 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.bt-tug-a {
+  width: var(--a);
+  background: linear-gradient(90deg, var(--blue-2, #0ea5c6), var(--blue));
+  box-shadow: 0 0 12px rgba(34, 211, 255, 0.45);
+  transition: width 0.6s ease;
+}
+
+.bt-tug-b {
+  flex: 1;
+  background: linear-gradient(90deg, var(--red), #c7324f);
+  box-shadow: 0 0 12px rgba(255, 92, 122, 0.45);
+  border-left: 2px solid var(--ground, #050507);
+}
+
+.bt-state {
+  text-align: center;
+  font-size: 13.5px;
+  color: var(--muted);
+}
+
+.bt-state b {
+  color: var(--text);
+}
+
+.bt-state b.bt-c-a { color: var(--blue); }
+.bt-state b.bt-c-b { color: var(--red); }
+
+/* The member playing, framed in their team's colour. */
+.bt-player {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--panel);
+  min-width: 0;
+  animation: koth-live 1.6s ease-in-out infinite;
+}
+
+.bt-player.bt-a {
+  border: 1px solid var(--blue);
+  box-shadow: 0 0 0 1px var(--blue), 0 0 22px rgba(34, 211, 255, 0.3);
+}
+
+.bt-player.bt-b {
+  border: 1px solid var(--red);
+  box-shadow: 0 0 0 1px var(--red), 0 0 22px rgba(255, 92, 122, 0.3);
+  animation-name: bt-live-b;
+}
+
+@keyframes bt-live-b {
+  50% {
+    box-shadow: 0 0 0 1px var(--red), 0 0 8px rgba(255, 92, 122, 0.1);
+  }
+}
+
+.bt-player.bt-a .boss-label { color: var(--blue); }
+.bt-player.bt-b .boss-label { color: var(--red); }
+
+/* Each team's scorers, side by side. */
+.bt-rosters {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.bt-roster {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.bt-roster .bt-name {
+  margin-bottom: 4px;
+}
+
+.bt-roster-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 0;
+  border-top: 1px solid var(--edge);
+  font-size: 14px;
+}
+
+.bt-roster-row b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bt-roster-row span {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.bg-chip.bt-chip-a { color: var(--blue); border-color: rgba(34, 211, 255, 0.5); }
+.bg-chip.bt-chip-b { color: var(--red); border-color: rgba(255, 92, 122, 0.5); }
+.tag.bt-tag-a { color: var(--blue); border-color: rgba(34, 211, 255, 0.45); }
+.tag.bt-tag-b { color: var(--red); border-color: rgba(255, 92, 122, 0.45); }
+
+.ovl-now.bt-now-a { border-color: rgba(34, 211, 255, 0.7); }
+.ovl-now.bt-now-b { border-color: rgba(255, 92, 122, 0.7); }
+
+@media (max-width: 520px) {
+  .bt-total {
+    font-size: 26px;
+  }
+  .bt-rosters {
+    gap: 12px;
+  }
+}
+
+/* On stream. */
+.battle-ovl .bt-board,
+.battle-ovl .bt-player {
+  background-color: rgba(8, 9, 13, 0.6);
+}
+
+.battle-ovl .bt-total {
+  font-size: 40px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bt-player {
+    animation: none;
+  }
+  .bt-tug-a {
+    transition: none;
+  }
+}

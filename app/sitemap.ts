@@ -20,6 +20,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     ['/bingo', 'daily', 0.6],
     ['/koth', 'daily', 0.6],
     ['/raid', 'daily', 0.6],
+    ['/battle', 'daily', 0.6],
     ['/slots', 'daily', 0.6],
     ['/raffles', 'daily', 0.7],
     ['/store', 'weekly', 0.7],

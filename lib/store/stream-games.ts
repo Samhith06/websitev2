@@ -5,27 +5,29 @@ import type { LiveGames } from '@/lib/nav';
 /**
  * Which stream games are running, for the primary nav. One small query, since
  * it runs under every page: a hunt counts until it is finished, a bingo, a
- * king of the hill or a boss raid while it is running.
+ * king of the hill, a boss raid or a team battle while it is running.
  *
  * The nav is not worth a broken page, so a failed read means "nothing live".
  */
 export async function liveGames(): Promise<LiveGames> {
   try {
-    const row = await one<{ hunt: boolean; bingo: boolean; koth: boolean; raid: boolean }>(
+    const row = await one<{ hunt: boolean; bingo: boolean; koth: boolean; raid: boolean; battle: boolean }>(
       `SELECT EXISTS (SELECT 1 FROM bonus_hunts WHERE status <> 'finished') AS hunt,
               EXISTS (SELECT 1 FROM bingo_cards WHERE status = 'running') AS bingo,
               EXISTS (SELECT 1 FROM koth_games WHERE status = 'running') AS koth,
-              EXISTS (SELECT 1 FROM raid_games WHERE status = 'running') AS raid`,
+              EXISTS (SELECT 1 FROM raid_games WHERE status = 'running') AS raid,
+              EXISTS (SELECT 1 FROM battle_games WHERE status = 'running') AS battle`,
     );
     return {
       hunt: row?.hunt ?? false,
       bingo: row?.bingo ?? false,
       koth: row?.koth ?? false,
       raid: row?.raid ?? false,
+      battle: row?.battle ?? false,
     };
   } catch (error) {
     console.error('[nav] could not read live stream games', error);
-    return { hunt: false, bingo: false, koth: false, raid: false };
+    return { hunt: false, bingo: false, koth: false, raid: false, battle: false };
   }
 }
 
@@ -39,6 +41,7 @@ const SR_GAMES = {
   bingo: { table: 'bingo_cards', name: 'slot bingo' },
   koth: { table: 'koth_games', name: 'king of the hill' },
   raid: { table: 'raid_games', name: 'boss raid' },
+  battle: { table: 'battle_games', name: 'team battle' },
 } as const;
 
 export type SrGame = keyof typeof SR_GAMES;

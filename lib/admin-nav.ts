@@ -1,10 +1,10 @@
 /**
- * The staff area's seventeen screens, in four groups.
+ * The staff area's eighteen screens, in four groups.
  *
  * Moderation first because it is the work: those are what a mod has open
- * during a stream. Stream games next — the hunt, bingo, king of the hill and
- * boss raid are run live, on stream nights. Data and System are reference and
- * configuration, reached occasionally.
+ * during a stream. Stream games next — the hunt, bingo, king of the hill, boss
+ * raid and team battle are run live, on stream nights. Data and System are
+ * reference and configuration, reached occasionally.
  */
 export type AdminSection = {
   href: string;
@@ -26,6 +26,7 @@ export const ADMIN_SECTIONS: AdminSection[] = [
   { href: '/admin/bingo', label: 'Slot bingo', group: 'games' },
   { href: '/admin/koth', label: 'King of the hill', group: 'games' },
   { href: '/admin/raid', label: 'Boss raid', group: 'games' },
+  { href: '/admin/battle', label: 'Team battle', group: 'games' },
   { href: '/admin/users', label: 'Users', group: 'data' },
   { href: '/admin/razed', label: 'Razed wagerers', group: 'data' },
   { href: '/admin/badges', label: 'Badges', group: 'data' },

@@ -14,6 +14,7 @@ import { submitGuess, submitRequest } from '@/lib/store/hunts';
 import { liveCard, submitBingoRequest } from '@/lib/store/bingo';
 import { liveGame, submitKothRequest } from '@/lib/store/koth';
 import { liveRaid, submitRaidRequest } from '@/lib/store/raid';
+import { liveBattle, submitBattleRequest } from '@/lib/store/battle';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -147,8 +148,8 @@ async function onChatMessage(payload: unknown): Promise<void> {
 
 /**
  * `!sr` and `!gtb` for the bonus hunt, and `!sr` for slot bingo, king of the
- * hill and the boss raid. Any chatter can use them — a linked account is only
- * needed to be paid.
+ * hill, the boss raid and the team battle. Any chatter can use them — a linked
+ * account is only needed to be paid.
  *
  * A failure here is logged and swallowed rather than thrown: the message still
  * has to open a presence window, and a thrown error would make Kick retry the
@@ -172,10 +173,12 @@ async function onHuntCommand(message: { senderId: string; senderUsername: string
 }
 
 /**
- * Where `!sr` goes: to whichever of slot bingo, king of the hill or the boss
- * raid is running (at most one ever is), else to the bonus hunt.
+ * Where `!sr` goes: to whichever of slot bingo, king of the hill, the boss
+ * raid or the team battle is running (at most one ever is), else to the bonus
+ * hunt.
  */
 async function onSlotRequest(input: { kickUserId: string; kickUsername: string; query: string }) {
+  if (await liveBattle()) return submitBattleRequest(input);
   if (await liveRaid()) return submitRaidRequest(input);
   if (await liveGame()) return submitKothRequest(input);
   if (await liveCard()) return submitBingoRequest(input);

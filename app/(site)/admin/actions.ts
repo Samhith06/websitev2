@@ -115,6 +115,19 @@ import {
   undoLastRaidTurn,
 } from '@/lib/store/raid';
 import { hp } from '@/lib/raid';
+import {
+  BattleError,
+  createBattle,
+  deleteBattle,
+  dismissBattleEntry,
+  drawBattler,
+  finishBattle,
+  resolveBattleTurn,
+  setBattleRequestsOpen,
+  skipBattleTurn,
+  undoLastBattleTurn,
+} from '@/lib/store/battle';
+import { pts, validTeamName } from '@/lib/battle';
 
 export type Outcome = { ok: true; message: string } | { ok: false; error: string };
 
@@ -2185,6 +2198,141 @@ export async function endRaid(gameId: number): Promise<Outcome> {
     return { ok: true, message: `Boss slain by ${r.killer}.` };
   } catch (error) {
     if (error instanceof RaidError) return { ok: false, error: error.message };
+    throw error;
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Team battle                                                                */
+/* -------------------------------------------------------------------------- */
+
+function revalidateBattle(): void {
+  revalidatePath('/admin/battle');
+  revalidatePath('/battle');
+}
+
+/** The team battle twin of `raidAction`: a BattleError is a sentence for the mod. */
+async function battleAction(
+  action: string,
+  target: string,
+  detail: Record<string, unknown>,
+  run: () => Promise<string>,
+): Promise<Outcome> {
+  const who = await staff();
+  if (!who) return DENIED;
+  try {
+    const message = await run();
+    await record_({ actor: who.name, actorDiscordId: who.discordId, action, target, detail });
+    revalidateBattle();
+    return { ok: true, message };
+  } catch (error) {
+    if (error instanceof BattleError) return { ok: false, error: error.message };
+    throw error;
+  }
+}
+
+export async function startBattle(formData: FormData): Promise<Outcome> {
+  const who = await staff();
+  if (!who) return DENIED;
+  const title = String(formData.get('title') ?? '').trim();
+  const teamA = String(formData.get('teamA') ?? '').trim();
+  const teamB = String(formData.get('teamB') ?? '').trim();
+  const rounds = Number(formData.get('rounds'));
+  const prize = Number(formData.get('prize') ?? 0);
+  if (!title) return { ok: false, error: 'Give the battle a name.' };
+  if (!validTeamName(teamA) || !validTeamName(teamB)) {
+    return { ok: false, error: 'Team names are one word, letters and numbers only, so chat can type them before a slot.' };
+  }
+  if (teamA.toLowerCase() === teamB.toLowerCase()) return { ok: false, error: 'The two teams need different names.' };
+  if (!Number.isInteger(rounds) || rounds < 1 || rounds > 50) return { ok: false, error: 'Buys per team is from 1 to 50.' };
+  if (!Number.isInteger(prize) || prize < 0 || prize > MAX_ADJUSTMENT) {
+    return { ok: false, error: 'The pot is a whole number of coins, or zero.' };
+  }
+  if (who.role !== 'owner' && prize > MOD_GTB_PRIZE_CAP) {
+    return { ok: false, error: `Pots over ${coins(MOD_GTB_PRIZE_CAP)} MC need an owner.` };
+  }
+  return battleAction('battle.created', title, { teamA, teamB, rounds, prize }, async () => {
+    await createBattle({ title, teamA, teamB, rounds, prize });
+    return `"${title}" is live: ${teamA} vs ${teamB}. Chat joins with !sr ${teamA.toLowerCase()} <slot> or !sr ${teamB.toLowerCase()} <slot>.`;
+  });
+}
+
+export async function toggleBattleRequests(gameId: number, open: boolean): Promise<Outcome> {
+  return battleAction('battle.requests', String(gameId), { open }, async () => {
+    await setBattleRequestsOpen(gameId, open);
+    return open ? '!sr is open.' : '!sr is closed.';
+  });
+}
+
+export async function drawBattle(gameId: number): Promise<Outcome> {
+  const detail: Record<string, unknown> = {};
+  return battleAction('battle.drawn', String(gameId), detail, async () => {
+    const draw = await drawBattler(gameId);
+    Object.assign(detail, draw);
+    return `${draw.viewer} plays for ${draw.team} with ${draw.slot}.`;
+  });
+}
+
+export async function resolveBattle(formData: FormData): Promise<Outcome> {
+  const turnId = Number(formData.get('turnId'));
+  const buyCost = moneyField(formData.get('buyCost'));
+  const payout = moneyField(formData.get('payout'));
+  if (buyCost == null || buyCost <= 0) return { ok: false, error: 'Enter what the bonus buy cost, e.g. 200.' };
+  if (payout == null) return { ok: false, error: 'Enter what it paid, e.g. 246.80 (0 if nothing).' };
+  return battleAction('battle.result', String(turnId), { buyCost, payout }, async () => {
+    const r = await resolveBattleTurn(turnId, buyCost, payout);
+    const scoreLine = `${pts(r.total.a)}–${pts(r.total.b)}`;
+    if (r.winner) return `+${pts(r.points)} for ${r.team}. ${r.winner} win ${scoreLine}! End the battle to pay the team.`;
+    if (r.tiebreak) return `+${pts(r.points)} for ${r.team}. Level at ${scoreLine} — draw a tiebreaker.`;
+    return `+${pts(r.points)} for ${r.team}. Score ${scoreLine}. Draw the next player.`;
+  });
+}
+
+export async function skipBattle(turnId: number): Promise<Outcome> {
+  return battleAction('battle.skipped', String(turnId), {}, async () => {
+    await skipBattleTurn(turnId);
+    return "Skipped. Still the same team's turn; draw again.";
+  });
+}
+
+export async function undoBattleResult(gameId: number): Promise<Outcome> {
+  return battleAction('battle.undone', String(gameId), {}, async () => {
+    const viewer = await undoLastBattleTurn(gameId);
+    return `${viewer}'s buy is back in play. Record its result again.`;
+  });
+}
+
+export async function dismissBattlePoolEntry(entryId: number): Promise<Outcome> {
+  return battleAction('battle.entry.dismissed', String(entryId), {}, async () => {
+    await dismissBattleEntry(entryId);
+    return 'Removed from the pool. They stay on their team.';
+  });
+}
+
+export async function removeBattle(gameId: number): Promise<Outcome> {
+  const detail: Record<string, unknown> = {};
+  return battleAction('battle.deleted', String(gameId), detail, async () => {
+    detail.title = await deleteBattle(gameId);
+    return `Deleted "${detail.title}".`;
+  });
+}
+
+/** Ending writes its own audit row inside the payout transaction. */
+export async function endBattle(gameId: number): Promise<Outcome> {
+  const who = await staff();
+  if (!who) return DENIED;
+  try {
+    const r = await finishBattle(gameId, who.name);
+    revalidateBattle();
+    const scoreLine = `${pts(r.total.a)}–${pts(r.total.b)}`;
+    if (!r.winner) return { ok: true, message: `Battle ended at ${scoreLine} before it was decided, so nobody is paid.` };
+    const paid = r.paidMembers
+      ? ` Paid ${coins(r.share)} MC each to ${r.paidMembers} member${r.paidMembers === 1 ? '' : 's'}.`
+      : '';
+    const unpaid = r.unpaid.length ? ` Not linked, so not paid: ${r.unpaid.join(', ')}.` : '';
+    return { ok: true, message: `${r.winner} win ${scoreLine}.${paid}${unpaid}` };
+  } catch (error) {
+    if (error instanceof BattleError) return { ok: false, error: error.message };
     throw error;
   }
 }
