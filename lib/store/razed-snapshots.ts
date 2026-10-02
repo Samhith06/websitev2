@@ -1,5 +1,5 @@
 import 'server-only';
-import { one, rows, tx } from '@/lib/db';
+import { one, rows, rows as rowsOf, tx } from '@/lib/db';
 import { fetchRazedLeaderboard, type RazedResult } from '@/lib/razed';
 
 /**
@@ -248,6 +248,21 @@ export async function syncLifetime(): Promise<SyncOutcome> {
     windows += 1;
     end = new Date(start);
     end.setUTCDate(end.getUTCDate() - 1);
+  }
+
+  // Hand-entered wagering the feed does not report. Applied here, at rebuild,
+  // rather than at read time, so every reader of the snapshot sees the same
+  // total — the ladder, the profile and the admin wagerers screen alike.
+  const adjustments = await rowsOf<{ username: string; amount: string }>(
+    `SELECT min(username) AS username, sum(amount)::text AS amount
+       FROM razed_wager_adjustments
+      GROUP BY lower(username)`,
+  );
+  for (const adj of adjustments) {
+    const key = adj.username.toLowerCase();
+    const existing = totals.get(key);
+    if (existing) existing.wagered += Number(adj.amount);
+    else totals.set(key, { username: adj.username, wagered: Number(adj.amount) });
   }
 
   const rows = [...totals.values()].sort((a, b) => b.wagered - a.wagered);
