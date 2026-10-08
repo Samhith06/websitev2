@@ -6,6 +6,7 @@ import { wagerStateFor } from '@/lib/store/wager';
 import { feedHealth } from '@/lib/store/razed-snapshots';
 import { dateShort, money, relativeTime } from '@/lib/format';
 import { ClaimButton } from '@/components/site/ClaimButton';
+import { discordInvite } from '@/lib/mock';
 
 export const metadata: Metadata = {
   title: 'Milestones',
@@ -178,6 +179,37 @@ export default async function MilestonesPage() {
       ) : null}
 
       {/* ------------------------------------------------------------------ */}
+      {/* Payout rules: read before anyone claims                            */}
+      {/* ------------------------------------------------------------------ */}
+      <div className="card" style={{ marginBottom: 18, borderColor: 'rgba(255,179,71,.4)' }}>
+        <span className="eyebrow">Before you claim</span>
+        <ul
+          className="small muted"
+          style={{ margin: '8px 0 0', paddingLeft: 18, lineHeight: 1.7, listStyle: 'disc' }}
+        >
+          <li>
+            If you mainly play <b>Originals</b>, milestone rewards are <b>cut in half</b>.
+          </li>
+          <li>
+            If <b>over 60%</b> of your wager is on <b>slots</b>, you can claim the{' '}
+            <b>entire milestone</b>.
+          </li>
+          <li>
+            Once you have claimed, please{' '}
+            <a
+              href={discordInvite}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: 'var(--blue)', fontWeight: 600, textDecoration: 'underline' }}
+            >
+              open a ticket in Discord
+            </a>{' '}
+            so your payout can be checked and sent.
+          </li>
+        </ul>
+      </div>
+
+      {/* ------------------------------------------------------------------ */}
       {/* The ladder                                                          */}
       {/* ------------------------------------------------------------------ */}
       <div className="ladder">
@@ -204,7 +236,7 @@ export default async function MilestonesPage() {
                   {state === 'paid' && claim?.paidAt
                     ? `Claimed ${dateShort(claim.paidAt)} · tipped on Razed`
                     : state === 'pending'
-                      ? 'Claimed — queued for payout, usually within 24 hours'
+                      ? 'Claimed — open a ticket in Discord to get it paid out'
                       : state === 'claimable'
                         ? 'Ready to claim — sent to your Razed account'
                         : user && wager.lifetime != null

@@ -22,6 +22,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       // `identify` gives the id, username and avatar; `guilds` lets us require
       // membership of Matty's server once that check is turned on.
       authorization: 'https://discord.com/api/oauth2/authorize?scope=identify+guilds',
+      // Discord now returns `iss` on the OAuth callback (RFC 9207). Auth.js
+      // compares it against the provider's issuer, which defaults to a
+      // placeholder for plain OAuth providers, so sign-in fails with
+      // "unexpected iss" unless the real issuer is named here.
+      issuer: 'https://discord.com',
     }),
   ],
   /**

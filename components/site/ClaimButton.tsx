@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react';
 import { money } from '@/lib/format';
 import { claim } from '@/app/(site)/milestones/actions';
+import { discordInvite } from '@/lib/mock';
 
 /**
  * The claim button, and the confirmation that replaces it.
@@ -17,7 +18,20 @@ export function ClaimButton({ tierId, reward }: { tierId: number; reward: number
   const [pending, startTransition] = useTransition();
 
   if (done) {
-    return <span className="tag warn">Pending payout</span>;
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5 }}>
+        <span className="tag warn">Pending payout</span>
+        <a
+          className="small"
+          href={discordInvite}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ color: 'var(--blue)', textDecoration: 'underline' }}
+        >
+          Open a ticket in Discord
+        </a>
+      </div>
+    );
   }
 
   return (
