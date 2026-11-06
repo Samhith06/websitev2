@@ -1,5 +1,5 @@
 import 'server-only';
-import { one, rows, rows as rowsOf, tx } from '@/lib/db';
+import { one, rows, rows as rowsOf, tx, write } from '@/lib/db';
 import { fetchRazedLeaderboard, type RazedResult } from '@/lib/razed';
 
 /**
@@ -59,6 +59,22 @@ const RETRY_BACKOFF_MS = [500, 2_000];
 const RETRYABLE = new Set(['http', 'network']);
 
 export const LIFETIME_PERIOD = 'lifetime';
+
+/** A calendar month in UTC as 'YYYY-MM', the same clock Razed's windows run on. */
+export function monthKey(now = new Date()): string {
+  return now.toISOString().slice(0, 7);
+}
+
+/**
+ * What the running month's wager is filed under for the milestone ladder.
+ *
+ * Prefixed so it can never be a bare `YYYY-MM`. That key belongs to frozen
+ * boards, and the badge rules read it as "wagered during a finished month", so a
+ * partial month filed there would start deciding badges.
+ */
+export function monthPeriod(month: string): string {
+  return `milestone:${month}`;
+}
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -269,6 +285,52 @@ export async function syncLifetime(): Promise<SyncOutcome> {
   return storeSnapshot(LIFETIME_PERIOD, { windows, through: today() }, rows);
 }
 
+/**
+ * Refresh the running month's wager, for the milestone ladder.
+ *
+ * Reads the 1st of the month through today, so the figure starts again from
+ * nothing on the 1st with no reset job to run or forget: a new month is simply a
+ * new period, which has no snapshot until the first sync writes one, and until
+ * then the ladder says it is waiting rather than showing last month's number.
+ *
+ * Hand-entered adjustments stay out of this. They restate lifetime wagering the
+ * feed missed, so counting them here would hand the same amount over every month.
+ *
+ * Older snapshots of the same month go once the new one is stored. Only the
+ * newest is ever read, a claim freezes its own figure, and this runs every ten
+ * minutes. Each finished month keeps its last snapshot.
+ */
+export async function syncMonth(now = new Date()): Promise<SyncOutcome> {
+  const month = monthKey(now);
+  const from = `${month}-01`;
+  const to = isoDay(now);
+
+  const { result, attempts } = await readWindow(from, to);
+  if (!result.ok) {
+    return {
+      ok: false,
+      reason: result.reason,
+      detail:
+        `${result.detail} (month ${month}, ` +
+        `${attempts} attempt${attempts === 1 ? '' : 's'})`,
+    };
+  }
+
+  const period = monthPeriod(month);
+  const stored = await storeSnapshot(
+    period,
+    { from, to },
+    result.rows.map((row) => ({ username: row.username, wagered: row.wagered })),
+  );
+  if (stored.ok) {
+    await write('DELETE FROM razed_snapshots WHERE period = $1 AND id < $2', [
+      period,
+      stored.snapshot.id,
+    ]);
+  }
+  return stored;
+}
+
 export async function latestSnapshot(period: string): Promise<Snapshot | null> {
   const row = await one<{ id: string; period: string; fetched_at: Date; row_count: number }>(
     `SELECT id::text, period, fetched_at, row_count
@@ -304,6 +366,14 @@ export async function latestSnapshot(period: string): Promise<Snapshot | null> {
  * from "we have not managed to ask Razed yet".
  */
 export async function lifetimeWagered(username: string | null): Promise<number | null> {
+  return wageredInPeriod(LIFETIME_PERIOD, username);
+}
+
+/** The same read for any period. See `lifetimeWagered` for why it reads this way. */
+export async function wageredInPeriod(
+  period: string,
+  username: string | null,
+): Promise<number | null> {
   if (!username) return null;
   const row = await one<{ wagered: string | null }>(
     `SELECT w.wagered::text
@@ -313,7 +383,7 @@ export async function lifetimeWagered(username: string | null): Promise<number |
       WHERE s.period = $1
       ORDER BY s.fetched_at DESC
       LIMIT 1`,
-    [LIFETIME_PERIOD, username],
+    [period, username],
   );
   // No row at all means there is no snapshot yet, so we cannot say anything.
   if (!row) return null;

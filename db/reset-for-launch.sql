@@ -119,8 +119,9 @@ COMMIT;
      sync job overwrites it on its next run anyway.
    lb_periods, prize_tiers — deleting an open period takes its prize tiers with
      it. Boards are opened and closed from the admin page, not from here.
-   clips, shop_items, raffles, badges, milestone_tiers, settings — the site's
-     own content and configuration.
+   clips, shop_items, raffles, badges, milestone_tiers,
+     milestone_lifetime_members, settings — the site's own content and
+     configuration.
 
    ═══════════════════════════════════════════════════════════════════════════
    Check it landed

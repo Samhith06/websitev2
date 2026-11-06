@@ -18,6 +18,7 @@ import { pokerHandleFor, settingsFor } from '@/lib/store/profile';
 import { wagerStateFor } from '@/lib/store/wager';
 import {
   coins,
+  cycleLabel,
   dateShort,
   dateTime,
   duration,
@@ -29,6 +30,7 @@ import {
 } from '@/lib/format';
 import { AdjustBalance } from '@/components/admin/AdjustBalance';
 import { RecheckBadgesButton } from '@/components/admin/AdminButtons';
+import { LifetimeToggle } from '@/components/admin/LifetimeControls';
 
 export const metadata = { title: 'Member' };
 export const dynamic = 'force-dynamic';
@@ -313,6 +315,38 @@ export default async function AdminMemberPage({
               </p>
             ) : null}
 
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                gap: 12,
+                marginTop: 12,
+                flexWrap: 'wrap',
+              }}
+            >
+              <div className="small muted">
+                {wager.milestone.mode === 'lifetime' ? (
+                  <>
+                    On the <b>lifetime ladder</b>. Progress is their lifetime wager, and each tier
+                    can be claimed once ever.
+                  </>
+                ) : (
+                  <>
+                    On the <b>monthly ladder</b>: {maybe(wager.milestone.wagered, money)} wagered in{' '}
+                    {cycleLabel(wager.milestone.cycle)}.
+                  </>
+                )}
+              </div>
+              {isOwner ? (
+                <LifetimeToggle
+                  userId={member.id}
+                  username={member.discordUsername}
+                  member={wager.milestone.mode === 'lifetime'}
+                />
+              ) : null}
+            </div>
+
             {claims.length > 0 ? (
               <div className="tw" style={{ marginTop: 12 }}>
                 <table>
@@ -328,7 +362,10 @@ export default async function AdminMemberPage({
                   <tbody>
                     {claims.map((claim) => (
                       <tr key={claim.id}>
-                        <td>{tierName.get(claim.tierId) ?? `Tier ${claim.tierId}`}</td>
+                        <td>
+                          {tierName.get(claim.tierId) ?? `Tier ${claim.tierId}`}
+                          <div className="small muted">{cycleLabel(claim.cycle)}</div>
+                        </td>
                         <td className="n">{money(claim.wageredAtClaim)}</td>
                         <td className="n g">{money(claim.reward)}</td>
                         <td className="n" style={{ color: 'var(--muted)' }}>

@@ -8,7 +8,14 @@
  *
  *   RAZED_REFERRAL_KEY=... DATABASE_URL=... npm run razed:sync
  */
-import { latestWagerRows, syncLifetime } from '../lib/store/razed-snapshots';
+import { latestWagerRows, syncLifetime, syncMonth } from '../lib/store/razed-snapshots';
+
+const month = await syncMonth();
+if (!month.ok) {
+  console.error(`FAILED: ${month.reason} — ${month.detail}`);
+  process.exit(1);
+}
+console.log(`Synced ${month.rowCount} wagerers for this month into snapshot ${month.snapshot.id}.`);
 
 const result = await syncLifetime();
 

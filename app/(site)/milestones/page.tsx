@@ -1,17 +1,24 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { currentUser } from '@/lib/player';
-import { buildLadder, claimsFor, listTiers, nextTier, progressTo } from '@/lib/store/milestones';
+import {
+  buildLadder,
+  claimsFor,
+  claimsForCycle,
+  listTiers,
+  nextTier,
+  progressTo,
+} from '@/lib/store/milestones';
 import { wagerStateFor } from '@/lib/store/wager';
 import { feedHealth } from '@/lib/store/razed-snapshots';
-import { dateShort, money, relativeTime } from '@/lib/format';
+import { cycleLabel, dateShort, money, relativeTime } from '@/lib/format';
 import { ClaimButton } from '@/components/site/ClaimButton';
 import { discordInvite } from '@/lib/mock';
 
 export const metadata: Metadata = {
   title: 'Milestones',
   description:
-    'The lifetime wager milestone ladder. Every tier is claimable once and paid straight to your Razed account.',
+    'The monthly wager milestone ladder. Every tier is claimable once a month and paid straight to your Razed account.',
 };
 
 export const dynamic = 'force-dynamic';
@@ -26,29 +33,51 @@ export default async function MilestonesPage() {
    * job refreshes, so `force-dynamic` re-renders the same figures until that
    * job writes a new one — and the gap is invisible unless the page says it.
    */
-  const [tiers, wager, claims, feed] = await Promise.all([
+  const [tiers, wager, claims] = await Promise.all([
     listTiers(),
     wagerStateFor(user?.id ?? null),
     user ? claimsFor(user.id) : Promise.resolve([]),
-    feedHealth(),
   ]);
+  const { milestone } = wager;
+  const feed = await feedHealth(milestone.period);
 
-  const lifetime = wager.lifetime ?? 0;
-  const ladder = buildLadder(tiers, claims, lifetime, wager.approved);
-  const next = nextTier(tiers, lifetime);
-  const pct = progressTo(tiers, lifetime);
-  const claimedTotal = claims
+  const monthly = milestone.mode === 'monthly';
+  const month = cycleLabel(milestone.cycle);
+  const resetsOn = milestone.resetsAt ? dateShort(milestone.resetsAt) : null;
+  const wagerLabel = monthly
+    ? `Wagered in ${month} under MATTYSPINS`
+    : 'Lifetime wagered under MATTYSPINS';
+
+  const wagered = milestone.wagered ?? 0;
+  const cycleClaims = claimsForCycle(claims, milestone.cycle);
+  const ladder = buildLadder(tiers, cycleClaims, wagered, wager.approved);
+  const next = nextTier(tiers, wagered);
+  const pct = progressTo(tiers, wagered);
+  const claimedTotal = cycleClaims
     .filter((c) => c.status === 'paid' || c.status === 'pending')
     .reduce((sum, c) => sum + c.reward, 0);
+  const claimedTiers = ladder.filter((r) => r.state === 'paid' || r.state === 'pending').length;
+
+  // A claim made last month has left this month's ladder but may not have been
+  // paid yet. Without this it just looks like the reset ate it.
+  const earlierOwed = monthly
+    ? claims
+        .filter((c) => c.status === 'pending' && c.cycle !== milestone.cycle)
+        .reduce((sum, c) => sum + c.reward, 0)
+    : 0;
 
   return (
     <>
       <div className="sec-head">
         <div>
-          <span className="eyebrow">Claim once, keep forever</span>
+          <span className="eyebrow">
+            {monthly ? 'Starts again every month' : 'Claim once, keep forever'}
+          </span>
           <h1>Wager Milestones</h1>
           <div className="sh-sub">
-            Lifetime totals — these never reset at month end
+            {monthly
+              ? `${month} wagering only — the ladder resets on ${resetsOn} (UTC)`
+              : 'You are on the lifetime ladder — your total never resets'}
             {feed.lastSyncAt
               ? ` · figures read from Razed ${relativeTime(feed.lastSyncAt)}`
               : ' · figures not read from Razed yet'}
@@ -62,20 +91,20 @@ export default async function MilestonesPage() {
       {!user ? (
         <div className="ms-head">
           <div>
-            <span className="eyebrow">Lifetime wager ladder</span>
+            <span className="eyebrow">Monthly wager ladder</span>
             <h2 style={{ fontSize: 22, margin: '6px 0 8px' }}>Sign in to track your progress</h2>
             <div className="small muted">
-              Every tier below is claimable once and paid straight to your Razed account.
+              Every tier below is claimable once a month and paid straight to your Razed account.
             </div>
           </div>
           <Link className="btn pri discord" href="/api/auth/signin?callbackUrl=/milestones">
             Sign in with Discord
           </Link>
         </div>
-      ) : wager.lifetime == null ? (
+      ) : milestone.wagered == null ? (
         <div className="ms-head">
           <div>
-            <span className="eyebrow">Lifetime wagered under MATTYSPINS</span>
+            <span className="eyebrow">{wagerLabel}</span>
             <h2 style={{ fontSize: 22, margin: '6px 0 8px' }}>
               {wager.link ? 'Waiting on the next Razed sync' : 'Link your Razed username'}
             </h2>
@@ -92,9 +121,9 @@ export default async function MilestonesPage() {
       ) : (
         <div className="ms-head">
           <div>
-            <span className="eyebrow">Lifetime wagered under MATTYSPINS</span>
+            <span className="eyebrow">{wagerLabel}</span>
             <div className="mono" style={{ fontSize: 34, fontWeight: 600, lineHeight: 1.15 }}>
-              {money(lifetime)}
+              {money(wagered)}
             </div>
             <div className="railbar">
               <i style={{ width: `${pct}%` }} />
@@ -102,7 +131,7 @@ export default async function MilestonesPage() {
             <div className="small muted" style={{ marginTop: 9 }}>
               {next ? (
                 <>
-                  {money(next.threshold - lifetime)} more to unlock{' '}
+                  {money(next.threshold - wagered)} more to unlock{' '}
                   <b style={{ color: 'var(--gold)' }}>{money(next.reward)}</b> at{' '}
                   {money(next.threshold)}
                 </>
@@ -112,7 +141,7 @@ export default async function MilestonesPage() {
             </div>
           </div>
           <div style={{ textAlign: 'right' }}>
-            <div className="eyebrow">Claimed so far</div>
+            <div className="eyebrow">{monthly ? 'Claimed this month' : 'Claimed so far'}</div>
             <div
               className="mono"
               style={{ fontSize: 26, fontWeight: 600, color: 'var(--gold)' }}
@@ -120,11 +149,23 @@ export default async function MilestonesPage() {
               {money(claimedTotal)}
             </div>
             <div className="small muted">
-              {claims.length} of {tiers.length} tiers
+              {claimedTiers} of {tiers.length} tiers
             </div>
           </div>
         </div>
       )}
+
+      {earlierOwed > 0 ? (
+        <div className="card" style={{ marginBottom: 18 }}>
+          <div style={{ display: 'flex', gap: 13, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span className="tag warn">Still being paid</span>
+            <div className="small muted" style={{ flex: 1, minWidth: 220 }}>
+              {money(earlierOwed)} you claimed in an earlier month is still waiting on payout. The
+              monthly reset does not affect it.
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {/* ------------------------------------------------------------------ */}
       {/* When the figures are old, say so                                    */}
@@ -142,10 +183,12 @@ export default async function MilestonesPage() {
             <span className="tag warn">Figures may be behind</span>
             <div className="small muted" style={{ flex: 1, minWidth: 220 }}>
               {feed.lastSyncAt
-                ? `The lifetime wager data was last read from Razed ${relativeTime(
+                ? `The wager data was last read from Razed ${relativeTime(
                     feed.lastSyncAt,
                   )}. Anything wagered since then is not counted below yet — it is not lost, and it lands on the next sync.`
-                : 'The lifetime wager data has never been read from Razed, so there is nothing for the ladder to measure against yet.'}
+                : monthly
+                  ? `The wager data for ${month} has not been read from Razed yet, so there is nothing for the ladder to measure against until the next sync.`
+                  : 'The wager data has never been read from Razed, so there is nothing for the ladder to measure against yet.'}
             </div>
           </div>
         </div>
@@ -154,7 +197,7 @@ export default async function MilestonesPage() {
       {/* The link state, when it is the thing standing between someone and a
           claim. Shown separately from the header so it reads as an action
           rather than a status. */}
-      {user && wager.lifetime != null && !wager.approved ? (
+      {user && milestone.wagered != null && !wager.approved ? (
         <div
           className="card"
           style={{
@@ -187,6 +230,12 @@ export default async function MilestonesPage() {
           className="small muted"
           style={{ margin: '8px 0 0', paddingLeft: 18, lineHeight: 1.7, listStyle: 'disc' }}
         >
+          {monthly ? (
+            <li>
+              Unclaimed tiers <b>do not carry over</b>. Claim before the ladder resets on{' '}
+              <b>{resetsOn}</b>.
+            </li>
+          ) : null}
           <li>
             If you mainly play <b>Originals</b>, milestone rewards are <b>cut in half</b>.
           </li>
@@ -239,8 +288,8 @@ export default async function MilestonesPage() {
                       ? 'Claimed — open a ticket in Discord to get it paid out'
                       : state === 'claimable'
                         ? 'Ready to claim — sent to your Razed account'
-                        : user && wager.lifetime != null
-                          ? `${money(Math.max(0, tier.threshold - lifetime))} more wagered to unlock`
+                        : user && milestone.wagered != null
+                          ? `${money(Math.max(0, tier.threshold - wagered))} more wagered to unlock`
                           : 'Locked'}
                 </div>
               </div>

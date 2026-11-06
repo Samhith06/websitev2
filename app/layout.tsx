@@ -30,7 +30,7 @@ export const metadata: Metadata = {
     template: '%s · MattySpins',
   },
   description:
-    'Earn Matty Coins for watching on Kick, climb the monthly Razed wager leaderboard, claim lifetime milestones, and spend coins on raffles and the store. Live every day at 7pm UK.',
+    'Earn Matty Coins for watching on Kick, climb the monthly Razed wager leaderboard, claim monthly milestones, and spend coins on raffles and the store. Live every day at 7pm UK.',
   openGraph: {
     type: 'website',
     siteName: 'MattySpins',

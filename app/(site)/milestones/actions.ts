@@ -9,7 +9,7 @@ export type ClaimOutcome = { ok: true; reward: number } | { ok: false; error: st
 
 const MESSAGES: Record<string, string> = {
   'already-claimed': 'That tier has already been claimed.',
-  'not-reached': 'You have not wagered enough for that tier yet.',
+  'not-reached': 'You have not wagered enough for that tier yet. The ladder may have just reset.',
   'not-approved': 'Your Razed username needs to be approved by a mod before you can claim.',
   'unknown-tier': 'That tier no longer exists.',
 };
@@ -31,7 +31,7 @@ export async function claim(tierId: number): Promise<ClaimOutcome> {
   }
 
   const wager = await wagerStateFor(gate.user.id);
-  if (wager.lifetime == null) {
+  if (wager.milestone.wagered == null) {
     return {
       ok: false,
       error: 'We have not been able to read your wager total from Razed yet. Try again shortly.',
@@ -41,7 +41,8 @@ export async function claim(tierId: number): Promise<ClaimOutcome> {
   const result = await claimTier({
     userId: gate.user.id,
     tierId,
-    lifetimeWagered: wager.lifetime,
+    cycle: wager.milestone.cycle,
+    wagered: wager.milestone.wagered,
     razedApproved: wager.approved,
   });
 

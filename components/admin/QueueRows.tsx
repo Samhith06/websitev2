@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { coins, money, relativeTime } from '@/lib/format';
+import { coins, cycleLabel, money, relativeTime } from '@/lib/format';
 import {
   approveRazedLink,
   holdClaim,
@@ -196,8 +196,8 @@ export function ClaimRow({ row }: { row: PayoutRow }) {
           </span>
         </div>
         <div className="qd">
-          Razed username <b>{target}</b> · tier unlocked and claimed · send the tip on Razed first,
-          then mark it here
+          Razed username <b>{target}</b> · {cycleLabel(row.cycle)} ladder · tier unlocked and
+          claimed · send the tip on Razed first, then mark it here
         </div>
         {error ? <Failed text={error} /> : null}
       </div>

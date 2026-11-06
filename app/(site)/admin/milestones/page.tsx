@@ -1,7 +1,9 @@
+import Link from 'next/link';
 import { rows } from '@/lib/db';
-import { listTiers } from '@/lib/store/milestones';
-import { money } from '@/lib/format';
+import { listLifetimeMembers, listTiers } from '@/lib/store/milestones';
+import { dateShort, maybe, money } from '@/lib/format';
 import { saveTierForm } from '@/app/(site)/admin/actions';
+import { LifetimeAddForm, LifetimeToggle } from '@/components/admin/LifetimeControls';
 import { TierControls } from '@/components/admin/TierControls';
 
 export const metadata = { title: 'Milestone tiers' };
@@ -13,13 +15,17 @@ export const dynamic = 'force-dynamic';
  * Editing a tier needs no deploy, and never touches a claim that has already
  * been made — a claim froze its own reward and wager figure when it was
  * created, precisely so that retuning the ladder later cannot rewrite history.
+ *
+ * The lifetime list lives here too. There is one ladder of tiers, and the list
+ * only decides which figure and which claims it is measured against.
  */
 export default async function AdminMilestonesPage() {
-  const [tiers, counts] = await Promise.all([
+  const [tiers, counts, lifetimeMembers] = await Promise.all([
     listTiers(true),
     rows<{ tier_id: string; n: string }>(
       `SELECT tier_id::text, COUNT(*)::text AS n FROM milestone_claims GROUP BY tier_id`,
     ),
+    listLifetimeMembers(),
   ]);
 
   const claimed = new Map(counts.map((c) => [Number(c.tier_id), Number(c.n)]));
@@ -28,11 +34,13 @@ export default async function AdminMilestonesPage() {
     <>
       <div className="sec-head">
         <div>
-          <span className="eyebrow">Lifetime wager ladder</span>
+          <span className="eyebrow">Monthly wager ladder</span>
           <h1>Milestone tiers</h1>
           <div className="sh-sub">
-            Stored as data — editing a tier needs no deploy. Existing claims are never affected.
-            The ladder always sorts by threshold, so changing one moves the tier into place.
+            Resets automatically on the 1st of every month (UTC), and each tier can be claimed once
+            a month. Stored as data — editing a tier needs no deploy. Existing claims are never
+            affected. The ladder always sorts by threshold, so changing one moves the tier into
+            place.
           </div>
         </div>
       </div>
@@ -143,10 +151,62 @@ export default async function AdminMilestonesPage() {
 
       <p className="small muted" style={{ marginTop: 14, maxWidth: '72ch' }}>
         Total on the ladder as it stands:{' '}
-        {money(tiers.filter((t) => t.active).reduce((sum, t) => sum + t.reward, 0))} per member who
-        eventually reaches the top. A tier with claims against it cannot be deleted — switching it
-        off takes it off the ladder and keeps the record of what was paid.
+        {money(tiers.filter((t) => t.active).reduce((sum, t) => sum + t.reward, 0))} per member, per
+        month, for anyone who reaches the top. A tier with claims against it cannot be deleted —
+        switching it off takes it off the ladder and keeps the record of what was paid.
       </p>
+
+      <div className="card" style={{ marginTop: 14 }}>
+        <h2 style={{ fontSize: 15, marginBottom: 6 }}>Lifetime milestones</h2>
+        <p className="small muted" style={{ margin: '0 0 12px', maxWidth: '72ch' }}>
+          Members on this list do not reset. Their progress is their lifetime wager, and each tier
+          can be claimed once ever, including any they already claimed on a monthly ladder. Removing
+          someone puts them back on the monthly ladder, and their claims are kept.
+        </p>
+
+        <LifetimeAddForm />
+
+        {lifetimeMembers.length === 0 ? (
+          <div className="emptyq" style={{ marginTop: 12 }}>
+            Nobody is on the list, so everyone is on the monthly ladder.
+          </div>
+        ) : (
+          <div className="tw" style={{ marginTop: 12 }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>Member</th>
+                  <th>Razed</th>
+                  <th>Lifetime wagered</th>
+                  <th>Added</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {lifetimeMembers.map((member) => (
+                  <tr key={member.userId}>
+                    <td>
+                      <Link href={`/admin/users/${member.userId}`}>{member.username}</Link>
+                    </td>
+                    <td>{member.razedUsername ?? '—'}</td>
+                    <td className="n">{maybe(member.wagered, money)}</td>
+                    <td className="n" style={{ color: 'var(--muted)' }}>
+                      {dateShort(member.addedAt)} by {member.addedBy}
+                    </td>
+                    <td>
+                      <LifetimeToggle
+                        userId={member.userId}
+                        username={member.username}
+                        member
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </>
   );
 }

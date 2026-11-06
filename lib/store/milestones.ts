@@ -1,14 +1,21 @@
 import 'server-only';
 import { one, rows, tx, write } from '@/lib/db';
+import { LIFETIME_PERIOD } from './razed-snapshots';
 
 /**
- * The lifetime wager ladder.
+ * The wager ladder.
  *
- * Milestones are cumulative and never reset, which is the whole point of them
- * next to a leaderboard that resets every month. A tier is claimable exactly
- * once, forever, and that is enforced by a unique index on (user, tier) rather
- * than by the button being disabled.
+ * It runs in cycles. For most members a cycle is a calendar month in UTC:
+ * progress is that month's wager, and on the 1st it starts again from zero with
+ * every tier claimable again. Members on the hand-kept lifetime list stay on one
+ * cycle for good, measured against their lifetime total.
+ *
+ * A tier is claimable exactly once per cycle, and that is enforced by a unique
+ * index on (user, tier, cycle) rather than by the button being disabled.
  */
+
+/** The cycle a lifetime member's claims are filed under. Months are 'YYYY-MM'. */
+export const LIFETIME_CYCLE = 'lifetime';
 
 export type Tier = {
   id: number;
@@ -24,6 +31,8 @@ export type ClaimStatus = 'pending' | 'paid' | 'rejected';
 export type Claim = {
   id: number;
   tierId: number;
+  /** 'YYYY-MM', or LIFETIME_CYCLE. */
+  cycle: string;
   status: ClaimStatus;
   reward: number;
   wageredAtClaim: number;
@@ -73,13 +82,14 @@ export async function claimsFor(userId: number): Promise<Claim[]> {
   const result = await rows<{
     id: string;
     tier_id: string;
+    cycle: string;
     status: ClaimStatus;
     reward: string;
     wagered_at_claim: string;
     created_at: Date;
     paid_at: Date | null;
   }>(
-    `SELECT id::text, tier_id::text, status, reward::text,
+    `SELECT id::text, tier_id::text, cycle, status, reward::text,
             wagered_at_claim::text, created_at, paid_at
        FROM milestone_claims
       WHERE user_id = $1
@@ -89,6 +99,7 @@ export async function claimsFor(userId: number): Promise<Claim[]> {
   return result.map((r) => ({
     id: Number(r.id),
     tierId: Number(r.tier_id),
+    cycle: r.cycle,
     status: r.status,
     reward: Number(r.reward),
     wageredAtClaim: Number(r.wagered_at_claim),
@@ -98,8 +109,22 @@ export async function claimsFor(userId: number): Promise<Claim[]> {
 }
 
 /**
+ * The claims that count against a cycle's ladder.
+ *
+ * A month only sees its own. A lifetime member sees every live claim they hold,
+ * whichever cycle it was made in: each tier is once-ever for them, so a tier
+ * they claimed on a monthly ladder before being added is already spent.
+ */
+export function claimsForCycle(claims: Claim[], cycle: string): Claim[] {
+  return cycle === LIFETIME_CYCLE
+    ? claims.filter((c) => c.status !== 'rejected')
+    : claims.filter((c) => c.cycle === cycle);
+}
+
+/**
  * The ladder as a screen wants it: every tier, its state, and the claim behind
- * that state.
+ * that state. `claims` is the result of `claimsForCycle`, and `wagered` is the
+ * figure for the same cycle.
  *
  * `razedApproved` gates claimability rather than progress. Someone whose link
  * is still pending should see how far along they are — hiding it would make
@@ -109,7 +134,7 @@ export async function claimsFor(userId: number): Promise<Claim[]> {
 export function buildLadder(
   tiers: Tier[],
   claims: Claim[],
-  lifetimeWagered: number,
+  wagered: number,
   razedApproved: boolean,
 ): LadderRung[] {
   const byTier = new Map(claims.map((c) => [c.tierId, c]));
@@ -117,7 +142,7 @@ export function buildLadder(
     const claim = byTier.get(tier.id) ?? null;
     if (claim && claim.status === 'paid') return { tier, claim, state: 'paid' as const };
     if (claim && claim.status === 'pending') return { tier, claim, state: 'pending' as const };
-    const reached = lifetimeWagered >= tier.threshold;
+    const reached = wagered >= tier.threshold;
     return {
       tier,
       claim,
@@ -127,18 +152,18 @@ export function buildLadder(
 }
 
 /** The next unreached tier, for the home rail and the milestones header. */
-export function nextTier(tiers: Tier[], lifetimeWagered: number): Tier | null {
-  return tiers.find((t) => t.threshold > lifetimeWagered) ?? null;
+export function nextTier(tiers: Tier[], wagered: number): Tier | null {
+  return tiers.find((t) => t.threshold > wagered) ?? null;
 }
 
 /** How far through the current tier someone is, 0–100. */
-export function progressTo(tiers: Tier[], lifetimeWagered: number): number {
-  const next = nextTier(tiers, lifetimeWagered);
+export function progressTo(tiers: Tier[], wagered: number): number {
+  const next = nextTier(tiers, wagered);
   if (!next) return 100;
   const previous = tiers.filter((t) => t.threshold < next.threshold).pop()?.threshold ?? 0;
   const span = next.threshold - previous;
   if (span <= 0) return 0;
-  return Math.max(0, Math.min(100, Math.round(((lifetimeWagered - previous) / span) * 100)));
+  return Math.max(0, Math.min(100, Math.round(((wagered - previous) / span) * 100)));
 }
 
 export type ClaimResult =
@@ -146,18 +171,23 @@ export type ClaimResult =
   | { ok: false; error: 'already-claimed' | 'not-reached' | 'not-approved' | 'unknown-tier' };
 
 /**
- * Claim one tier.
+ * Claim one tier, on one cycle's ladder.
  *
  * The threshold is re-checked inside the transaction against the wager figure
- * the caller measured, and the figure is frozen onto the claim. If Razed later
- * restates a number downward, a claim already made stays valid — it was earned
- * against what the site could see at the time, and clawing it back would be
- * indefensible.
+ * the caller measured for that cycle, and the figure is frozen onto the claim.
+ * If Razed later restates a number downward, a claim already made stays valid —
+ * it was earned against what the site could see at the time, and clawing it back
+ * would be indefensible.
+ *
+ * The caller passes the cycle it measured rather than this working out the
+ * current one. Otherwise a claim landing just after midnight on the 1st would
+ * spend the new month's tier using the old month's figure.
  */
 export async function claimTier(input: {
   userId: number;
   tierId: number;
-  lifetimeWagered: number;
+  cycle: string;
+  wagered: number;
   razedApproved: boolean;
 }): Promise<ClaimResult> {
   if (!input.razedApproved) return { ok: false, error: 'not-approved' };
@@ -173,25 +203,39 @@ export async function claimTier(input: {
     );
     const tier = tierRows[0];
     if (!tier) return { ok: false, error: 'unknown-tier' } as const;
-    if (input.lifetimeWagered < Number(tier.threshold)) {
+    if (input.wagered < Number(tier.threshold)) {
       return { ok: false, error: 'not-reached' } as const;
+    }
+
+    // The index only stops a repeat within one cycle. A lifetime member gets
+    // each tier once ever, including any they claimed on a monthly ladder before
+    // they were added, and that has to be checked by hand.
+    if (input.cycle === LIFETIME_CYCLE) {
+      const { rows: spent } = await client.query(
+        `SELECT 1 FROM milestone_claims
+          WHERE user_id = $1 AND tier_id = $2 AND status <> 'rejected'
+          LIMIT 1`,
+        [input.userId, input.tierId],
+      );
+      if (spent[0]) return { ok: false, error: 'already-claimed' } as const;
     }
 
     const { rows: inserted } = await client.query<{
       id: string;
       tier_id: string;
+      cycle: string;
       status: ClaimStatus;
       reward: string;
       wagered_at_claim: string;
       created_at: Date;
       paid_at: Date | null;
     }>(
-      `INSERT INTO milestone_claims (user_id, tier_id, wagered_at_claim, reward)
-       VALUES ($1, $2, $3, $4)
-       ON CONFLICT (user_id, tier_id) DO NOTHING
-       RETURNING id::text, tier_id::text, status, reward::text,
+      `INSERT INTO milestone_claims (user_id, tier_id, cycle, wagered_at_claim, reward)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (user_id, tier_id, cycle) DO NOTHING
+       RETURNING id::text, tier_id::text, cycle, status, reward::text,
                  wagered_at_claim::text, created_at, paid_at`,
-      [input.userId, input.tierId, input.lifetimeWagered, tier.reward],
+      [input.userId, input.tierId, input.cycle, input.wagered, tier.reward],
     );
 
     // The conflict path is the double-tap: the tier is already claimed, and
@@ -204,6 +248,7 @@ export async function claimTier(input: {
       claim: {
         id: Number(r.id),
         tierId: Number(r.tier_id),
+        cycle: r.cycle,
         status: r.status,
         reward: Number(r.reward),
         wageredAtClaim: Number(r.wagered_at_claim),
@@ -215,6 +260,108 @@ export async function claimTier(input: {
 }
 
 /* -------------------------------------------------------------------------- */
+/* The lifetime list                                                          */
+/* -------------------------------------------------------------------------- */
+
+export async function isLifetimeMember(userId: number): Promise<boolean> {
+  const row = await one<{ user_id: string }>(
+    'SELECT user_id::text FROM milestone_lifetime_members WHERE user_id = $1',
+    [userId],
+  );
+  return row != null;
+}
+
+export type LifetimeMember = {
+  userId: number;
+  username: string;
+  razedUsername: string | null;
+  /** Null when there is no approved Razed link to read a figure for. */
+  wagered: number | null;
+  addedBy: string;
+  addedAt: string;
+};
+
+export async function listLifetimeMembers(): Promise<LifetimeMember[]> {
+  const result = await rows<{
+    user_id: string;
+    username: string;
+    razed_username: string | null;
+    wagered: string | null;
+    added_by: string;
+    created_at: Date;
+  }>(
+    `SELECT m.user_id::text,
+            u.discord_username AS username,
+            rl.username        AS razed_username,
+            rw.wagered::text   AS wagered,
+            m.added_by,
+            m.created_at
+       FROM milestone_lifetime_members m
+       JOIN users u ON u.id = m.user_id
+       LEFT JOIN razed_links rl ON rl.user_id = m.user_id
+       LEFT JOIN razed_wagers rw
+              ON lower(rw.username) = lower(rl.username)
+             AND rl.status = 'approved'
+             AND rw.snapshot_id = (
+               SELECT id FROM razed_snapshots WHERE period = $1
+                ORDER BY fetched_at DESC LIMIT 1
+             )
+      ORDER BY lower(u.discord_username) ASC`,
+    [LIFETIME_PERIOD],
+  );
+  return result.map((r) => ({
+    userId: Number(r.user_id),
+    username: r.username,
+    razedUsername: r.razed_username,
+    wagered: r.wagered == null ? null : Number(r.wagered),
+    addedBy: r.added_by,
+    addedAt: r.created_at.toISOString(),
+  }));
+}
+
+/**
+ * Accounts matching a name exactly: Discord username or id, Kick username, or
+ * Razed username.
+ *
+ * Exact rather than a search, because this decides who is owed money, and
+ * "matty" should not quietly pick one of three accounts. The caller refuses
+ * anything but a single match. Two rows is enough to know that.
+ */
+export async function findMembersByHandle(
+  handle: string,
+): Promise<Array<{ userId: number; username: string }>> {
+  const result = await rows<{ id: string; discord_username: string }>(
+    `SELECT DISTINCT u.id::text, u.discord_username
+       FROM users u
+       LEFT JOIN kick_links k   ON k.user_id = u.id
+       LEFT JOIN razed_links rl ON rl.user_id = u.id
+      WHERE u.discord_id = $1
+         OR lower(u.discord_username) = lower($1)
+         OR lower(k.kick_username) = lower($1)
+         OR lower(rl.username) = lower($1)
+      LIMIT 2`,
+    [handle],
+  );
+  return result.map((r) => ({ userId: Number(r.id), username: r.discord_username }));
+}
+
+/** Returns false when they were already on the list. */
+export async function grantLifetime(userId: number, by: string): Promise<boolean> {
+  const inserted = await rows<{ user_id: string }>(
+    `INSERT INTO milestone_lifetime_members (user_id, added_by)
+     VALUES ($1, $2)
+     ON CONFLICT (user_id) DO NOTHING
+     RETURNING user_id::text`,
+    [userId, by],
+  );
+  return inserted.length > 0;
+}
+
+export async function revokeLifetime(userId: number): Promise<void> {
+  await write('DELETE FROM milestone_lifetime_members WHERE user_id = $1', [userId]);
+}
+
+/* -------------------------------------------------------------------------- */
 /* Admin                                                                      */
 /* -------------------------------------------------------------------------- */
 
@@ -222,6 +369,8 @@ export type PayoutRow = {
   claimId: number;
   username: string;
   razedUsername: string | null;
+  /** Which ladder it was claimed on, because the same tier now recurs. */
+  cycle: string;
   threshold: number;
   reward: number;
   createdAt: string;
@@ -235,6 +384,7 @@ export async function pendingPayouts(): Promise<PayoutRow[]> {
     claim_id: string;
     username: string;
     razed_username: string | null;
+    cycle: string;
     threshold: string;
     reward: string;
     created_at: Date;
@@ -243,6 +393,7 @@ export async function pendingPayouts(): Promise<PayoutRow[]> {
     `SELECT c.id::text                AS claim_id,
             u.discord_username        AS username,
             rl.username               AS razed_username,
+            c.cycle,
             t.threshold::text,
             c.reward::text,
             c.created_at,
@@ -258,6 +409,7 @@ export async function pendingPayouts(): Promise<PayoutRow[]> {
     claimId: Number(r.claim_id),
     username: r.username,
     razedUsername: r.razed_username,
+    cycle: r.cycle,
     threshold: Number(r.threshold),
     reward: Number(r.reward),
     createdAt: r.created_at.toISOString(),

@@ -57,8 +57,9 @@ export default async function HomePage() {
   const pot = period ? potOf(period.tiers) : 0;
   const top = board[0] ?? null;
 
-  const next = wager.lifetime == null ? null : nextTier(tiers, wager.lifetime);
-  const pct = wager.lifetime == null ? 0 : progressTo(tiers, wager.lifetime);
+  const wagered = wager.milestone.wagered;
+  const next = wagered == null ? null : nextTier(tiers, wagered);
+  const pct = wagered == null ? 0 : progressTo(tiers, wagered);
 
   return (
     <>
@@ -108,7 +109,7 @@ export default async function HomePage() {
                   Sign in with Discord
                 </Link>
               </>
-            ) : wager.lifetime == null ? (
+            ) : wagered == null ? (
               <>
                 <div className="small muted">
                   {wager.link
@@ -121,15 +122,19 @@ export default async function HomePage() {
               </>
             ) : next ? (
               <>
-                <div className="small muted">Wagered under the code</div>
+                <div className="small muted">
+                  {wager.milestone.mode === 'monthly'
+                    ? 'Wagered this month'
+                    : 'Wagered under the code'}
+                </div>
                 <div className="mono" style={{ fontSize: 20, fontWeight: 600 }}>
-                  {money(wager.lifetime)}
+                  {money(wagered)}
                 </div>
                 <div className="railbar">
                   <i style={{ width: `${pct}%` }} />
                 </div>
                 <div className="small muted" style={{ marginTop: 9 }}>
-                  {money(next.threshold - wager.lifetime)} to go for{' '}
+                  {money(next.threshold - wagered)} to go for{' '}
                   <b style={{ color: 'var(--text)' }}>{next.name}</b> ·{' '}
                   <b style={{ color: 'var(--gold)' }}>{money(next.reward)}</b>
                 </div>
@@ -141,7 +146,7 @@ export default async function HomePage() {
               <>
                 <div className="small muted">Every tier unlocked.</div>
                 <div className="mono" style={{ fontSize: 20, fontWeight: 600 }}>
-                  {money(wager.lifetime)}
+                  {money(wagered)}
                 </div>
                 <Link className="btn sm wide" style={{ marginTop: 11 }} href="/milestones">
                   View ladder
@@ -212,7 +217,7 @@ export default async function HomePage() {
             <h2>Play under the code, get paid every month</h2>
             <p>
               Sign up on Razed using the code below and every dollar you wager counts toward the
-              monthly leaderboard, the lifetime milestone ladder and your badges. Rewards are tipped
+              monthly leaderboard, the monthly milestone ladder and your badges. Rewards are tipped
               straight to your Razed account.
             </p>
             <div className="perks">

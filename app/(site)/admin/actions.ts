@@ -10,8 +10,11 @@ import { approveLink, rejectLink } from '@/lib/store/razed-links';
 import {
   TierInUse,
   deleteTier as deleteMilestoneTier,
+  findMembersByHandle,
+  grantLifetime,
   markClaimPaid,
   rejectClaim,
+  revokeLifetime,
   setTierActive,
   upsertTier,
 } from '@/lib/store/milestones';
@@ -24,7 +27,7 @@ import {
   upsertItem,
 } from '@/lib/store/shop';
 import type { ShopCategory } from '@/lib/types';
-import { syncLifetime, syncPeriod } from '@/lib/store/razed-snapshots';
+import { syncLifetime, syncMonth, syncPeriod } from '@/lib/store/razed-snapshots';
 import { award, revoke } from '@/lib/store/badges';
 import { evaluateBadges } from '@/lib/store/badge-rules';
 import {
@@ -360,18 +363,24 @@ export async function syncRazed(): Promise<Outcome> {
   const who = await staff();
   if (!who) return DENIED;
 
+  const month = await syncMonth();
   const result = await syncLifetime();
+  if (!month.ok) return { ok: false, error: `Sync failed: ${month.detail}` };
   if (!result.ok) return { ok: false, error: `Sync failed: ${result.detail}` };
 
   await record_({
     actor: who.name,
     actorDiscordId: who.discordId,
     action: 'razed.synced',
-    detail: { rows: result.rowCount },
+    detail: { rows: result.rowCount, monthRows: month.rowCount },
   });
 
   revalidatePath('/admin/razed');
-  return { ok: true, message: `Synced ${result.rowCount} wagerers.` };
+  revalidatePath('/milestones');
+  return {
+    ok: true,
+    message: `Synced ${result.rowCount} wagerers, ${month.rowCount} of them active this month.`,
+  };
 }
 
 /**
@@ -556,6 +565,80 @@ export async function toggleTier(tierId: number, active: boolean, name: string):
     ok: true,
     message: active ? `${name} is back on the ladder.` : `${name} is off the ladder. Claims kept.`,
   };
+}
+
+/* -------------------------------------------------------------------------- */
+/* The lifetime milestone list                                                */
+/* -------------------------------------------------------------------------- */
+
+function revalidateLifetime(userId: number): void {
+  revalidatePath('/admin/milestones');
+  revalidatePath(`/admin/users/${userId}`);
+  revalidatePath('/milestones');
+}
+
+/**
+ * Put someone on the lifetime ladder, or take them off it.
+ *
+ * Owner-only for the same reason the tiers are: this decides what a member can
+ * be paid. Removing someone does not touch their claims, and adding them back
+ * restores their lifetime ladder exactly as it was.
+ */
+export async function setLifetimeMember(
+  userId: number,
+  username: string,
+  on: boolean,
+): Promise<Outcome> {
+  const who = await staff('owner');
+  if (!who) return DENIED;
+
+  if (on) {
+    const added = await grantLifetime(userId, who.name);
+    if (!added) return { ok: true, message: `${username} is already on the lifetime list.` };
+  } else {
+    await revokeLifetime(userId);
+  }
+
+  await record_({
+    actor: who.name,
+    actorDiscordId: who.discordId,
+    action: on ? 'milestone.lifetime.added' : 'milestone.lifetime.removed',
+    target: String(userId),
+    detail: { username },
+  });
+
+  revalidateLifetime(userId);
+  return {
+    ok: true,
+    message: on
+      ? `${username} is on the lifetime ladder.`
+      : `${username} is back on the monthly ladder.`,
+  };
+}
+
+/** The same, starting from a name typed into the list's add box. */
+export async function addLifetimeByHandle(handle: string): Promise<Outcome> {
+  const who = await staff('owner');
+  if (!who) return DENIED;
+
+  const wanted = handle.trim();
+  if (!wanted) return { ok: false, error: 'Type a username or Discord id.' };
+
+  const matches = await findMembersByHandle(wanted);
+  if (matches.length === 0) {
+    return {
+      ok: false,
+      error: `No account matches "${wanted}" exactly. They have to have signed in to the site once.`,
+    };
+  }
+  if (matches.length > 1) {
+    return {
+      ok: false,
+      error: `"${wanted}" matches more than one account. Use their Discord id, or add them from their member page.`,
+    };
+  }
+
+  return setLifetimeMember(matches[0].userId, matches[0].username, true);
 }
 
 /* -------------------------------------------------------------------------- */

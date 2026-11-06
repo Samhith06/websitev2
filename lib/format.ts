@@ -107,6 +107,16 @@ export function isWholeCalendarMonth(fromIso: string, toIso: string): boolean {
   return to.getTime() >= nextMonth - 1000 && to.getTime() < nextMonth;
 }
 
+/** A milestone cycle as people say it: "November 2026", or "Lifetime". */
+export function cycleLabel(cycle: string): string {
+  if (!/^\d{4}-\d{2}$/.test(cycle)) return 'Lifetime';
+  return new Date(`${cycle}-01T00:00:00Z`).toLocaleDateString('en-GB', {
+    ...UTC,
+    month: 'long',
+    year: 'numeric',
+  });
+}
+
 /**
  * What to call a leaderboard window.
  *

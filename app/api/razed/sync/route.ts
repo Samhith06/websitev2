@@ -1,7 +1,14 @@
 import { NextResponse } from 'next/server';
 import { timingSafeEqual } from 'node:crypto';
 import { hasDatabase } from '@/lib/db';
-import { latestSnapshot, syncLifetime } from '@/lib/store/razed-snapshots';
+import {
+  LIFETIME_PERIOD,
+  latestSnapshot,
+  monthKey,
+  monthPeriod,
+  syncLifetime,
+  syncMonth,
+} from '@/lib/store/razed-snapshots';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -24,8 +31,21 @@ export const runtime = 'nodejs';
  * or two schedulers being pointed at this at once. `syncLifetime` walks the
  * Razed API a window at a time, so a stray double-fire is real traffic against
  * somebody else's API rather than a wasted millisecond.
+ *
+ * The running month and the lifetime total are guarded separately, because a new
+ * month has no snapshot at all. A shared guard would hold every monthly ladder on
+ * "waiting for a sync" whenever the lifetime walk happened to have run recently.
  */
 const MIN_INTERVAL_MINUTES = 8;
+
+async function minutesSince(period: string): Promise<number | null> {
+  const previous = await latestSnapshot(period);
+  return previous ? (Date.now() - new Date(previous.fetchedAt).getTime()) / 60_000 : null;
+}
+
+function due(age: number | null): boolean {
+  return age == null || age >= MIN_INTERVAL_MINUTES;
+}
 
 export async function POST(request: Request) {
   const secret = process.env.CRON_SECRET;
@@ -50,34 +70,42 @@ export async function POST(request: Request) {
   // does not care that one ran four minutes ago.
   const force = new URL(request.url).searchParams.get('force') === '1';
 
-  if (!force) {
-    const previous = await latestSnapshot('lifetime');
-    if (previous) {
-      const ageMinutes = (Date.now() - new Date(previous.fetchedAt).getTime()) / 60_000;
-      if (ageMinutes < MIN_INTERVAL_MINUTES) {
-        return NextResponse.json({
-          ok: true,
-          ran: false,
-          reason: 'too-soon',
-          lastSyncedMinutesAgo: Math.round(ageMinutes),
-        });
-      }
-    }
+  const [monthAge, lifetimeAge] = await Promise.all([
+    minutesSince(monthPeriod(monthKey())),
+    minutesSince(LIFETIME_PERIOD),
+  ]);
+  const monthDue = force || due(monthAge);
+  const lifetimeDue = force || due(lifetimeAge);
+
+  if (!monthDue && !lifetimeDue) {
+    return NextResponse.json({
+      ok: true,
+      ran: false,
+      reason: 'too-soon',
+      lastSyncedMinutesAgo: Math.round(lifetimeAge ?? 0),
+    });
   }
 
-  const result = await syncLifetime();
-  if (!result.ok) {
-    // A failed sync is a 200 with `ran: false`, not a 500: the scheduler should
+  // The month first: it is a single window, and one bad walk of the lifetime
+  // history should not cost every monthly ladder its figures.
+  const month = monthDue ? await syncMonth() : null;
+  const lifetime = lifetimeDue ? await syncLifetime() : null;
+
+  const ran = Boolean(month?.ok || lifetime?.ok);
+  const failed = [month, lifetime].find((result) => result && !result.ok);
+  if (failed && !failed.ok) {
+    // A failed sync is a 200 with `ok: false`, not a 500: the scheduler should
     // not treat "Razed did not answer" as this endpoint being broken, and the
     // previous snapshot is still being served either way.
-    return NextResponse.json({ ok: false, ran: false, reason: result.reason, detail: result.detail });
+    return NextResponse.json({ ok: false, ran, reason: failed.reason, detail: failed.detail });
   }
 
   return NextResponse.json({
     ok: true,
-    ran: true,
-    rows: result.rowCount,
-    snapshotAt: result.snapshot.fetchedAt,
+    ran,
+    monthRows: month?.ok ? month.rowCount : undefined,
+    rows: lifetime?.ok ? lifetime.rowCount : undefined,
+    snapshotAt: lifetime?.ok ? lifetime.snapshot.fetchedAt : undefined,
   });
 }
 

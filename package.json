@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "check:rtp": "node scripts/check-rtp.mjs .",
     "db:smoke": "node --env-file-if-exists=.env.local --import tsx --conditions=react-server scripts/db-smoke.mts",
+    "milestones:smoke": "node --env-file-if-exists=.env.local --import tsx --conditions=react-server scripts/milestone-smoke.mts",
     "razed:check": "node --env-file-if-exists=.env.local --import tsx --conditions=react-server scripts/razed-check.mts",
     "razed:sync": "node --env-file-if-exists=.env.local --import tsx --conditions=react-server scripts/razed-sync.mts",
     "razed:top": "node --env-file-if-exists=.env.local --import tsx --conditions=react-server scripts/razed-top.mts",
