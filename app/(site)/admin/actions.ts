@@ -15,8 +15,10 @@ import {
   markClaimPaid,
   rejectClaim,
   revokeLifetime,
+  searchMembers,
   setTierActive,
   upsertTier,
+  type MemberMatch,
 } from '@/lib/store/milestones';
 import { createRaffle, drawRaffle, setRaffleStatus } from '@/lib/store/raffles';
 import {
@@ -614,6 +616,18 @@ export async function setLifetimeMember(
       ? `${username} is on the lifetime ladder.`
       : `${username} is back on the monthly ladder.`,
   };
+}
+
+/**
+ * Who a part-typed name might mean, for the add box's dropdown. Behind the same
+ * gate as adding, because it answers questions about members' linked accounts.
+ */
+export async function searchLifetimeCandidates(
+  query: string,
+): Promise<{ ok: true; matches: MemberMatch[] } | { ok: false; error: string }> {
+  const who = await staff('owner');
+  if (!who) return { ok: false, error: 'Only the owner can add people to the lifetime list.' };
+  return { ok: true, matches: await searchMembers(query) };
 }
 
 /** The same, starting from a name typed into the list's add box. */

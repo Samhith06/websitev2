@@ -345,6 +345,72 @@ export async function findMembersByHandle(
   return result.map((r) => ({ userId: Number(r.id), username: r.discord_username }));
 }
 
+export type MemberMatch = {
+  userId: number;
+  username: string;
+  kickUsername: string | null;
+  razedUsername: string | null;
+  onList: boolean;
+};
+
+/**
+ * Accounts a part-typed name might mean, for the list's add box.
+ *
+ * This only ever offers people to choose between; the exact lookup above is still
+ * what a typed name resolves through, because nothing here adds anyone by itself.
+ * Each match carries all three names so two similar accounts can be told apart.
+ * Exact matches come first, then names that start with what was typed, then the
+ * rest, so the person being typed for is near the top by the second character.
+ */
+export async function searchMembers(query: string, limit = 8): Promise<MemberMatch[]> {
+  const wanted = query.trim();
+  if (wanted.length < 2) return [];
+
+  // % and _ in a username are characters to find, not wildcards.
+  const literal = wanted.replace(/[\\%_]/g, '\\$&');
+  const result = await rows<{
+    id: string;
+    discord_username: string;
+    kick_username: string | null;
+    razed_username: string | null;
+    on_list: boolean;
+  }>(
+    `SELECT u.id::text,
+            u.discord_username,
+            k.kick_username,
+            rl.username AS razed_username,
+            m.user_id IS NOT NULL AS on_list
+       FROM users u
+       LEFT JOIN kick_links k   ON k.user_id = u.id
+       LEFT JOIN razed_links rl ON rl.user_id = u.id
+       LEFT JOIN milestone_lifetime_members m ON m.user_id = u.id
+      WHERE u.discord_id = $1
+         OR u.discord_username ILIKE $2
+         OR k.kick_username ILIKE $2
+         OR rl.username ILIKE $2
+      ORDER BY CASE
+                 WHEN u.discord_id = $1
+                   OR lower(u.discord_username) = lower($1)
+                   OR lower(k.kick_username) = lower($1)
+                   OR lower(rl.username) = lower($1) THEN 0
+                 WHEN u.discord_username ILIKE $3
+                   OR k.kick_username ILIKE $3
+                   OR rl.username ILIKE $3 THEN 1
+                 ELSE 2
+               END,
+               lower(u.discord_username)
+      LIMIT $4`,
+    [wanted, `%${literal}%`, `${literal}%`, limit],
+  );
+  return result.map((r) => ({
+    userId: Number(r.id),
+    username: r.discord_username,
+    kickUsername: r.kick_username,
+    razedUsername: r.razed_username,
+    onList: r.on_list,
+  }));
+}
+
 /** Returns false when they were already on the list. */
 export async function grantLifetime(userId: number, by: string): Promise<boolean> {
   const inserted = await rows<{ user_id: string }>(

@@ -26,6 +26,7 @@ import {
   listLifetimeMembers,
   listTiers,
   revokeLifetime,
+  searchMembers,
 } from '../lib/store/milestones';
 import { approveLink, submitLink } from '../lib/store/razed-links';
 import { monthKey, monthPeriod, syncLifetime, syncMonth } from '../lib/store/razed-snapshots';
@@ -158,8 +159,31 @@ check('nobody is on it to begin with', !(await isLifetimeMember(lin.id)));
 check('a name resolves to one account', (await findMembersByHandle('LIN_RAZED'))[0]?.userId === lin.id);
 check('an inexact name does not', (await findMembersByHandle('lin_raz')).length === 0);
 
+const linaa = await accounts.ensureUser({ discordId: 'd-linaa', discordUsername: 'linaa' });
+const inlin = await accounts.ensureUser({ discordId: 'd-inlin', discordUsername: 'inlin' });
+const percent = await accounts.ensureUser({ discordId: 'd-pct', discordUsername: 'li%n' });
+const found = (query: string) => searchMembers(query).then((all) => all.map((m) => m.userId));
+
+check('one letter searches nothing', (await found('l')).length === 0);
+check('part of a name finds it', (await found('inl')).includes(inlin.id));
+check('part of a Razed name finds the account', (await found('lin_raz')).includes(lin.id));
+check('the search ignores case', (await found('LINAA')).includes(linaa.id));
+check('a Discord id finds the account', (await found('d-linaa'))[0] === linaa.id);
+check('an exact name comes first', (await found('lin'))[0] === lin.id);
+const startsFirst = await found('li');
+check('a name starting with it beats one containing it',
+  startsFirst.indexOf(linaa.id) < startsFirst.indexOf(inlin.id));
+check('a % is searched for rather than matching everything',
+  (await found('i%n')).join() === String(percent.id));
+const linMatch = (await searchMembers('lin_razed'))[0];
+check('a match carries its other names',
+  linMatch?.username === 'lin' && linMatch?.razedUsername === 'lin_razed');
+check('searching adds nobody', !(await isLifetimeMember(lin.id)));
+check('a match says it is not on the list', linMatch?.onList === false);
+
 check('adding reports it was new', await grantLifetime(lin.id, 'smoke'));
 check('adding twice reports it was not', !(await grantLifetime(lin.id, 'smoke')));
+check('a match says it is on the list', (await searchMembers('lin_razed'))[0]?.onList === true);
 
 state = await wagerStateFor(lin.id);
 check('a member is on the lifetime ladder', state.milestone.mode === 'lifetime');
