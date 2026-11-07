@@ -283,7 +283,7 @@ export default async function MilestonesPage() {
                     : state === 'pending'
                       ? 'Claimed — open a ticket in Discord to get it paid out'
                       : state === 'claimable'
-                        ? 'Ready to claim — sent to your Razed account'
+                        ? 'Ready to claim — then open a ticket in Discord to get paid'
                         : user && milestone.wagered != null
                           ? `${money(Math.max(0, tier.threshold - wagered))} more wagered to unlock`
                           : 'Locked'}
@@ -309,9 +309,10 @@ export default async function MilestonesPage() {
       </div>
 
       <p className="small muted" style={{ marginTop: 18, maxWidth: '70ch' }}>
-        Milestone rewards are tipped by Razed to the account linked to your profile, usually within
-        24 hours of claiming. Razed has no API for sending tips, so every payout is done by hand and
-        marked off here — which is why the ladder promises a window rather than an instant.
+        Once you have claimed, open a ticket in Discord. Your reward is then tipped by Razed to the
+        account linked to your profile, usually within 24 hours of opening the ticket. Razed has no
+        API for sending tips, so every payout is done by hand and marked off here — which is why the
+        ladder promises a window rather than an instant.
       </p>
     </>
   );

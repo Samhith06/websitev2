@@ -151,8 +151,8 @@ export default async function PayoutsPage() {
       {/* ------------------------------------------------------------------ */}
       <h2 style={{ fontSize: 16 }}>Milestone claims</h2>
       <p className="small muted" style={{ marginBottom: 12 }}>
-        Members are told to expect these within 24 hours. Anything red has broken that promise.
-        Amounts and the Copy button use the 100% rate, so check the wager split on their ticket
+        Members are told to expect these within 24 hours of opening a ticket. Waiting time counts
+        from the claim, so a red row may just mean they have not opened one yet. Amounts and the Copy button use the 100% rate, so check the wager split on their ticket
         first: 50% for Originals, 100% for slots or at least 60% slots.{' '}
         <a href="/admin/claims">Every claim by month →</a>
       </p>
