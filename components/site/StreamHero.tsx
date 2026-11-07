@@ -43,7 +43,16 @@ function untilStream(now: number): number {
  * Live, it says so and sends people to Kick. Offline, it counts down to the next
  * stream, because someone arriving at 3pm only wants to know when to come back.
  */
-export function StreamHero({ stream, code }: { stream: StreamState; code: string }) {
+export function StreamHero({
+  stream,
+  code,
+  razedUrl,
+}: {
+  stream: StreamState;
+  code: string;
+  /** The referral link, which is what credits a signup to the code. */
+  razedUrl: string;
+}) {
   const [now, setNow] = useState<number | null>(null);
 
   // The clock starts on the client only, so the server and the first client
@@ -123,7 +132,12 @@ export function StreamHero({ stream, code }: { stream: StreamState; code: string
           {stream.live ? 'Watch live on Kick' : 'Follow on Kick'}
           <ArrowRight size={18} aria-hidden />
         </a>
-        <a className="btn split h-usecode" href="#razed">
+        <a
+          className="btn split h-usecode"
+          href={razedUrl}
+          target="_blank"
+          rel="noreferrer noopener sponsored"
+        >
           <span>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/brand/razed.png" alt="Razed" width={102} height={35} />

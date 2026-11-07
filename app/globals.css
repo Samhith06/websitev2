@@ -7902,8 +7902,8 @@ body:has(.ovl) {
 }
 
 /* — clips —
-   The cards sit in the page rather than on panels: a greyscale frame, a title,
-   a rule between columns. The rule lives in the column gap, so the last column's
+   The cards sit in the page rather than on panels: a frame in full colour, a
+   title, a rule between columns. The rule lives in the column gap, so the last column's
    falls outside the grid and is clipped however the columns have wrapped. */
 
 .clips {
@@ -7949,10 +7949,6 @@ body:has(.ovl) {
 
 .clip .thumb {
   background: var(--panel);
-}
-
-.clip .thumb img {
-  filter: grayscale(1) contrast(1.08);
 }
 
 /* The whole card is the button, so the play mark only needs to answer "is this

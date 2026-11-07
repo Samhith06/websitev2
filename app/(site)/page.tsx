@@ -74,7 +74,7 @@ export default async function HomePage() {
         {/* Hero: the stream's status, and the things people check beside it */}
         {/* ------------------------------------------------------------ */}
         <section className="h-hero">
-          <StreamHero stream={stream} code={razed.referralCode} />
+          <StreamHero stream={stream} code={razed.referralCode} razedUrl={razed.affiliateUrl} />
 
           <aside className="h-rail">
             <div className="h-block">
