@@ -39,6 +39,8 @@ import {
   syncMonth,
 } from '../lib/store/razed-snapshots';
 import { evaluateBadges } from '../lib/store/badge-rules';
+import { PeriodError, archivedPeriods, frozenPeriod, recordPastBoard } from '../lib/store/periods';
+import { periodLabel } from '../lib/format';
 import { wagerStateFor } from '../lib/store/wager';
 
 let failures = 0;
@@ -390,6 +392,34 @@ check('fourth is not', !(await holds(fourthNew.id, 'podium')));
 check('an older board’s winner earns nothing from it', !(await holds(champOld.id, 'champion')));
 check('nor an older board’s runner-up', !(await holds(podiumOld.id, 'podium')));
 check('a newer weekly board is not the last leaderboard', !(await holds(podiumOld.id, 'champion')));
+
+// A past month recorded after the fact: results only, nothing owed.
+const pastWinner = await member('pastwinner');
+const pastBoard = {
+  startsAt: '2025-12-01T00:00:00.000Z',
+  endsAt: '2025-12-31T23:59:59.000Z',
+  standings: [
+    { rank: 1, username: 'pastwinner_razed', maskedUsername: 'past****', wagered: 9000, prize: 0 },
+  ] as never,
+  createdBy: 'smoke',
+};
+await recordPastBoard(pastBoard);
+const archivedBoard = (await archivedPeriods()).find((p) => p.startsAt === pastBoard.startsAt);
+check('a past month goes in the archive', archivedBoard != null);
+check('as a whole calendar month', periodLabel(archivedBoard!.startsAt, archivedBoard!.endsAt) === 'December 2025');
+check('with no prize tiers', archivedBoard!.tiers.length === 0);
+const stillFrozen = await frozenPeriod();
+check('it is not the board awaiting payout', stillFrozen?.startsAt !== pastBoard.startsAt);
+await evaluateBadges();
+check('an older past month does not outrank the last board', !(await holds(pastWinner.id, 'champion')));
+
+let overlapRefused = false;
+try {
+  await recordPastBoard({ ...pastBoard, startsAt: '2025-12-15T00:00:00.000Z', endsAt: '2026-01-14T23:59:59.000Z' });
+} catch (error) {
+  overlapRefused = error instanceof PeriodError;
+}
+check('a month a board already covers is refused', overlapRefused);
 
 // The sweep still only awards.
 await write(

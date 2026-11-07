@@ -56,6 +56,7 @@ import {
   discardPeriod,
   freezeStandings,
   prizeForRank,
+  recordPastBoard,
   updatePeriodDates,
   upsertTier as upsertPrizeTier,
 } from '@/lib/store/periods';
@@ -466,6 +467,75 @@ export async function freezeMonth(): Promise<Outcome> {
   return {
     ok: true,
     message: `Frozen. ${standings.filter((r) => r.prize > 0).length} payouts queued.`,
+  };
+}
+
+/**
+ * Add a finished month's results to the archive, so Champion and Podium have a
+ * board to read for a month the site never froze. See `recordPastBoard`: it queues
+ * no payouts and opens no claims.
+ */
+export async function recordPastMonth(month: string): Promise<Outcome> {
+  const who = await staff('owner');
+  if (!who) return DENIED;
+
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return { ok: false, error: 'Choose a month.' };
+
+  const [year, monthNumber] = month.split('-').map(Number);
+  const startsAt = new Date(Date.UTC(year, monthNumber - 1, 1));
+  const nextMonth = Date.UTC(year, monthNumber, 1);
+  // The last second of the month, which is what makes it read as a whole month.
+  const endsAt = new Date(nextMonth - 1000);
+  if (nextMonth > Date.now()) {
+    return { ok: false, error: 'That month has not finished yet.' };
+  }
+
+  const feed = await fetchRazedLeaderboard({
+    from: startsAt.toISOString().slice(0, 10),
+    to: endsAt.toISOString().slice(0, 10),
+    top: 1000,
+    revalidate: 0,
+  });
+  if (!feed.ok) {
+    return { ok: false, error: `Razed could not be read (${feed.detail}). Nothing was recorded.` };
+  }
+  if (feed.rows.length === 0) {
+    return { ok: false, error: 'Razed has no wagering under the code for that month.' };
+  }
+
+  // With the real names, for the same reason as a freeze: the badge rules match
+  // them against Razed links. The public archive only ever prints the masked one.
+  const standings = toBoardRows(feed.rows, () => 0, { reveal: true });
+
+  try {
+    await recordPastBoard({
+      startsAt: startsAt.toISOString(),
+      endsAt: endsAt.toISOString(),
+      standings,
+      createdBy: who.name,
+    });
+  } catch (error) {
+    if (error instanceof PeriodError) return { ok: false, error: error.message };
+    throw error;
+  }
+
+  await record_({
+    actor: who.name,
+    actorDiscordId: who.discordId,
+    action: 'leaderboard.past-month-recorded',
+    target: month,
+    detail: { rows: standings.length, top3: standings.slice(0, 3).map((row) => row.username) },
+  });
+
+  const { awarded } = await evaluateBadges();
+
+  revalidatePath('/admin/leaderboard');
+  revalidatePath('/admin/badges');
+  revalidatePath('/leaderboard');
+  const top3 = standings.slice(0, 3).map((row) => row.username).join(', ');
+  return {
+    ok: true,
+    message: `Recorded. Top 3: ${top3}. ${awarded} badge${awarded === 1 ? '' : 's'} awarded; a winner with no approved Razed link gets theirs once it is approved.`,
   };
 }
 

@@ -286,12 +286,14 @@ export default async function LeaderboardPage() {
                     <div className="am">{label}</div>
                     <div className="ap">
                       {winner
-                        ? `Winner ${winner.maskedUsername} · ${money(winner.prize)}`
+                        ? // A month recorded after the fact has no prize figures, and
+                          // saying nothing is true where "$0" would not be.
+                          `Winner ${winner.maskedUsername}${winner.prize ? ` · ${money(winner.prize)}` : ''}`
                         : 'Standings not frozen'}
                     </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                    <span className="tag gold">{money(potOf(month.tiers))} pool</span>
+                    {month.pot ? <span className="tag gold">{money(month.pot)} pool</span> : null}
                     <span className="chev">▾</span>
                   </div>
                 </summary>

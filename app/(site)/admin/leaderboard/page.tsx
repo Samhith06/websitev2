@@ -3,11 +3,17 @@ import { fetchRazedLeaderboard, toBoardRows } from '@/lib/razed';
 import { devBypass, roleFor } from '@/lib/admin';
 import { auth } from '@/auth';
 import { money, periodLabel } from '@/lib/format';
-import { FreezeMonthButton } from '@/components/admin/AdminButtons';
+import { FreezeMonthButton, RecordPastMonth } from '@/components/admin/AdminButtons';
 import { OpenPeriod, PeriodControls, PrizeEditor } from '@/components/admin/PeriodEditor';
 
 export const metadata = { title: 'Leaderboard' };
 export const dynamic = 'force-dynamic';
+
+/** The previous calendar month in UTC as 'YYYY-MM'. */
+function lastMonth(): string {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1)).toISOString().slice(0, 7);
+}
 
 /**
  * The month as staff see it.
@@ -151,6 +157,8 @@ export default async function AdminLeaderboardPage() {
           frozen={period.frozenAt != null}
         />
       ) : null}
+
+      {isOwner ? <RecordPastMonth defaultMonth={lastMonth()} /> : null}
 
       <p className="small muted" style={{ marginTop: 14, maxWidth: '72ch' }}>
         Freezing stores these standings permanently and queues the winners on the payouts screen.

@@ -6,6 +6,7 @@ import {
   draw,
   freezeMonth,
   recheckBadges,
+  recordPastMonth,
   sweepBadges,
   syncRazed,
 } from '@/app/(site)/admin/actions';
@@ -107,6 +108,51 @@ export function FreezeMonthButton() {
       }}
       run={freezeMonth}
     />
+  );
+}
+
+/** Adds a finished month the site never froze, for its badges and the archive. */
+export function RecordPastMonth({ defaultMonth }: { defaultMonth: string }) {
+  const [month, setMonth] = useState(defaultMonth);
+  return (
+    <div className="card" style={{ marginTop: 14 }}>
+      <h2 style={{ fontSize: 15, marginBottom: 4 }}>Record a past month</h2>
+      <p className="small muted" style={{ margin: '0 0 12px', maxWidth: '72ch' }}>
+        Reads a finished month from Razed and adds it to the archive, so Champion and Podium can be
+        awarded from it. It queues no payouts, opens no claims and shows no prize amounts. Refused
+        if a board already covers that month.
+      </p>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+        <input
+          className="inp s"
+          type="month"
+          aria-label="Month to record"
+          max={defaultMonth}
+          value={month}
+          onChange={(event) => setMonth(event.target.value)}
+          style={{ width: 180 }}
+        />
+        <ActionButton
+          label="Record month"
+          running="Recording…"
+          confirm={{
+            title: `Record ${month}?`,
+            body: (
+              <>
+                <p style={{ margin: '0 0 10px' }}>
+                  Razed&rsquo;s figures for that month are stored as its final results, and its
+                  winner becomes Champion and its top 3 Podium, unless a later board has been
+                  frozen.
+                </p>
+                <p style={{ margin: 0 }}>This cannot be undone.</p>
+              </>
+            ),
+            go: 'Record it',
+          }}
+          run={() => recordPastMonth(month)}
+        />
+      </div>
+    </div>
   );
 }
 

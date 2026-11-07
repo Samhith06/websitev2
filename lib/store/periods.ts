@@ -238,6 +238,40 @@ export async function createPeriod(input: {
   });
 }
 
+/**
+ * Record a monthly board that ran before the site was keeping one, for its
+ * results and nothing else.
+ *
+ * Stored as `archived`, never `frozen`, because `frozen` is what queues payouts
+ * and opens the claim flow, and this is not a statement about what anybody is
+ * owed. It carries no prize tiers and every row's prize is zero, since the site
+ * does not know what that month paid. Refused if any monthly board already covers
+ * those dates, so it cannot put a second answer beside a real one.
+ */
+export async function recordPastBoard(input: {
+  startsAt: string;
+  endsAt: string;
+  standings: LeaderboardRow[];
+  createdBy: string;
+}): Promise<void> {
+  await tx(async (client) => {
+    const { rows: overlapping } = await client.query(
+      `SELECT id FROM lb_periods
+        WHERE type = 'monthly' AND starts_at < $2 AND ends_at > $1 LIMIT 1`,
+      [input.startsAt, input.endsAt],
+    );
+    if (overlapping.length) {
+      throw new PeriodError('A monthly board already covers those dates.');
+    }
+    await client.query(
+      `INSERT INTO lb_periods
+         (type, starts_at, ends_at, status, locked_at, frozen_standings, frozen_at, created_by)
+       VALUES ('monthly', $1, $2, 'archived', now(), $3::jsonb, now(), $4)`,
+      [input.startsAt, input.endsAt, JSON.stringify(input.standings), input.createdBy],
+    );
+  });
+}
+
 export async function updatePeriodDates(
   id: number,
   startsAt: string,

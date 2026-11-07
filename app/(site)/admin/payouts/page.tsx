@@ -23,7 +23,8 @@ export default async function PayoutsPage() {
     archivedPeriods(3),
   ]);
 
-  const board = frozen ?? archive[0] ?? null;
+  // A month recorded for its results alone has nothing to pay, so it is skipped.
+  const board = frozen ?? archive.find((period) => period.pot > 0) ?? null;
   const standings = board?.frozenStandings ?? [];
   const boardDue = standings.filter((row) => row.prize > 0);
   // Boards frozen before the real name was stored have only the masked one, so
