@@ -1,8 +1,13 @@
 import type { Metadata } from 'next';
+import { ArrowRight, DollarSign, Percent, Repeat, Trophy, Users } from 'lucide-react';
 import { archivedPeriods, currentPeriod, potOf, prizeForRank } from '@/lib/store/periods';
 import { fetchRazedLeaderboard, healthFrom, toBoardRows } from '@/lib/razed';
 import { money, periodLabel, relativeTime } from '@/lib/format';
+import { razed } from '@/lib/mock';
 import { Countdown } from '@/components/ui/Countdown';
+import { RacePodium } from '@/components/site/RacePodium';
+
+const DAY = 24 * 60 * 60 * 1000;
 
 export const metadata: Metadata = {
   title: 'Leaderboard',
@@ -51,131 +56,193 @@ export default async function LeaderboardPage() {
   const partialTotal = feed?.ok === true && feed.truncated;
   const playersInWindow = feed?.ok === true ? feed.total : rows.length;
 
-  const [first, second, third] = rows;
   const rest = rows.slice(3);
 
-  return (
-    <>
-      <div className="sec-head">
-        <div>
-          <span className="eyebrow">Wagered under code MATTYSPINS</span>
-          <h1>Monthly Leaderboard</h1>
-          <div className="sh-sub">
-            {health?.status === 'healthy'
-              ? `Live from Razed · last synced ${relativeTime(health.lastSyncAt)}`
-              : (health?.code ?? 'No leaderboard period is open yet.')}
-          </div>
-        </div>
-      </div>
+  /**
+   * How far through the race we are. Worked out here rather than on the client:
+   * unlike the ticking clock, a day count cannot disagree with itself between
+   * the server's render and the browser's.
+   */
+  const startsMs = period ? new Date(period.startsAt).getTime() : 0;
+  const endsMs = period ? new Date(period.endsAt).getTime() : 0;
+  const nowMs = Date.now();
+  const totalDays = Math.max(1, Math.round((endsMs - startsMs) / DAY));
+  const today = Math.min(totalDays, Math.max(1, Math.floor((nowMs - startsMs) / DAY) + 1));
+  const elapsedPct = period
+    ? Math.min(100, Math.max(0, ((nowMs - startsMs) / (endsMs - startsMs)) * 100))
+    : 0;
+  const raceOpen = period?.status === 'open' && nowMs < endsMs;
 
-      {period ? (
-        <div className="lb-head">
-          <div>
-            <div className="eyebrow">{windowLabel} prize pool</div>
-            <div className="pool">{pot ? money(pot) : '—'}</div>
-            <div className="small muted">
-              {period.tiers.length
-                ? `Top ${period.tiers.length} paid · tipped directly by Razed`
-                : 'No prize tiers set for this period yet.'}
-            </div>
+  /** The last place that gets paid: a "4–10" tier is one row but seven people. */
+  const paidPlaces = period ? Math.max(0, ...period.tiers.map((tier) => tier.rankTo)) : 0;
+
+  const feedHealthy = health?.status === 'healthy';
+  const status = !period
+    ? { label: 'Not open', live: false }
+    : !feedHealthy
+      ? { label: 'Delayed', live: false }
+      : raceOpen
+        ? { label: 'Live', live: true }
+        : { label: 'Locked', live: false };
+
+  return (
+    <div className="lbx">
+      <section className="lb-hero">
+        <div className="lb-copy">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img className="lb-brand" src="/brand/razed.png" alt="Razed" width={118} height={41} />
+          <h1>Monthly wager race{windowLabel ? ` · ${windowLabel}` : ''}</h1>
+          <div className="lb-pot">{pot ? money(pot) : '—'}</div>
+          <p className="lb-blurb">
+            Play on Razed with code {razed.referralCode} and every dollar you wager counts.
+            {paidPlaces > 0 && pot
+              ? ` The top ${paidPlaces} at the end of the month split ${money(pot)}, tipped directly by Razed.`
+              : ' Prizes for this race have not been set yet.'}
+          </p>
+
+          {period ? (
+            <>
+              <div className="lb-clockhead">
+                <span>{raceOpen ? 'Race ends in' : 'Race over'}</span>
+                <span>
+                  Day {today} of {totalDays}
+                </span>
+              </div>
+              {raceOpen ? <Countdown to={period.endsAt} /> : null}
+              <div className="lb-bar">
+                <i style={{ width: `${elapsedPct}%` }} />
+              </div>
+            </>
+          ) : null}
+
+          <a
+            className="btn pri"
+            href={razed.affiliateUrl}
+            target="_blank"
+            rel="noreferrer noopener sponsored"
+          >
+            Play on Razed
+            <ArrowRight size={18} aria-hidden />
+          </a>
+
+          <a
+            className="lb-promo"
+            href={razed.affiliateUrl}
+            target="_blank"
+            rel="noreferrer noopener sponsored"
+          >
+            <span className="ic">
+              <Percent size={18} aria-hidden />
+            </span>
+            <span className="tx">
+              <b>200% welcome bonus</b>
+              <small>On Razed with code {razed.referralCode}</small>
+            </span>
+            <ArrowRight size={18} aria-hidden />
+          </a>
+          <a
+            className="lb-promo"
+            href={razed.affiliateUrl}
+            target="_blank"
+            rel="noreferrer noopener sponsored"
+          >
+            <span className="ic">
+              <Repeat size={18} aria-hidden />
+            </span>
+            <span className="tx">
+              <b>Weekly rakeback</b>
+              <small>On Razed with code {razed.referralCode}</small>
+            </span>
+            <ArrowRight size={18} aria-hidden />
+          </a>
+        </div>
+
+        {/* Silence is never rendered as zero — an empty board says why. */}
+        {rows.length === 0 ? (
+          <div className="emptyq lb-empty">
+            {period
+              ? 'The board could not be read from Razed just now. The last good figures return on the next sync — nothing has been lost.'
+              : 'No leaderboard period is open. Once one is created in the staff area the board fills in from Razed automatically.'}
           </div>
-          <div>
-            <div className="eyebrow">Total wagered</div>
-            <div className="pool total">{rows.length ? money(totalWagered) : '—'}</div>
-            <div className="small muted">
-              {rows.length === 0
-                ? 'Nothing to total until the board reads.'
-                : partialTotal
-                  ? `Top ${rows.length} of ${playersInWindow} players · the tail is not counted here`
-                  : `Across ${rows.length} player${rows.length === 1 ? '' : 's'} under the code`}
+        ) : (
+          <RacePodium rows={rows} />
+        )}
+      </section>
+
+      {/* ------------------------------------------------------------------ */}
+      {/* Four figures, all summed from the rows below or read from the feed  */}
+      {/* ------------------------------------------------------------------ */}
+      <section className="lb-stats">
+        <div className="lb-stat">
+          <span className="ring">
+            <DollarSign size={18} aria-hidden />
+          </span>
+          <div className="v b">{rows.length ? money(Math.round(totalWagered)) : '—'}</div>
+          <div className="l">Total wagered</div>
+          {partialTotal ? (
+            <div className="m">
+              Top {rows.length} of {playersInWindow} players
             </div>
-          </div>
-          <div>
-            <div className="eyebrow" style={{ marginBottom: 7 }}>
-              Board locks in
-            </div>
-            <Countdown to={period.endsAt} />
-          </div>
+          ) : null}
+        </div>
+        <div className="lb-stat">
+          <span className="ring">
+            <Trophy size={18} aria-hidden />
+          </span>
+          <div className="v g">{pot ? money(pot) : '—'}</div>
+          <div className="l">Prize pool</div>
+        </div>
+        <div className="lb-stat">
+          <span className="ring">
+            <Users size={18} aria-hidden />
+          </span>
+          <div className="v">{feed?.ok ? playersInWindow.toLocaleString('en-GB') : '—'}</div>
+          <div className="l">Active players</div>
+        </div>
+        <div className="lb-stat">
+          <span className={status.live ? 'ring' : 'ring off'}>
+            <i aria-hidden />
+          </span>
+          <div className={status.live ? 'v b' : 'v w'}>{status.label}</div>
+          <div className="l">Leaderboard status</div>
+          {health && feedHealthy ? (
+            <div className="m">Synced {relativeTime(health.lastSyncAt)}</div>
+          ) : null}
+        </div>
+      </section>
+
+      {rest.length > 0 ? (
+        <div className="tw lb-table">
+          <table>
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Player</th>
+                <th>Wagered</th>
+                <th>Prize</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rest.map((row) => (
+                <tr key={row.rank}>
+                  <td className="n" style={{ color: 'var(--muted)' }}>
+                    {row.rank}
+                  </td>
+                  <td className="n">{row.maskedUsername}</td>
+                  <td className="n">{money(row.wagered)}</td>
+                  <td className="g">
+                    {row.prize ? (
+                      money(row.prize)
+                    ) : (
+                      <span style={{ color: 'var(--muted-2)' }}>—</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       ) : null}
-
-      {/* ------------------------------------------------------------------ */}
-      {/* The board itself. Silence is never rendered as zero — an empty      */}
-      {/* board says why it is empty.                                         */}
-      {/* ------------------------------------------------------------------ */}
-      {rows.length === 0 ? (
-        <div className="emptyq">
-          {period
-            ? 'The board could not be read from Razed just now. The last good figures return on the next sync — nothing has been lost.'
-            : 'No leaderboard period is open. Once one is created in the staff area the board fills in from Razed automatically.'}
-        </div>
-      ) : (
-        <>
-          {first ? (
-            <div className="podium">
-              {second ? (
-                <div className="pod second">
-                  <div className="medal">2</div>
-                  <div className="pn">{second.maskedUsername}</div>
-                  <div className="pw">{money(second.wagered)}</div>
-                  <div className="pp">{second.prize ? money(second.prize) : '—'}</div>
-                </div>
-              ) : (
-                <div />
-              )}
-              <div className="pod first">
-                <div className="medal">1</div>
-                <div className="pn">{first.maskedUsername}</div>
-                <div className="pw">{money(first.wagered)}</div>
-                <div className="pp">{first.prize ? money(first.prize) : '—'}</div>
-              </div>
-              {third ? (
-                <div className="pod third">
-                  <div className="medal">3</div>
-                  <div className="pn">{third.maskedUsername}</div>
-                  <div className="pw">{money(third.wagered)}</div>
-                  <div className="pp">{third.prize ? money(third.prize) : '—'}</div>
-                </div>
-              ) : (
-                <div />
-              )}
-            </div>
-          ) : null}
-
-          {rest.length > 0 ? (
-            <div className="tw">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Rank</th>
-                    <th>Player</th>
-                    <th>Wagered</th>
-                    <th>Prize</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rest.map((row) => (
-                    <tr key={row.rank}>
-                      <td className="n" style={{ color: 'var(--muted)' }}>
-                        {row.rank}
-                      </td>
-                      <td className="n">{row.maskedUsername}</td>
-                      <td className="n">{money(row.wagered)}</td>
-                      <td className="g">
-                        {row.prize ? (
-                          money(row.prize)
-                        ) : (
-                          <span style={{ color: 'var(--muted-2)' }}>—</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : null}
-        </>
-      )}
 
       <div
         className="card"
@@ -251,6 +318,6 @@ export default async function LeaderboardPage() {
           })}
         </div>
       ) : null}
-    </>
+    </div>
   );
 }

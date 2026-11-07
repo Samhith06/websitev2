@@ -1948,116 +1948,9 @@ nav.mainnav a.on {
    Leaderboard — podium, header, archive
    ═══════════════════════════════════════════════════════════════════════════ */
 
-.podium {
-  display: grid;
-  grid-template-columns: 1fr 1.15fr 1fr;
-  gap: 12px;
-  align-items: end;
-  margin-bottom: 18px;
-}
-
-.pod {
-  border: 1px solid var(--edge);
-  border-radius: 0;
-  background: var(--panel);
-  padding: 20px 16px;
-  text-align: center;
-  position: relative;
-  overflow: hidden;
-}
-
-.pod .medal {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  margin: 0 auto 12px;
-  display: grid;
-  place-items: center;
-  font-family: var(--display);
-  font-weight: 700;
-  font-size: 17px;
-}
-
-.pod .pn {
-  font-family: var(--mono);
-  font-size: 14px;
-  margin-bottom: 4px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.pod .pw {
-  font-family: var(--mono);
-  font-size: 12.5px;
-  color: var(--muted);
-}
-
-.pod .pp {
-  font-family: var(--display);
-  font-weight: 700;
-  font-size: 24px;
-  color: var(--gold);
-  margin-top: 11px;
-}
-
-.pod.first {
-  border-color: rgba(255, 209, 102, 0.4);
-  padding-top: 30px;
-  padding-bottom: 26px;
-  background: linear-gradient(180deg, rgba(255, 209, 102, 0.09), var(--panel) 55%);
-  box-shadow: 0 20px 60px -40px rgba(255, 209, 102, 0.9);
-}
-
-.pod.first .medal {
-  background: linear-gradient(160deg, #ffe49b, #c79a3c);
-  color: #2e2103;
-  width: 52px;
-  height: 52px;
-  font-size: 20px;
-}
-
-.pod.first .pp {
-  font-size: 30px;
-}
-
-.pod.second .medal {
-  background: linear-gradient(160deg, #e6ecf2, #94a3b3);
-  color: #1a1f26;
-}
-
-.pod.third .medal {
-  background: linear-gradient(160deg, #e8b98a, #a5713f);
-  color: #2a1a0c;
-}
-
-.lb-head {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
-  align-items: center;
-  justify-content: space-between;
-  border: 1px solid var(--edge-hot);
-  border-radius: 0;
-  padding: 18px 22px;
-  margin-bottom: 20px;
-  background: linear-gradient(100deg, rgba(31, 139, 255, 0.07), transparent 60%), var(--panel);
-}
-
-.lb-head .pool {
-  font-family: var(--display);
-  font-weight: 700;
-  font-size: 30px;
-  color: var(--gold);
-  line-height: 1.1;
-}
-
 /* Total wagered sits beside the prize pool at the same size, so it takes the
    blue rather than the gold. Two gold figures side by side read as two pots,
    and only one of them is money anybody is being paid. */
-.lb-head .pool.total {
-  color: var(--blue);
-}
-
 .cd-mini {
   display: flex;
   gap: 7px;
@@ -3667,12 +3560,6 @@ nav.mainnav a.on {
 .socials > *,
 .hero > *,
 .stats > *,
-.podium > *,
-.fgrid > *,
-.kpis > * {
-  min-width: 0;
-}
-
 .soc > div {
   min-width: 0;
 }
@@ -4260,13 +4147,6 @@ footer.site a:hover {
   .sitemain {
     padding: 20px 0 40px;
   }
-  .podium {
-    grid-template-columns: 1fr;
-    align-items: stretch;
-  }
-  .pod.first {
-    order: -1;
-  }
   .ms-head {
     grid-template-columns: 1fr;
   }
@@ -4277,10 +4157,6 @@ footer.site a:hover {
   .tier .tright {
     grid-column: 1 / -1;
     justify-content: space-between;
-  }
-  .lb-head {
-    flex-direction: column;
-    align-items: flex-start;
   }
   .fgrid {
     grid-template-columns: 1fr;
@@ -7862,7 +7738,6 @@ body:has(.ovl) {
 .gpanel,
 .acc,
 .tier,
-.pod,
 .stat,
 .gcard {
   border: var(--rule-soft);
@@ -7899,7 +7774,6 @@ body:has(.ovl) {
 }
 
 /* Hard edges for the panels that matter, in place of the old glow. */
-.lb-head,
 .ms-head {
   border: var(--rule);
   background: color-mix(in srgb, var(--panel) 88%, transparent);
@@ -7908,11 +7782,6 @@ body:has(.ovl) {
 .rates {
   border: 2px solid var(--gold);
   background: color-mix(in srgb, var(--panel) 88%, transparent);
-}
-
-.lb-head .pool {
-  font-weight: 800;
-  letter-spacing: -0.02em;
 }
 
 /* — figures — */
@@ -7979,38 +7848,6 @@ body:has(.ovl) {
 
 .tw tbody tr.self {
   background: color-mix(in srgb, var(--blue) 14%, transparent);
-}
-
-/* — leaderboard podium — */
-
-.pod {
-  background: color-mix(in srgb, var(--panel) 88%, transparent);
-}
-
-.pod .medal {
-  font-weight: 800;
-}
-
-.pod .medal,
-.pod.first .medal,
-.pod.second .medal,
-.pod.third .medal {
-  border-radius: 0;
-}
-
-.pod.first {
-  border: 2px solid var(--gold);
-  background: color-mix(in srgb, var(--panel) 88%, transparent);
-  box-shadow: none;
-}
-
-.pod.first .medal {
-  background: var(--gold);
-}
-
-.pod .pp {
-  font-weight: 800;
-  letter-spacing: -0.02em;
 }
 
 /* — milestones — */
@@ -8226,5 +8063,482 @@ body:has(.ovl) {
   .sec-head h1,
   .sec-head h2 {
     font-size: 32px;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Leaderboard — the race
+   A hero panel holding the pot and the podium, four figures, then the table.
+   The one page allowed to glow, because a podium is the one thing on the site
+   that is meant to feel like an occasion. Its corners are a single variable.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.lbx {
+  --lbr: 0px;
+}
+
+.lb-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
+  gap: 32px;
+  padding: 32px;
+  border: var(--rule-soft);
+  border-radius: var(--lbr);
+  background:
+    radial-gradient(720px 440px at 0% 0%, rgba(31, 139, 255, 0.3), transparent 68%),
+    radial-gradient(520px 320px at 72% 100%, rgba(255, 209, 102, 0.13), transparent 70%),
+    var(--panel);
+}
+
+.lb-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.lb-brand {
+  display: block;
+  align-self: flex-start;
+  width: 118px;
+  height: auto;
+  margin-bottom: 20px;
+}
+
+.lb-copy h1 {
+  font-family: var(--body);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--blue-deep);
+}
+
+.lb-pot {
+  margin: 6px 0 14px;
+  font-size: clamp(64px, 8.4vw, 112px);
+  font-weight: 800;
+  line-height: 0.95;
+  letter-spacing: -0.05em;
+  font-variant-numeric: tabular-nums;
+  background: linear-gradient(180deg, #fff 20%, var(--blue-deep));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.lb-blurb {
+  margin: 0 0 20px;
+  max-width: 44ch;
+  font-size: 14px;
+  color: var(--soft);
+}
+
+.lb-clockhead {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.lb-hero .cd-mini {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.lb-hero .cd-mini .u {
+  min-width: 0;
+  padding: 10px 4px;
+  border: 1px solid var(--edge);
+  border-radius: var(--lbr);
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.lb-hero .cd-mini b {
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+.lb-bar {
+  height: 4px;
+  margin: 12px 0 20px;
+  background: var(--panel-3);
+}
+
+.lb-bar i {
+  display: block;
+  height: 100%;
+  background: var(--blue);
+}
+
+.lb-copy > .btn {
+  align-self: flex-start;
+  margin-bottom: 14px;
+}
+
+.lb-promo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+  padding: 11px 14px;
+  border: 1px solid rgba(255, 209, 102, 0.4);
+  border-radius: var(--lbr);
+  background: rgba(255, 209, 102, 0.05);
+  color: var(--gold);
+  transition: border-color 0.14s, background 0.14s;
+}
+
+.lb-promo:hover {
+  border-color: var(--gold);
+  background: rgba(255, 209, 102, 0.1);
+}
+
+.lb-promo .ic {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--lbr);
+  background: var(--gold);
+  color: var(--on-gold);
+}
+
+.lb-promo .tx {
+  flex: 1;
+  min-width: 0;
+}
+
+.lb-promo b {
+  display: block;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.lb-promo small {
+  display: block;
+  font-size: 12px;
+  color: var(--soft);
+}
+
+.lb-promo > svg {
+  flex: none;
+}
+
+/* — the podium — */
+
+.lbp {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  align-items: end;
+  min-width: 0;
+}
+
+.lbp-spot {
+  --tone: var(--edge-2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+  text-align: center;
+}
+
+.lbp-spot.r1 {
+  --tone: var(--gold);
+}
+
+.lbp-spot.r2 {
+  --tone: #c6cfdd;
+}
+
+.lbp-spot.r3 {
+  --tone: #e8b98a;
+}
+
+.lbp-crown {
+  margin-bottom: 4px;
+  color: var(--gold);
+  filter: drop-shadow(0 0 10px rgba(255, 209, 102, 0.7));
+}
+
+.lbp-face {
+  position: relative;
+  width: 58px;
+  height: 58px;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--tone);
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 25%, #1b4a7c, #0c1a2e 75%);
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.lbp-spot.r1 .lbp-face {
+  width: 76px;
+  height: 76px;
+  font-size: 26px;
+  box-shadow: 0 0 28px -6px rgba(255, 209, 102, 0.75);
+}
+
+.lbp-face i {
+  position: absolute;
+  bottom: -8px;
+  left: 50%;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: var(--tone);
+  color: var(--on-gold);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.lbp-name {
+  max-width: 100%;
+  margin-top: 14px;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lbp-sum {
+  margin-top: 8px;
+  font-size: clamp(15px, 1.5vw, 20px);
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+.lbp-sum small {
+  font-size: 0.62em;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.lbp-cap {
+  margin-top: 3px;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.lbp-prize {
+  min-width: 72%;
+  margin: 10px 0;
+  padding: 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--tone) 55%, transparent);
+  border-radius: var(--lbr);
+  background: color-mix(in srgb, var(--tone) 10%, transparent);
+}
+
+.lbp-prize span {
+  display: block;
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--soft);
+}
+
+.lbp-prize b {
+  display: block;
+  font-size: clamp(15px, 1.5vw, 20px);
+  font-weight: 800;
+  color: var(--tone);
+  font-variant-numeric: tabular-nums;
+}
+
+.lbp-plinth {
+  width: 100%;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  border-top: 2px solid var(--tone);
+  border-radius: var(--lbr) var(--lbr) 0 0;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--tone) 34%, transparent), transparent);
+  font-size: 38px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--tone);
+}
+
+.lbp-spot.r1 .lbp-plinth {
+  height: 118px;
+  font-size: 60px;
+  box-shadow: 0 -20px 60px -26px rgba(255, 209, 102, 0.8);
+}
+
+.lbp-spot.r2 .lbp-plinth {
+  height: 84px;
+  font-size: 46px;
+}
+
+.lb-empty {
+  align-self: center;
+}
+
+/* — four figures — */
+
+.lb-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.lb-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 20px 16px;
+  border: var(--rule-soft);
+  border-radius: var(--lbr);
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  text-align: center;
+}
+
+.lb-stat .ring {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--gold-2);
+  border-radius: 50%;
+  color: var(--soft);
+}
+
+.lb-stat .ring i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--blue);
+  box-shadow: 0 0 12px var(--blue);
+  animation: livepulse 1.4s infinite;
+}
+
+.lb-stat .ring.off i {
+  background: var(--warn);
+  box-shadow: none;
+  animation: none;
+}
+
+.lb-stat .v {
+  font-size: clamp(28px, 2.8vw, 36px);
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.lb-stat .v.b {
+  color: var(--blue-2);
+}
+
+.lb-stat .v.g {
+  color: var(--gold);
+}
+
+.lb-stat .v.w {
+  color: var(--warn);
+}
+
+.lb-stat .l {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.lb-stat .m {
+  font-size: 12px;
+  color: var(--soft);
+}
+
+/* — the rest of the board — */
+
+.lb-table {
+  border: var(--rule-soft);
+  border-radius: var(--lbr);
+}
+
+.lb-table th:nth-child(n + 3),
+.lb-table td:nth-child(n + 3) {
+  text-align: right;
+}
+
+@media (max-width: 980px) {
+  .lb-hero {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 28px;
+    padding: 22px;
+  }
+  .lb-pot {
+    font-size: clamp(64px, 18vw, 112px);
+  }
+  .lbp-sum,
+  .lbp-prize b {
+    font-size: clamp(14px, 3.6vw, 20px);
+  }
+}
+
+/* A third of a phone cannot hold cents beside six figures. */
+@media (max-width: 520px) {
+  /* Four short columns fit a phone, and the figures are what people came for,
+     so the table does not get to hide them behind a sideways scroll. */
+  .lb-table table {
+    min-width: 0;
+  }
+  .lb-table th,
+  .lb-table td {
+    padding: 12px 8px;
+    font-size: 13px;
+  }
+  .lb-table th {
+    font-size: 10px;
+    letter-spacing: 0.04em;
+  }
+  .lb-hero {
+    padding: 18px 14px;
+  }
+  .lbp {
+    gap: 6px;
+  }
+  .lbp-sum small {
+    display: none;
+  }
+  .lbp-name {
+    font-size: 12.5px;
+  }
+  .lb-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .lb-stat {
+    padding: 16px 8px;
+  }
+  .lb-stat .v {
+    font-size: 24px;
+  }
+  .lb-stat .l {
+    font-size: 10px;
   }
 }
