@@ -329,6 +329,11 @@ export const socials = [
     url: "https://kick.com/mattyspinss",
   },
   {
+    platform: "Twitch",
+    handle: "twitch.tv/mattyspinss",
+    url: "https://twitch.tv/mattyspinss",
+  },
+  {
     platform: "YouTube",
     handle: "@MattySpinss",
     url: "https://youtube.com/@MattySpinss",
@@ -342,6 +347,11 @@ export const socials = [
     platform: "X",
     handle: "@mattyspinsslots",
     url: "https://x.com/mattyspinsslots",
+  },
+  {
+    platform: "Telegram",
+    handle: "t.me/mattyspins",
+    url: "https://t.me/mattyspins",
   },
 ];
 

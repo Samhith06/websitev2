@@ -63,7 +63,9 @@ export function TierControls({
       {note ? (
         <div
           className="small"
-          style={{ color: note.ok ? 'var(--green)' : 'var(--red)', marginTop: 5 }}
+          // A child of the row's grid, so it has to ask for the whole width or
+          // it lands in the narrow first column and wraps a word per line.
+          style={{ gridColumn: '1 / -1', color: note.ok ? 'var(--green)' : 'var(--red)', marginTop: 5 }}
         >
           {note.text}
         </div>
