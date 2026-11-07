@@ -1,7 +1,7 @@
 import 'server-only';
 import { rows, write } from '@/lib/db';
 import { TICK_MINUTES } from './presence';
-import { LIFETIME_PERIOD } from './razed-snapshots';
+import { LAST_30_DAYS_PERIOD, LAST_MONTH_PERIOD, LIFETIME_PERIOD } from './razed-snapshots';
 
 /**
  * The badge evaluator.
@@ -233,51 +233,56 @@ const lifetimeWager: Rule = (criteria, scope) => {
 };
 
 /**
- * Wagered inside a window, against the newest monthly snapshot.
+ * Wagered enough in the previous calendar month, or in the last 30 days. Either
+ * one is enough, so somebody cannot miss out because their big month straddled
+ * the 1st.
  *
- * Nothing stores a rolling window. Monthly snapshots are written when a board
- * is frozen and keyed `YYYY-MM`, and that is the only period figure the
- * database holds, so a badge asking for roughly a month is answered from the
- * newest of those and anything else is reported as having no data rather than
- * quietly answered from the wrong window. Syncing a real rolling period would
- * make this exact; until then it says what it is doing.
+ * Read from the two windows the Razed sync keeps fresh. Those are refreshed for
+ * this and nothing else, so neither can be confused with a partial month or a
+ * board covering some other stretch of time.
  */
 const periodWager: Rule = async (criteria, scope) => {
   if (criteria.kind !== 'period_wager') return [];
   return ids(
-    `SELECT rl.user_id::text AS id
+    `SELECT DISTINCT rl.user_id::text AS id
        FROM razed_links rl
        JOIN razed_wagers w ON lower(w.username) = lower(rl.username)
       WHERE rl.status = 'approved'
-        AND w.snapshot_id = (
-          SELECT id FROM razed_snapshots
-           WHERE period ~ '^[0-9]{4}-[0-9]{2}$'
-           ORDER BY period DESC, fetched_at DESC LIMIT 1
+        AND w.snapshot_id IN (
+          (SELECT id FROM razed_snapshots WHERE period = $3 ORDER BY fetched_at DESC, id DESC LIMIT 1),
+          (SELECT id FROM razed_snapshots WHERE period = $4 ORDER BY fetched_at DESC, id DESC LIMIT 1)
         )
         AND w.wagered >= $1
         AND ($2::bigint[] IS NULL OR rl.user_id = ANY($2::bigint[]))`,
-    [criteria.threshold, scope],
+    [criteria.threshold, scope, LAST_MONTH_PERIOD, LAST_30_DAYS_PERIOD],
   );
 };
 
 /**
- * Finished at or above a rank on a frozen board.
+ * Finished at or above a rank on the most recently frozen monthly board.
  *
- * Read from `frozen_standings`, never from a live Razed query. The frozen
- * standings are what the board actually said when it locked and what winners
- * were paid against; re-asking Razed today can come back restated, and a badge
- * that appeared and vanished with it would be indefensible.
+ * Only that board: an earlier one no longer earns these. Read from
+ * `frozen_standings`, never from a live Razed query. The frozen standings are
+ * what the board actually said when it locked and what winners were paid against;
+ * re-asking Razed today can come back restated, and a badge that appeared and
+ * vanished with it would be indefensible. That also means a board that has ended
+ * counts from the moment staff freeze it, not from the moment it ends.
  */
 const leaderboardRank: Rule = async (criteria, scope) => {
   if (criteria.kind !== 'leaderboard_rank') return [];
   return ids(
     `SELECT rl.user_id::text AS id
-       FROM lb_periods p
+       FROM (
+         SELECT frozen_standings
+           FROM lb_periods
+          WHERE type = 'monthly' AND frozen_standings IS NOT NULL
+          ORDER BY ends_at DESC
+          LIMIT 1
+       ) p
        CROSS JOIN LATERAL jsonb_array_elements(p.frozen_standings) AS standing
        JOIN razed_links rl
          ON lower(rl.username) = lower(standing->>'username')
-      WHERE p.frozen_standings IS NOT NULL
-        AND standing->>'username' IS NOT NULL
+      WHERE standing->>'username' IS NOT NULL
         AND (standing->>'rank')::integer <= $1
         AND rl.status = 'approved'
         AND ($2::bigint[] IS NULL OR rl.user_id = ANY($2::bigint[]))`,
@@ -320,22 +325,23 @@ async function precondition(criteria: Criteria): Promise<string | null> {
   }
 
   if (criteria.kind === 'period_wager') {
-    // Snapshots are a calendar month; anything else is a window we do not hold.
-    if (criteria.days < 28 || criteria.days > 31) {
-      return `Asks for ${criteria.days} days, but only calendar-month snapshots are stored.`;
+    // These are the only windows the sync keeps; anything else we cannot answer.
+    if (criteria.days !== 30) {
+      return `Asks for ${criteria.days} days, but only the last 30 days are stored.`;
     }
     const [snapshot] = await rows<{ period: string }>(
-      `SELECT period FROM razed_snapshots
-        WHERE period ~ '^[0-9]{4}-[0-9]{2}$' ORDER BY period DESC LIMIT 1`,
+      `SELECT period FROM razed_snapshots WHERE period IN ($1, $2) LIMIT 1`,
+      [LAST_MONTH_PERIOD, LAST_30_DAYS_PERIOD],
     );
-    return snapshot ? null : 'No monthly Razed snapshot exists — freeze a board to write one.';
+    return snapshot ? null : 'The last-month and 30-day Razed figures have not been synced yet.';
   }
 
   if (criteria.kind === 'leaderboard_rank') {
     const [frozen] = await rows<{ id: string }>(
-      `SELECT id::text FROM lb_periods WHERE frozen_standings IS NOT NULL LIMIT 1`,
+      `SELECT id::text FROM lb_periods
+        WHERE type = 'monthly' AND frozen_standings IS NOT NULL LIMIT 1`,
     );
-    return frozen ? null : 'No board has been frozen yet, so no final rank exists.';
+    return frozen ? null : 'No monthly board has been frozen yet, so no final rank exists.';
   }
 
   if (criteria.kind === 'streams_attended') {

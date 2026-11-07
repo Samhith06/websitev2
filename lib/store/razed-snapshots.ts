@@ -69,8 +69,7 @@ export function monthKey(now = new Date()): string {
  * What the running month's wager is filed under for the milestone ladder.
  *
  * Prefixed so it can never be a bare `YYYY-MM`. That key belongs to frozen
- * boards, and the badge rules read it as "wagered during a finished month", so a
- * partial month filed there would start deciding badges.
+ * boards, and a partial month filed there would read as a finished one.
  */
 export function monthPeriod(month: string): string {
   return `milestone:${month}`;
@@ -329,6 +328,57 @@ export async function syncMonth(now = new Date()): Promise<SyncOutcome> {
     ]);
   }
   return stored;
+}
+
+/** The two windows the VIP badge is decided on. Only the newest of each is kept. */
+export const LAST_MONTH_PERIOD = 'badge:last-month';
+export const LAST_30_DAYS_PERIOD = 'badge:last-30-days';
+
+/** A UTC instant as Razed reads it, so a window can start partway through a day. */
+function razedInstant(d: Date): string {
+  return d.toISOString().slice(0, 19).replace('T', ' ');
+}
+
+/**
+ * Refresh what the VIP badge reads: the whole of the previous calendar month, and
+ * the 30 days up to this moment.
+ *
+ * Each is read in full rather than added up from other snapshots. Razed answers
+ * past windows, so last month's figure is the finished month rather than whatever
+ * the running month's last sync happened to catch, and neither window comes close
+ * to the 45-day limit. A failed read leaves that window's previous snapshot alone.
+ */
+export async function syncBadgeWindows(now = new Date()): Promise<SyncOutcome[]> {
+  const lastMonthEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0));
+  const lastMonthStart = new Date(Date.UTC(lastMonthEnd.getUTCFullYear(), lastMonthEnd.getUTCMonth(), 1));
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 86_400_000);
+
+  const windows: Array<[period: string, from: string, to: string]> = [
+    [LAST_MONTH_PERIOD, isoDay(lastMonthStart), isoDay(lastMonthEnd)],
+    [LAST_30_DAYS_PERIOD, razedInstant(thirtyDaysAgo), razedInstant(now)],
+  ];
+
+  const outcomes: SyncOutcome[] = [];
+  for (const [period, from, to] of windows) {
+    const { result, attempts } = await readWindow(from, to);
+    if (!result.ok) {
+      outcomes.push({
+        ok: false,
+        reason: result.reason,
+        detail: `${result.detail} (${period}, ${attempts} attempt${attempts === 1 ? '' : 's'})`,
+      });
+      continue;
+    }
+    const stored = await storeSnapshot(period, { from, to }, result.rows);
+    if (stored.ok) {
+      await write('DELETE FROM razed_snapshots WHERE period = $1 AND id < $2', [
+        period,
+        stored.snapshot.id,
+      ]);
+    }
+    outcomes.push(stored);
+  }
+  return outcomes;
 }
 
 export async function latestSnapshot(period: string): Promise<Snapshot | null> {

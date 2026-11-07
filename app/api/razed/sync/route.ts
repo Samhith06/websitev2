@@ -2,10 +2,12 @@ import { NextResponse } from 'next/server';
 import { timingSafeEqual } from 'node:crypto';
 import { hasDatabase } from '@/lib/db';
 import {
+  LAST_30_DAYS_PERIOD,
   LIFETIME_PERIOD,
   latestSnapshot,
   monthKey,
   monthPeriod,
+  syncBadgeWindows,
   syncLifetime,
   syncMonth,
 } from '@/lib/store/razed-snapshots';
@@ -70,14 +72,16 @@ export async function POST(request: Request) {
   // does not care that one ran four minutes ago.
   const force = new URL(request.url).searchParams.get('force') === '1';
 
-  const [monthAge, lifetimeAge] = await Promise.all([
+  const [monthAge, lifetimeAge, badgeAge] = await Promise.all([
     minutesSince(monthPeriod(monthKey())),
     minutesSince(LIFETIME_PERIOD),
+    minutesSince(LAST_30_DAYS_PERIOD),
   ]);
   const monthDue = force || due(monthAge);
   const lifetimeDue = force || due(lifetimeAge);
+  const badgesDue = force || due(badgeAge);
 
-  if (!monthDue && !lifetimeDue) {
+  if (!monthDue && !lifetimeDue && !badgesDue) {
     return NextResponse.json({
       ok: true,
       ran: false,
@@ -89,10 +93,11 @@ export async function POST(request: Request) {
   // The month first: it is a single window, and one bad walk of the lifetime
   // history should not cost every monthly ladder its figures.
   const month = monthDue ? await syncMonth() : null;
+  const badgeWindows = badgesDue ? await syncBadgeWindows() : [];
   const lifetime = lifetimeDue ? await syncLifetime() : null;
 
-  const ran = Boolean(month?.ok || lifetime?.ok);
-  const failed = [month, lifetime].find((result) => result && !result.ok);
+  const ran = Boolean(month?.ok || lifetime?.ok || badgeWindows.some((result) => result.ok));
+  const failed = [month, ...badgeWindows, lifetime].find((result) => result && !result.ok);
   if (failed && !failed.ok) {
     // A failed sync is a 200 with `ok: false`, not a 500: the scheduler should
     // not treat "Razed did not answer" as this endpoint being broken, and the

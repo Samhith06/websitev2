@@ -396,11 +396,9 @@ export async function syncRazed(): Promise<Outcome> {
 /**
  * What a frozen board's Razed snapshot is filed under.
  *
- * A board covering a whole calendar month is keyed by that month, because
- * `YYYY-MM` is the key the badge rules read as "wagered during a month". Any
- * other window is keyed by its dates instead: filing a fortnight under
- * "2026-09" would let a rule asking for a month's wager quietly answer with
- * half of one, and the rules already ignore keys that are not months.
+ * A board covering a whole calendar month is keyed by that month. Any other
+ * window is keyed by its dates instead: filing a fortnight under "2026-09" would
+ * make half a month read as a whole one to anything looking at the raw figures.
  */
 function snapshotKey(startsAt: string, endsAt: string): string {
   return isWholeCalendarMonth(startsAt, endsAt)

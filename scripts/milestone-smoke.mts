@@ -29,7 +29,16 @@ import {
   searchMembers,
 } from '../lib/store/milestones';
 import { approveLink, submitLink } from '../lib/store/razed-links';
-import { monthKey, monthPeriod, syncLifetime, syncMonth } from '../lib/store/razed-snapshots';
+import {
+  LAST_30_DAYS_PERIOD,
+  LAST_MONTH_PERIOD,
+  monthKey,
+  monthPeriod,
+  syncBadgeWindows,
+  syncLifetime,
+  syncMonth,
+} from '../lib/store/razed-snapshots';
+import { evaluateBadges } from '../lib/store/badge-rules';
 import { wagerStateFor } from '../lib/store/wager';
 
 let failures = 0;
@@ -247,6 +256,150 @@ const inMonth = await claimsInCycle(month);
 check('a month lists everyone in it', new Set(inMonth.map((c) => c.username)).size === 2);
 check('and only that month', (await claimsInCycle(nextMonth)).length === 1);
 check('with the Razed name to pay', inMonth.every((c) => c.razedUsername?.endsWith('_razed')));
+
+/* -------------------------------------------------------------------------- */
+section('VIP, Champion and Podium');
+
+/** Fresh members with approved links, so nothing above decides what these hold. */
+const member = async (name: string) => {
+  const user = await accounts.ensureUser({ discordId: `d-${name}`, discordUsername: name });
+  await submitLink({ userId: user.id, username: `${name}_razed`, matchedWagered: 0 });
+  await approveLink(user.id, 'smoke');
+  return user;
+};
+const holds = async (userId: number, slug: string) =>
+  (
+    await rows(
+      `SELECT 1 FROM user_badges ub JOIN badges b ON b.id = ub.badge_id
+        WHERE ub.user_id = $1 AND b.slug = $2`,
+      [userId, slug],
+    )
+  ).length > 0;
+
+const lastMonthOnly = await member('lastmonth');
+const recentOnly = await member('recent');
+const bothWindows = await member('bothwindows');
+const justShort = await member('justshort');
+const unapproved = await accounts.ensureUser({ discordId: 'd-pending', discordUsername: 'pending' });
+await submitLink({ userId: unapproved.id, username: 'pending_razed', matchedWagered: 0 });
+
+const report = async (slug: string) =>
+  (await evaluateBadges()).rules.find((rule) => rule.slug === slug);
+
+check('VIP says it has no data before the first sync', (await report('vip'))?.status === 'no-data');
+
+// Razed, restubbed: answers by which window was asked for, and remembers it.
+const windowsAsked: string[] = [];
+const fixedNow = new Date('2026-03-15T12:34:56Z');
+const windowStub = (async (input: string | URL) => {
+  const url = new URL(String(input));
+  const from = url.searchParams.get('from') ?? '';
+  const to = url.searchParams.get('to') ?? '';
+  windowsAsked.push(`${from} -> ${to}`);
+  const data = from.startsWith('2026-02-01')
+    ? [
+        { username: 'lastmonth_razed', wagered: '40000.00' },
+        { username: 'BothWindows_Razed', wagered: '50000.00' },
+        { username: 'justshort_razed', wagered: '39999.99' },
+        { username: 'pending_razed', wagered: '90000.00' },
+      ]
+    : [
+        { username: 'recent_razed', wagered: '41000.00' },
+        { username: 'bothwindows_razed', wagered: '60000.00' },
+        { username: 'justshort_razed', wagered: '39999.99' },
+      ];
+  return new Response(JSON.stringify({ data, total: data.length, last_page: 1 }), { status: 200 });
+}) as typeof fetch;
+globalThis.fetch = windowStub;
+
+const synced = await syncBadgeWindows(fixedNow);
+check('both windows sync', synced.length === 2 && synced.every((outcome) => outcome.ok));
+check(
+  'last month is the whole previous month, across a short February',
+  windowsAsked[0] === '2026-02-01 00:00:00 -> 2026-02-28 23:59:59',
+  windowsAsked[0],
+);
+check(
+  'the rolling window is exactly the last 30 days',
+  windowsAsked[1] === '2026-02-13 12:34:56 -> 2026-03-15 12:34:56',
+  windowsAsked[1],
+);
+await syncBadgeWindows(fixedNow);
+const windowSnapshots = await rows<{ n: number }>(
+  `SELECT count(*)::int AS n FROM razed_snapshots WHERE period IN ($1, $2)`,
+  [LAST_MONTH_PERIOD, LAST_30_DAYS_PERIOD],
+);
+check('only the newest of each window is kept', windowSnapshots[0].n === 2, String(windowSnapshots[0].n));
+const januaryWindow: string[] = [];
+globalThis.fetch = (async (input: string | URL) => {
+  const url = new URL(String(input));
+  januaryWindow.push(url.searchParams.get('from') ?? '');
+  return new Response(JSON.stringify({ data: [], total: 0, last_page: 1 }), { status: 200 });
+}) as typeof fetch;
+const newYear = new Date('2026-01-10T00:00:00Z');
+await syncBadgeWindows(newYear);
+check('in January, last month is the December before', januaryWindow[0] === '2025-12-01 00:00:00', januaryWindow[0]);
+
+// A failed read keeps the window's last good figures.
+globalThis.fetch = windowStub;
+await syncBadgeWindows(fixedNow);
+globalThis.fetch = (async () => new Response('nope', { status: 400 })) as typeof fetch;
+const failedWindows = await syncBadgeWindows(fixedNow);
+check('a failed read is reported', failedWindows.every((outcome) => !outcome.ok));
+globalThis.fetch = windowStub;
+
+await evaluateBadges();
+check('$40,000 last month earns VIP', await holds(lastMonthOnly.id, 'vip'));
+check('$40,000 in the last 30 days earns VIP', await holds(recentOnly.id, 'vip'));
+check('both at once earns it once, whatever the name case', await holds(bothWindows.id, 'vip'));
+check('a cent short does not', !(await holds(justShort.id, 'vip')));
+check('an unapproved link does not', !(await holds(unapproved.id, 'vip')));
+check('the description says so', (await rows<{ description: string }>(
+  `SELECT description FROM badges WHERE slug = 'vip'`,
+))[0]?.description === '$40,000 last month or in the last 30 days');
+
+// Two frozen boards, the winner of each different, and the older written second.
+const champNew = await member('champnew');
+const secondNew = await member('secondnew');
+const thirdNew = await member('thirdnew');
+const fourthNew = await member('fourthnew');
+const champOld = await member('champold');
+const podiumOld = await member('podiumold');
+
+check('Champion says it has no data with no frozen board', (await report('champion'))?.status === 'no-data');
+
+const frozenBoard = async (type: string, starts: string, ends: string, names: string[]) => {
+  const standings = names.map((name, index) => ({ rank: index + 1, username: `${name}_razed` }));
+  await write(
+    `INSERT INTO lb_periods (type, starts_at, ends_at, status, frozen_standings, frozen_at)
+     VALUES ($1, $2, $3, 'frozen', $4::jsonb, now())`,
+    [type, starts, ends, JSON.stringify(standings)],
+  );
+};
+await frozenBoard('monthly', '2026-02-01', '2026-03-01', ['champnew', 'secondnew', 'thirdnew', 'fourthnew']);
+await frozenBoard('monthly', '2026-01-01', '2026-02-01', ['champold', 'podiumold']);
+await frozenBoard('weekly', '2026-03-02', '2026-03-09', ['podiumold']);
+
+await evaluateBadges();
+check('the last board’s winner is Champion', await holds(champNew.id, 'champion'));
+check('and on the Podium too', await holds(champNew.id, 'podium'));
+check('second is not Champion', !(await holds(secondNew.id, 'champion')));
+check('second is on the Podium', await holds(secondNew.id, 'podium'));
+check('third is on the Podium', await holds(thirdNew.id, 'podium'));
+check('fourth is not', !(await holds(fourthNew.id, 'podium')));
+check('an older board’s winner earns nothing from it', !(await holds(champOld.id, 'champion')));
+check('nor an older board’s runner-up', !(await holds(podiumOld.id, 'podium')));
+check('a newer weekly board is not the last leaderboard', !(await holds(podiumOld.id, 'champion')));
+
+// The sweep still only awards.
+await write(
+  `INSERT INTO lb_periods (type, starts_at, ends_at, status, frozen_standings, frozen_at)
+   VALUES ('monthly', '2026-03-01', '2026-04-01', 'frozen', $1::jsonb, now())`,
+  [JSON.stringify([{ rank: 1, username: 'champold_razed' }])],
+);
+await evaluateBadges();
+check('the next board’s winner becomes Champion', await holds(champOld.id, 'champion'));
+check('and the last one keeps theirs', await holds(champNew.id, 'champion'));
 
 console.log(`\n${failures === 0 ? 'ALL PASSED' : `${failures} FAILED`}\n`);
 process.exit(failures === 0 ? 0 : 1);
