@@ -9,26 +9,40 @@
  * each entry carries both a full label and a short one — "Leaderboard" does
  * not fit a fifth of a phone screen, "Board" does.
  */
+export type NavIconName =
+  | 'home'
+  | 'trophy'
+  | 'flag'
+  | 'games'
+  | 'ticket'
+  | 'bag'
+  | 'target'
+  | 'grid'
+  | 'crown'
+  | 'sword'
+  | 'banner'
+  | 'bracket';
+
 export type NavItem = {
   href: string;
   label: string;
   short: string;
-  icon: string;
+  icon: NavIconName;
 };
 
-const HOME: NavItem = { href: '/', label: 'Home', short: 'Home', icon: '⌂' };
-const LEADERBOARD: NavItem = { href: '/leaderboard', label: 'Leaderboard', short: 'Board', icon: '≡' };
-const MILESTONES: NavItem = { href: '/milestones', label: 'Milestones', short: 'Tiers', icon: '◆' };
-const GAMES: NavItem = { href: '/games', label: 'Games', short: 'Games', icon: '⬢' };
-const RAFFLES: NavItem = { href: '/raffles', label: 'Raffles', short: 'Raffles', icon: '✦' };
-const STORE: NavItem = { href: '/store', label: 'Store', short: 'Store', icon: '▣' };
+const HOME: NavItem = { href: '/', label: 'Home', short: 'Home', icon: 'home' };
+const LEADERBOARD: NavItem = { href: '/leaderboard', label: 'Leaderboard', short: 'Board', icon: 'trophy' };
+const MILESTONES: NavItem = { href: '/milestones', label: 'Milestones', short: 'Milestones', icon: 'flag' };
+const GAMES: NavItem = { href: '/games', label: 'Games', short: 'Games', icon: 'games' };
+const RAFFLES: NavItem = { href: '/raffles', label: 'Raffles', short: 'Raffles', icon: 'ticket' };
+const STORE: NavItem = { href: '/store', label: 'Store', short: 'Store', icon: 'bag' };
 
-const HUNT: NavItem = { href: '/hunt', label: 'Bonus Hunt', short: 'Hunt', icon: '◎' };
-const BINGO: NavItem = { href: '/bingo', label: 'Slot Bingo', short: 'Bingo', icon: '▦' };
-const KOTH: NavItem = { href: '/koth', label: 'King of the Hill', short: 'KOTH', icon: '♛' };
-const RAID: NavItem = { href: '/raid', label: 'Boss Raid', short: 'Raid', icon: '⚔' };
-const BATTLE: NavItem = { href: '/battle', label: 'Team Battle', short: 'Battle', icon: '⚑' };
-const TOURNEY: NavItem = { href: '/tournament', label: 'Tournament', short: 'Cup', icon: '♜' };
+const HUNT: NavItem = { href: '/hunt', label: 'Bonus Hunt', short: 'Hunt', icon: 'target' };
+const BINGO: NavItem = { href: '/bingo', label: 'Slot Bingo', short: 'Bingo', icon: 'grid' };
+const KOTH: NavItem = { href: '/koth', label: 'King of the Hill', short: 'KOTH', icon: 'crown' };
+const RAID: NavItem = { href: '/raid', label: 'Boss Raid', short: 'Raid', icon: 'sword' };
+const BATTLE: NavItem = { href: '/battle', label: 'Team Battle', short: 'Battle', icon: 'banner' };
+const TOURNEY: NavItem = { href: '/tournament', label: 'Tournament', short: 'Cup', icon: 'bracket' };
 
 /**
  * Which stream games are running right now. Bingo, king of the hill, the boss

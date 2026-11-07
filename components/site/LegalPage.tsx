@@ -39,7 +39,7 @@ export function LegalPage({
                   href={page.href}
                   aria-current={page.href === current ? 'page' : undefined}
                   className={cn(
-                    'block rounded-[6px] px-3 py-2 text-[13.5px] transition-colors duration-150',
+                    'block rounded-none px-3 py-2 text-[13.5px] transition-colors duration-150',
                     page.href === current
                       ? 'bg-brand-bg font-medium text-brand'
                       : 'text-ink-2 hover:bg-surface-2 hover:text-ink',
@@ -54,7 +54,7 @@ export function LegalPage({
 
         <div className="min-w-0 max-w-[70ch]">
           {!LEGAL_REVIEWED ? (
-            <div className="mb-8 flex items-start gap-3 rounded-[8px] border border-gold-line bg-gold-bg px-4 py-3.5">
+            <div className="mb-8 flex items-start gap-3 rounded-none border border-gold-line bg-gold-bg px-4 py-3.5">
               <TriangleAlert size={16} className="mt-0.5 shrink-0 text-gold" aria-hidden />
               <p className="text-[13px] leading-relaxed text-ink-2">
                 <span className="text-gold">Draft — not yet reviewed by a solicitor.</span> This

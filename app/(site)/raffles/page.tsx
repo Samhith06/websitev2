@@ -58,7 +58,7 @@ export default async function RafflesPage() {
         style={{
           marginTop: 16,
           borderColor: 'var(--edge-hot)',
-          background: 'linear-gradient(100deg,rgba(34,211,255,.05),var(--panel) 60%)',
+          background: 'linear-gradient(100deg,rgba(31,139,255,.05),var(--panel) 60%)',
         }}
       >
         <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>

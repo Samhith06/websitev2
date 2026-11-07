@@ -478,7 +478,7 @@ export function SignInToPlay({ game }: { game: string }) {
         </p>
         <Link
           href="/api/auth/signin?callbackUrl=%2Fgames"
-          className="mt-6 flex h-11 items-center justify-center gap-2 rounded-[8px] bg-discord text-[14px] font-medium text-white transition-[filter] duration-150 hover:brightness-110"
+          className="mt-6 flex h-11 items-center justify-center gap-2 rounded-none bg-discord text-[14px] font-medium text-white transition-[filter] duration-150 hover:brightness-110"
         >
           Sign in with Discord
         </Link>

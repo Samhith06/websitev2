@@ -101,57 +101,49 @@ export function ClipCard({
           {clip.durationSeconds ? (
             <span className="dur">{clipLength(clip.durationSeconds)}</span>
           ) : null}
-          {/* The multiplier, and — where it earned one — the max-win mark
-              beside it. Two tags in one row rather than two absolute boxes, so
-              neither can land on top of the other. */}
-          {showWin && (hasFigures || clip.maxWin) ? (
+          {/* Over the frame only when a clip paid its slot's ceiling: the rarest
+              thing on the wall, and the one tag allowed to shout. */}
+          {showWin && clip.maxWin ? (
             <span className="cliptags">
-              {hasFigures ? (
-                <span className="tag gold">{formatMultiplier(clip.bet!, clip.payout!)}</span>
-              ) : null}
-              {clip.maxWin ? <span className="tag max">Max win</span> : null}
+              <span className="tag max">Max win</span>
             </span>
           ) : null}
         </div>
 
-        <div className="ci">
-          <div className="ct">{clip.title}</div>
-          <div className="cm">
-            {clip.source} · {relativeTime(clip.occurredAt)}
-            {/* Hidden at zero. "0 plays" on every card the day this ships
-                advertises that nobody has watched them. */}
-            {plays > 0 ? <> · {compact(plays)} {plays === 1 ? 'play' : 'plays'}</> : null}
+        {showWin ? (
+          <div className="ci">
+            <div className="winline">
+              <span className="ct">{clip.slotName ?? clip.title}</span>
+              {hasFigures ? (
+                <span className="wm">{formatMultiplier(clip.bet!, clip.payout!)}</span>
+              ) : null}
+            </div>
+            {/* In coins, not dollars, which is the unit the rest of that page
+                uses and the one these figures are actually held in. */}
+            <div className="cm winfoot">
+              <span>
+                {hasFigures ? (
+                  <>
+                    {coins(clip.bet!)} → <b>{coins(clip.payout!)}</b>
+                  </>
+                ) : (
+                  clip.source
+                )}
+              </span>
+              <span>{dateShort(clip.occurredAt)}</span>
+            </div>
           </div>
-          {/* The wall of fame's figures, kept exactly as they read before —
-              in coins, not dollars, which is the unit the rest of that page
-              uses. */}
-          {showWin && hasFigures ? (
-            <div
-              className="cm"
-              style={{
-                marginTop: 8,
-                paddingTop: 8,
-                borderTop: '1px solid var(--edge)',
-                display: 'flex',
-                justifyContent: 'space-between',
-                gap: 8,
-              }}
-            >
-              <span>
-                Bet <b style={{ color: 'var(--text)' }}>{coins(clip.bet!)}</b>
-              </span>
-              <span>
-                Won <b style={{ color: 'var(--gold)' }}>{coins(clip.payout!)}</b>
-              </span>
+        ) : (
+          <div className="ci">
+            <div className="ct">{clip.title}</div>
+            <div className="cm">
+              {clip.source} · {relativeTime(clip.occurredAt)}
+              {/* Hidden at zero. "0 plays" on every card the day this ships
+                  advertises that nobody has watched them. */}
+              {plays > 0 ? <> · {compact(plays)} {plays === 1 ? 'play' : 'plays'}</> : null}
             </div>
-          ) : null}
-
-          {showWin && clip.slotName ? (
-            <div className="cm" style={{ marginTop: 5 }}>
-              {clip.slotName} · {dateShort(clip.occurredAt)}
-            </div>
-          ) : null}
-        </div>
+          </div>
+        )}
       </button>
 
       {/* Portalled to the body rather than left where the card sits. A

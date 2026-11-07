@@ -1,15 +1,16 @@
 'use client';
 
 import { useState } from 'react';
+import { Copy } from 'lucide-react';
 
 /**
- * The referral code, and a button that copies it.
+ * The referral code, as one big button that copies it.
  *
  * The confirmation replaces the button label rather than firing a toast: the
  * thing you just clicked telling you it worked is less to track than a message
  * somewhere else on the screen.
  */
-export function CopyCode({ code, label = 'Referral code' }: { code: string; label?: string }) {
+export function CopyCode({ code }: { code: string }) {
   const [copied, setCopied] = useState(false);
 
   async function copy() {
@@ -24,14 +25,12 @@ export function CopyCode({ code, label = 'Referral code' }: { code: string; labe
   }
 
   return (
-    <div className="codebox">
-      <div>
-        <div className="cl">{label}</div>
-        <div className="cc">{code}</div>
-      </div>
-      <button type="button" className="btn sm" onClick={copy}>
-        {copied ? '✓ Copied' : 'Copy'}
-      </button>
-    </div>
+    <button type="button" className="codebtn" onClick={copy} aria-label={`Copy the code ${code}`}>
+      <span className="cc">{code}</span>
+      <span className="ca">
+        {copied ? 'Copied' : 'Copy'}
+        <Copy size={18} aria-hidden />
+      </span>
+    </button>
   );
 }

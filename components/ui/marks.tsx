@@ -131,7 +131,7 @@ export function CoinAmount({
 export function LogoMark({ size = 38, className }: { size?: number; className?: string }) {
   return (
     <span
-      className={cn('grid shrink-0 place-items-center rounded-[9px] bg-brand', className)}
+      className={cn('grid shrink-0 place-items-center rounded-none bg-brand', className)}
       style={{ width: size, height: size }}
       aria-hidden
     >

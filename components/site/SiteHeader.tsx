@@ -45,7 +45,7 @@ export function SiteHeader({ viewer, nav }: { viewer: Viewer; nav: NavItem[] }) 
   return (
     <header className="site">
       <div className="wrap">
-        <div className="hd">
+        <div className={viewer.signedIn ? 'hd in' : 'hd'}>
           <Link className="brand" href="/">
             <Logo />
             <div className="bt">
@@ -53,7 +53,7 @@ export function SiteHeader({ viewer, nav }: { viewer: Viewer; nav: NavItem[] }) 
             </div>
           </Link>
 
-          <nav className="mainnav" aria-label="Primary">
+          <nav className={nav.length > 6 ? 'mainnav tight' : 'mainnav'} aria-label="Primary">
             {nav.map((item) => (
               <Link
                 key={item.href}
@@ -62,8 +62,8 @@ export function SiteHeader({ viewer, nav }: { viewer: Viewer; nav: NavItem[] }) 
                 aria-current={active === item.href ? 'page' : undefined}
                 title={item.label}
               >
-                {/* The short name takes over on narrower screens, where eight
-                    full labels would not fit beside the coin pill. */}
+                {/* The short name takes over while a stream game adds a seventh
+                    or eighth link, which would not fit beside the coin pill. */}
                 <span className="nl">{item.label}</span>
                 <span className="ns">{item.short}</span>
               </Link>
@@ -84,13 +84,11 @@ export function SiteHeader({ viewer, nav }: { viewer: Viewer; nav: NavItem[] }) 
                 </Link>
 
                 {staff ? (
-                  <Link
-                    className="btn sm ghost"
-                    href="/admin"
-                    title="Staff area"
-                    style={{ borderColor: 'rgba(255,179,71,.35)', color: 'var(--warn)' }}
-                  >
-                    ◆<span className="stf"> Staff</span>
+                  <Link className="staffbtn" href="/admin" title="Staff area" aria-label="Staff area">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden>
+                      <path d="M6 0l6 6-6 6-6-6z" />
+                    </svg>
+                    <span className="stf">Staff</span>
                   </Link>
                 ) : null}
 
@@ -99,15 +97,22 @@ export function SiteHeader({ viewer, nav }: { viewer: Viewer; nav: NavItem[] }) 
                     // Discord CDN avatars, unoptimised on purpose — they are
                     // already the right size and the loader would cost a hop.
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={viewer.avatarUrl} alt="" width={34} height={34} />
+                    <img src={viewer.avatarUrl} alt="" width={40} height={40} />
                   ) : (
                     initial
                   )}
                 </Link>
               </>
             ) : (
-              <Link className="btn pri sm discord" href="/api/auth/signin?callbackUrl=/profile">
-                Sign in with Discord
+              <Link
+                className="btn pri"
+                href="/api/auth/signin?callbackUrl=/profile"
+                aria-label="Sign in with Discord"
+                style={{ padding: '8px 12px' }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/brand/social/discord.svg" alt="" width={18} height={18} />
+                <span>Sign in</span>
               </Link>
             )}
           </div>

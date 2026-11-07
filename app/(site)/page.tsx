@@ -11,20 +11,23 @@ import { razed, socials, portraitUrl, aboutCopy, discordInvite } from '@/lib/moc
 import { coins, money } from '@/lib/format';
 import { ClipCard } from '@/components/site/ClipCard';
 import { FameRail } from '@/components/site/FameRail';
-import { StreamStage } from '@/components/site/StreamStage';
+import { StreamHero } from '@/components/site/StreamHero';
 import { CopyCode } from '@/components/ui/CopyCode';
 
 /** Live status, the board and the clip strip all move, so nothing is cached. */
 export const dynamic = 'force-dynamic';
 
-const PLATFORM_MARKS: Record<string, string> = {
-  Kick: 'K',
-  Discord: 'D',
-  Twitch: 'T',
-  Instagram: 'IG',
-  YouTube: 'YT',
-  X: 'X',
-  TikTok: 'TT',
+/** Each platform's own colour behind its mark, the one place they appear. */
+const PLATFORM_TILES: Record<string, { tile: string; icon: string }> = {
+  Kick: { tile: '#53fc18', icon: '/brand/social/kick.svg' },
+  Twitch: { tile: '#9146ff', icon: '/brand/social/twitch.svg' },
+  YouTube: { tile: '#ff0000', icon: '/brand/social/youtube.svg' },
+  Instagram: {
+    tile: 'linear-gradient(45deg, #f58529, #dd2a7b 50%, #8134af)',
+    icon: '/brand/social/instagram.svg',
+  },
+  X: { tile: '#000000', icon: '/brand/social/x.svg' },
+  Telegram: { tile: '#26a5e4', icon: '/brand/social/telegram.svg' },
 };
 
 export default async function HomePage() {
@@ -60,227 +63,237 @@ export default async function HomePage() {
   const wagered = wager.milestone.wagered;
   const next = wagered == null ? null : nextTier(tiers, wagered);
   const pct = wagered == null ? 0 : progressTo(tiers, wagered);
+  // The rung the progress bar starts from: the same one `progressTo` measures
+  // against, so the labels under the bar describe the bar.
+  const previous = next ? tiers.filter((t) => t.threshold < next.threshold).pop() : undefined;
 
   return (
-    <>
-      {/* ---------------------------------------------------------------- */}
-      {/* Hero: the stream, and the two things people check alongside it     */}
-      {/* ---------------------------------------------------------------- */}
-      <div className="hero">
-        <StreamStage stream={stream} />
+    <div className="home">
+      <div className="wrap">
+        {/* ------------------------------------------------------------ */}
+        {/* Hero: the stream's status, and the things people check beside it */}
+        {/* ------------------------------------------------------------ */}
+        <section className="h-hero">
+          <StreamHero stream={stream} code={razed.referralCode} />
 
-        <div className="herorail">
-          <div className="railcard">
-            <h3 style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              Top wagerers
-              <Link href="/leaderboard" className="eyebrow">
-                This month →
-              </Link>
-            </h3>
-            {board.length === 0 ? (
-              <p className="small muted" style={{ margin: 0 }}>
-                {period
-                  ? 'The board could not be read from Razed just now. It will fill in on the next sync.'
-                  : 'No leaderboard period is open yet.'}
+          <aside className="h-rail">
+            <div className="h-block">
+              <div className="h-boardhead">
+                <h4>Top wagerers</h4>
+                <Link href="/leaderboard">This month →</Link>
+              </div>
+              {board.length === 0 ? (
+                <p>
+                  {period
+                    ? 'The board could not be read from Razed just now. It will fill in on the next sync.'
+                    : 'No leaderboard period is open yet.'}
+                </p>
+              ) : (
+                board.map((row, i) => (
+                  <div className={i < 3 ? 'h-row top' : 'h-row'} key={row.rank}>
+                    <span className="pos">{i + 1}</span>
+                    <span className="who">{row.maskedUsername}</span>
+                    <span className="amt">{money(row.wagered)}</span>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="h-block">
+              <h4>Next milestone</h4>
+              {!user ? (
+                <>
+                  <p>Sign in to track your progress toward the wager milestones.</p>
+                  <Link
+                    className="btn wide split"
+                    href="/api/auth/signin?callbackUrl=/milestones"
+                  >
+                    Sign in with Discord<span aria-hidden>→</span>
+                  </Link>
+                </>
+              ) : wagered == null ? (
+                <>
+                  <p>
+                    {wager.link
+                      ? 'Your Razed username is waiting on the next sync before progress can be shown.'
+                      : 'Link your Razed username to track the milestone ladder.'}
+                  </p>
+                  <Link className="btn wide split" href="/profile">
+                    Go to profile<span aria-hidden>→</span>
+                  </Link>
+                </>
+              ) : next ? (
+                <>
+                  <div className="h-note">
+                    {wager.milestone.mode === 'monthly'
+                      ? 'Wagered this month'
+                      : 'Wagered under the code'}
+                  </div>
+                  <div className="h-sum">{money(wagered)}</div>
+                  <div className="h-bar">
+                    <i style={{ width: `${pct}%` }} />
+                  </div>
+                  <div className="h-barlabels">
+                    <span>{previous ? `${previous.name} · ${money(previous.threshold)}` : money(0)}</span>
+                    <span>
+                      {next.name} · {money(next.threshold)}
+                    </span>
+                  </div>
+                  <p className="h-togo">
+                    {money(next.threshold - wagered)} to go for <b>{next.name}</b> ·{' '}
+                    <b className="g">{money(next.reward)}</b>
+                  </p>
+                  <Link className="btn wide split" href="/milestones">
+                    View ladder<span aria-hidden>→</span>
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <div className="h-note">Every tier unlocked.</div>
+                  <div className="h-sum">{money(wagered)}</div>
+                  <Link className="btn wide split" href="/milestones">
+                    View ladder<span aria-hidden>→</span>
+                  </Link>
+                </>
+              )}
+            </div>
+
+            {/* The invite lives in the rail rather than down beside the socials
+                because it is the one call to action on this page that asks
+                nothing of a visitor and is not a casino — someone who will never
+                sign up under the code can still take it. It should not need the
+                whole page scrolled to find. */}
+            <div className="h-block">
+              <h4>Discord</h4>
+              <p>
+                Giveaway pings, clip drops and the people you already recognise from chat. Free, and
+                you do not need a Razed account to be in it.
               </p>
-            ) : (
-              board.map((row, i) => (
-                <div className="mini-row" key={row.rank}>
-                  <div className={`rank ${i < 3 ? `r${i + 1}` : ''}`}>{i + 1}</div>
-                  <div className="nm">{row.maskedUsername}</div>
-                  <div className="vl">{money(row.wagered)}</div>
-                </div>
-              ))
-            )}
-          </div>
+              <a
+                className="btn pri wide split"
+                href={discordInvite}
+                target="_blank"
+                rel="noreferrer noopener"
+              >
+                Join the server<span aria-hidden>→</span>
+              </a>
+            </div>
+          </aside>
+        </section>
 
-          <div className="railcard">
-            <h3>Next milestone</h3>
-            {!user ? (
-              <>
-                <div className="small muted">
-                  Sign in to track your progress toward the wager milestones.
-                </div>
-                <Link
-                  className="btn pri sm wide discord"
-                  style={{ marginTop: 11 }}
-                  href="/api/auth/signin?callbackUrl=/milestones"
-                >
-                  Sign in with Discord
-                </Link>
-              </>
-            ) : wagered == null ? (
-              <>
-                <div className="small muted">
-                  {wager.link
-                    ? 'Your Razed username is waiting on the next sync before progress can be shown.'
-                    : 'Link your Razed username to track the milestone ladder.'}
-                </div>
-                <Link className="btn sm wide" style={{ marginTop: 11 }} href="/profile">
-                  Go to profile
-                </Link>
-              </>
-            ) : next ? (
-              <>
-                <div className="small muted">
-                  {wager.milestone.mode === 'monthly'
-                    ? 'Wagered this month'
-                    : 'Wagered under the code'}
-                </div>
-                <div className="mono" style={{ fontSize: 20, fontWeight: 600 }}>
-                  {money(wagered)}
-                </div>
-                <div className="railbar">
-                  <i style={{ width: `${pct}%` }} />
-                </div>
-                <div className="small muted" style={{ marginTop: 9 }}>
-                  {money(next.threshold - wagered)} to go for{' '}
-                  <b style={{ color: 'var(--text)' }}>{next.name}</b> ·{' '}
-                  <b style={{ color: 'var(--gold)' }}>{money(next.reward)}</b>
-                </div>
-                <Link className="btn sm wide" style={{ marginTop: 11 }} href="/milestones">
-                  View ladder
-                </Link>
-              </>
-            ) : (
-              <>
-                <div className="small muted">Every tier unlocked.</div>
-                <div className="mono" style={{ fontSize: 20, fontWeight: 600 }}>
-                  {money(wagered)}
-                </div>
-                <Link className="btn sm wide" style={{ marginTop: 11 }} href="/milestones">
-                  View ladder
-                </Link>
-              </>
-            )}
+        {/* ------------------------------------------------------------ */}
+        {/* Four figures, all of them real                                */}
+        {/* ------------------------------------------------------------ */}
+        <section className="h-stats">
+          <div className="h-stat">
+            <div className="l">Prize pool this month</div>
+            <div className="v g">{pot ? money(pot) : '—'}</div>
+            <div className="m">Paid out by Razed</div>
           </div>
-
-          {/* The invite lives in the rail rather than down beside the socials
-              because it is the one call to action on this page that asks
-              nothing of a visitor and is not a casino — someone who will never
-              sign up under the code can still take it. It should not need the
-              whole page scrolled to find. */}
-          <div className="railcard">
-            <h3>Discord</h3>
-            <p className="small muted" style={{ margin: 0 }}>
-              Giveaway pings, clip drops and the people you already recognise from chat. Free, and
-              you do not need a Razed account to be in it.
-            </p>
-            <a
-              className="btn discord sm wide"
-              style={{ marginTop: 11 }}
-              href={discordInvite}
-              target="_blank"
-              rel="noreferrer noopener"
-            >
-              Join the server →
-            </a>
+          <div className="h-stat">
+            <div className="l">Top wagerer</div>
+            <div className="v">{top ? top.maskedUsername : '—'}</div>
+            <div className="m">{top ? `${money(top.wagered)} wagered` : 'No board yet'}</div>
           </div>
-        </div>
+          <div className="h-stat">
+            <div className="l">Coins earned by chat</div>
+            <div className="v">{coins(flow.minted)}</div>
+            <div className="m">All time</div>
+          </div>
+          <div className="h-stat">
+            <div className="l">Clips published</div>
+            <div className="v">{clips.length ? coins(clips.length) : '—'}</div>
+            <div className="m">
+              <Link href="/community">Clips &amp; wall of fame →</Link>
+            </div>
+          </div>
+        </section>
       </div>
 
-      {/* ---------------------------------------------------------------- */}
-      {/* Four figures, all of them real                                    */}
-      {/* ---------------------------------------------------------------- */}
-      <div className="stats">
-        <div className="stat">
-          <div className="sl">Prize pool this month</div>
-          <div className="sv g">{pot ? money(pot) : '—'}</div>
-          <div className="sm">Paid out by Razed</div>
-        </div>
-        <div className="stat">
-          <div className="sl">Top wagerer</div>
-          <div className="sv">{top ? top.maskedUsername : '—'}</div>
-          <div className="sm">{top ? `${money(top.wagered)} wagered` : 'No board yet'}</div>
-        </div>
-        <div className="stat">
-          <div className="sl">Coins earned by chat</div>
-          <div className="sv b">{coins(flow.minted)}</div>
-          <div className="sm">All time</div>
-        </div>
-        <div className="stat">
-          <div className="sl">Clips published</div>
-          <div className="sv">{clips.length ? coins(clips.length) : '—'}</div>
-          <div className="sm">
-            <Link href="/community">Clips &amp; wall of fame →</Link>
-          </div>
-        </div>
-      </div>
-
-      {/* ---------------------------------------------------------------- */}
-      {/* The partner band — the commercial heart of the site               */}
-      {/* ---------------------------------------------------------------- */}
-      <div className="razed">
-        <div className="razed-in">
-          <div>
-            <span className="tag blue">Official partner</span>
+      {/* -------------------------------------------------------------- */}
+      {/* The partner band — the commercial heart of the site             */}
+      {/* -------------------------------------------------------------- */}
+      <section id="razed" className="h-razed">
+        <div className="wrap h-razed-in">
+          <div className="h-razed-copy">
+            <div className="h-partner">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/brand/razed.png" alt="Razed" width={150} height={52} />
+              <span>Official partner</span>
+            </div>
             <h2>Play under the code, get paid every month</h2>
             <p>
               Sign up on Razed using the code below and every dollar you wager counts toward the
               monthly leaderboard, the monthly milestone ladder and your badges. Rewards are tipped
               straight to your Razed account.
             </p>
-            <div className="perks">
-              <div className="perk">
-                <span style={{ color: 'var(--blue)' }}>◆</span> <b>200%</b> welcome bonus
+            <div className="h-perks">
+              <div>
+                <b>200%</b>
+                welcome bonus
               </div>
-              <div className="perk">
-                <span style={{ color: 'var(--blue)' }}>◆</span>{' '}
-                <b>{pot ? money(pot) : '$5,000'}</b> monthly leaderboard
+              <div>
+                <b className="g">{pot ? money(pot) : '$5,000'}</b>
+                monthly leaderboard
               </div>
-              <div className="perk">
-                <span style={{ color: 'var(--blue)' }}>◆</span> <b>Weekly</b> rakeback
+              <div>
+                <b>Weekly</b>
+                rakeback
               </div>
             </div>
           </div>
-          <div>
+          <div className="h-code">
+            <div className="l">Referral code</div>
             <CopyCode code={razed.referralCode} />
             <a
-              className="btn gold wide"
-              style={{ marginTop: 10 }}
+              className="h-join"
               href={razed.affiliateUrl}
               target="_blank"
               rel="noreferrer noopener sponsored"
             >
-              Join Razed →
+              Join Razed<span aria-hidden>→</span>
             </a>
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* ---------------------------------------------------------------- */}
-      {/* Wall of fame                                                      */}
-      {/* ---------------------------------------------------------------- */}
+      {/* -------------------------------------------------------------- */}
+      {/* Wall of fame                                                    */}
+      {/* -------------------------------------------------------------- */}
       {/* Above the recent clips on purpose: the big wins are the best thing
           on the site and used to be reachable only from a tab on /community,
           which is two clicks past the page most people ever see. */}
       {wins.length > 0 ? (
-        <div className="sec">
-          <div className="sec-head">
-            <div>
-              <span className="eyebrow">Wall of fame</span>
-              <h2>Biggest wins</h2>
+        <>
+          <section className="wrap h-sec">
+            <div className="sec-head">
+              <div>
+                <span className="eyebrow">Wall of fame</span>
+                <h2>Biggest wins</h2>
+              </div>
+              <Link className="btn ghost" href="/community?view=fame">
+                See the wall →
+              </Link>
             </div>
-            <Link className="btn sm ghost" href="/community?view=fame">
-              See the wall
-            </Link>
+          </section>
+          <div className="h-fame">
+            <FameRail wins={wins} />
           </div>
-          <FameRail wins={wins} />
-        </div>
+        </>
       ) : null}
 
-      {/* ---------------------------------------------------------------- */}
-      {/* Clips                                                             */}
-      {/* ---------------------------------------------------------------- */}
+      {/* -------------------------------------------------------------- */}
+      {/* Clips                                                           */}
+      {/* -------------------------------------------------------------- */}
       {clips.length > 0 ? (
-        <div className="sec">
+        <section className="wrap h-sec">
           <div className="sec-head">
             <div>
               <span className="eyebrow">Latest</span>
               <h2>Recent clips</h2>
             </div>
-            <Link className="btn sm ghost" href="/community">
-              See all
+            <Link className="btn ghost" href="/community">
+              See all →
             </Link>
           </div>
           <div className="clips">
@@ -288,62 +301,56 @@ export default async function HomePage() {
               <ClipCard clip={clip} key={clip.id} />
             ))}
           </div>
-        </div>
+        </section>
       ) : null}
 
-      {/* ---------------------------------------------------------------- */}
-      {/* Who is Matty                                                      */}
-      {/* ---------------------------------------------------------------- */}
-      <div className="sec">
+      {/* -------------------------------------------------------------- */}
+      {/* Who is Matty                                                    */}
+      {/* -------------------------------------------------------------- */}
+      <section className="wrap h-sec" style={{ paddingBottom: 64 }}>
         <div className="sec-head">
           <div>
             <span className="eyebrow">About</span>
             <h2>Who is Matty?</h2>
           </div>
         </div>
-        <div className="about">
-          <div className="portrait">
-            {portraitUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
+        <div className="h-about">
+          <div className="h-portrait">
+            <div>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={portraitUrl} alt="Matty" />
-            ) : (
-              <div className="ph">PHOTO OF MATTY</div>
-            )}
+            </div>
           </div>
-          <div>
+          <div className="h-bio">
             {aboutCopy.map((para: string, i: number) => (
-              <p
-                key={i}
-                className={i === 0 ? undefined : 'muted'}
-                style={
-                  i === 0
-                    ? { fontSize: 16, lineHeight: 1.7, margin: '0 0 14px' }
-                    : { margin: '0 0 20px' }
-                }
-              >
+              <p key={i} className={i === 0 ? 'lead' : undefined}>
                 {para}
               </p>
             ))}
-            <div className="socials">
-              {socials.map((s) => (
-                <a
-                  className="soc"
-                  key={s.platform}
-                  href={s.url}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                >
-                  <div className="ic">{PLATFORM_MARKS[s.platform] ?? s.platform.slice(0, 2)}</div>
-                  <div>
-                    <div className="sn">{s.platform}</div>
-                    <div className="sh">{s.handle}</div>
-                  </div>
-                </a>
-              ))}
+            <div className="h-socials">
+              {socials.map((s) => {
+                const mark = PLATFORM_TILES[s.platform];
+                return (
+                  <a key={s.platform} href={s.url} target="_blank" rel="noreferrer noopener">
+                    <span className="tile" style={mark ? { background: mark.tile } : undefined}>
+                      {mark ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={mark.icon} alt="" width={22} height={22} />
+                      ) : (
+                        s.platform.slice(0, 2)
+                      )}
+                    </span>
+                    <span className="txt">
+                      <b>{s.platform}</b>
+                      <small>{s.handle}</small>
+                    </span>
+                  </a>
+                );
+              })}
             </div>
           </div>
         </div>
-      </div>
-    </>
+      </section>
+    </div>
   );
 }

@@ -45,7 +45,7 @@ export function FameRail({ wins }: { wins: Clip[] }) {
         style={{
           // About the same time per card however many there are, so six wins
           // do not race past and twenty do not crawl.
-          animationDuration: `${Math.max(24, wins.length * 7)}s`,
+          animationDuration: `${Math.max(24, wins.length * 7.5)}s`,
         }}
       >
         {track.map(({ clip, key, ghost }) => (
