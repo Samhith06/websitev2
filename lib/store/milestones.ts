@@ -417,6 +417,119 @@ export async function pendingPayouts(): Promise<PayoutRow[]> {
   }));
 }
 
+export type CycleSummary = {
+  cycle: string;
+  claims: number;
+  members: number;
+  /** Rewards at the ladder's 100% rate. See `CycleClaim.reward`. */
+  paid: number;
+  pending: number;
+  rejected: number;
+};
+
+/** Every cycle with a claim in it, newest month first and lifetime last. */
+export async function claimCycles(): Promise<CycleSummary[]> {
+  const result = await rows<{
+    cycle: string;
+    claims: string;
+    members: string;
+    paid: string;
+    pending: string;
+    rejected: string;
+  }>(
+    `SELECT cycle,
+            COUNT(*)::text                AS claims,
+            COUNT(DISTINCT user_id)::text AS members,
+            COALESCE(SUM(reward) FILTER (WHERE status = 'paid'), 0)::text     AS paid,
+            COALESCE(SUM(reward) FILTER (WHERE status = 'pending'), 0)::text  AS pending,
+            COALESCE(SUM(reward) FILTER (WHERE status = 'rejected'), 0)::text AS rejected
+       FROM milestone_claims
+      GROUP BY cycle
+      ORDER BY (cycle = $1) ASC, cycle DESC`,
+    [LIFETIME_CYCLE],
+  );
+  return result.map((r) => ({
+    cycle: r.cycle,
+    claims: Number(r.claims),
+    members: Number(r.members),
+    paid: Number(r.paid),
+    pending: Number(r.pending),
+    rejected: Number(r.rejected),
+  }));
+}
+
+export type CycleClaim = {
+  claimId: number;
+  userId: number;
+  username: string;
+  razedUsername: string | null;
+  tierName: string;
+  threshold: number;
+  wageredAtClaim: number;
+  /**
+   * The ladder's 100% figure. The site does not record what was actually tipped,
+   * so a claim paid at the 50% Originals rate still reads as the full amount.
+   */
+  reward: number;
+  status: ClaimStatus;
+  createdAt: string;
+  handledBy: string | null;
+  handledAt: string | null;
+};
+
+/** Everyone's claims in one cycle, newest first. */
+export async function claimsInCycle(cycle: string, limit = 500): Promise<CycleClaim[]> {
+  const result = await rows<{
+    claim_id: string;
+    user_id: string;
+    username: string;
+    razed_username: string | null;
+    tier_name: string | null;
+    threshold: string;
+    wagered_at_claim: string;
+    reward: string;
+    status: ClaimStatus;
+    created_at: Date;
+    paid_by: string | null;
+    paid_at: Date | null;
+  }>(
+    `SELECT c.id::text               AS claim_id,
+            c.user_id::text,
+            u.discord_username       AS username,
+            rl.username              AS razed_username,
+            t.name                   AS tier_name,
+            t.threshold::text,
+            c.wagered_at_claim::text,
+            c.reward::text,
+            c.status,
+            c.created_at,
+            c.paid_by,
+            c.paid_at
+       FROM milestone_claims c
+       JOIN users u           ON u.id = c.user_id
+       JOIN milestone_tiers t ON t.id = c.tier_id
+       LEFT JOIN razed_links rl ON rl.user_id = c.user_id
+      WHERE c.cycle = $1
+      ORDER BY c.created_at DESC, c.id DESC
+      LIMIT $2`,
+    [cycle, limit],
+  );
+  return result.map((r) => ({
+    claimId: Number(r.claim_id),
+    userId: Number(r.user_id),
+    username: r.username,
+    razedUsername: r.razed_username,
+    tierName: r.tier_name ?? '',
+    threshold: Number(r.threshold),
+    wageredAtClaim: Number(r.wagered_at_claim),
+    reward: Number(r.reward),
+    status: r.status,
+    createdAt: r.created_at.toISOString(),
+    handledBy: r.paid_by,
+    handledAt: r.paid_at?.toISOString() ?? null,
+  }));
+}
+
 export async function markClaimPaid(claimId: number, by: string): Promise<void> {
   await write(
     `UPDATE milestone_claims

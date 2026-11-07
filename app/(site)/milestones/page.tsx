@@ -13,6 +13,7 @@ import { wagerStateFor } from '@/lib/store/wager';
 import { feedHealth } from '@/lib/store/razed-snapshots';
 import { cycleLabel, dateShort, money, relativeTime } from '@/lib/format';
 import { ClaimButton } from '@/components/site/ClaimButton';
+import { RewardRates } from '@/components/site/RewardRates';
 import { discordInvite } from '@/lib/mock';
 
 export const metadata: Metadata = {
@@ -237,13 +238,6 @@ export default async function MilestonesPage() {
             </li>
           ) : null}
           <li>
-            If you mainly play <b>Originals</b>, milestone rewards are <b>cut in half</b>.
-          </li>
-          <li>
-            If <b>over 60%</b> of your wager is on <b>slots</b>, you can claim the{' '}
-            <b>entire milestone</b>.
-          </li>
-          <li>
             Once you have claimed, please{' '}
             <a
               href={discordInvite}
@@ -257,6 +251,8 @@ export default async function MilestonesPage() {
           </li>
         </ul>
       </div>
+
+      <RewardRates monthly={monthly} />
 
       {/* ------------------------------------------------------------------ */}
       {/* The ladder                                                          */}

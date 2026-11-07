@@ -15,8 +15,10 @@ import * as accounts from '../lib/store/accounts';
 import {
   LIFETIME_CYCLE,
   buildLadder,
+  claimCycles,
   claimTier,
   claimsFor,
+  claimsInCycle,
   claimsForCycle,
   findMembersByHandle,
   grantLifetime,
@@ -201,6 +203,26 @@ check('removal puts them back on the monthly ladder', state.milestone.mode === '
 check('and keeps their claims', (await claimsFor(lin.id)).length === 1);
 const backOnMonthly = await claim(lin.id, rookie.id, month, 10000);
 check('a monthly claim is open to them again', backOnMonthly.ok);
+
+/* -------------------------------------------------------------------------- */
+section('every claim, by month');
+
+const cycles = await claimCycles();
+check(
+  'the newest month comes first and lifetime last',
+  cycles[0]?.cycle === nextMonth && cycles.at(-1)?.cycle === LIFETIME_CYCLE,
+  cycles.map((c) => c.cycle).join(','),
+);
+
+const thisMonth = cycles.find((c) => c.cycle === month);
+check('a month counts its claims and members', thisMonth?.claims === 2 && thisMonth?.members === 2);
+check('rejected money is kept apart', thisMonth?.rejected === rookie.reward);
+check('pending money is kept apart', thisMonth?.pending === rookie.reward);
+
+const inMonth = await claimsInCycle(month);
+check('a month lists everyone in it', new Set(inMonth.map((c) => c.username)).size === 2);
+check('and only that month', (await claimsInCycle(nextMonth)).length === 1);
+check('with the Razed name to pay', inMonth.every((c) => c.razedUsername?.endsWith('_razed')));
 
 console.log(`\n${failures === 0 ? 'ALL PASSED' : `${failures} FAILED`}\n`);
 process.exit(failures === 0 ? 0 : 1);
