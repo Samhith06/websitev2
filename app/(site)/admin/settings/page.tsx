@@ -131,7 +131,7 @@ export default async function AdminSettingsPage() {
       </div>
 
       <p className="small muted" style={{ marginTop: 14, maxWidth: '72ch' }}>
-        The earn rates — one coin per 180-second block, ×2 for subs, ×2.5 for VIPs, ×3 for both, a
+        The earn rates — one coin per 180-second block, ×2 for subs, ×2.5 for VIPs (never both), a
         +10 bonus every unbroken hour and a 500-coin cap per stream — live with the points engine.
         Moving them to editable rows is the next piece of work on this screen.
       </p>

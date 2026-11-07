@@ -72,8 +72,8 @@ export default async function StorePage({
           </div>
         </div>
         <div className="small muted" style={{ maxWidth: '44ch' }}>
-          Earn 1 coin per 3 minutes chatting during the stream, ×2 as a sub, ×2.5 as a VIP, ×3 for
-          both, plus 10 bonus coins for every unbroken hour. Capped at 500 coins per stream.
+          Earn 1 coin per 3 minutes chatting during the stream, ×2 as a sub or ×2.5 as a VIP, plus
+          10 bonus coins for every unbroken hour. Capped at 500 coins per stream.
         </div>
       </div>
 

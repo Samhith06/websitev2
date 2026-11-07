@@ -5,7 +5,7 @@ import {
   verifySignature,
 } from '@/lib/kick';
 import {
-  freezeUser, redeemVerificationCode, refreshKickUsername, setSubState, unfreezeUser,
+  applyChatBadges, freezeUser, redeemVerificationCode, refreshKickUsername, setSubState, unfreezeUser,
   userIdByKickId,
 } from '@/lib/store/accounts';
 import { openWindow, streamWentLive, streamWentOffline } from '@/lib/store/presence';
@@ -130,7 +130,7 @@ async function onChatMessage(payload: unknown): Promise<void> {
     });
     if (outcome.ok) {
       console.log(`[kick] linked ${message.senderUsername} to user ${outcome.userId}`);
-      await applyBadges(outcome.userId, message);
+      await applyChatBadges(outcome.userId, message);
       return;
     }
     console.log(`[kick] code ${code} from ${message.senderUsername} refused: ${outcome.reason}`);
@@ -143,7 +143,7 @@ async function onChatMessage(payload: unknown): Promise<void> {
   if (!userId) return;
 
   await refreshKickUsername(message.senderId, message.senderUsername);
-  await applyBadges(userId, message);
+  await applyChatBadges(userId, message);
   await openWindow(userId, 'chat');
 }
 
@@ -185,22 +185,6 @@ async function onSlotRequest(input: { kickUserId: string; kickUsername: string; 
   if (await liveGame()) return submitKothRequest(input);
   if (await liveCard()) return submitBingoRequest(input);
   return submitRequest(input);
-}
-
-/** Badge state is instant but not authoritative; the webhooks correct it. */
-async function applyBadges(
-  userId: number,
-  message: { isSubscriber: boolean; isVip: boolean },
-): Promise<void> {
-  if (!message.isSubscriber && !message.isVip) return;
-  await setSubState({
-    userId,
-    isVip: message.isVip,
-    // A badge proves a sub right now but says nothing about when it lapses, so
-    // it is trusted for the length of one stream and no longer.
-    subActiveUntil: message.isSubscriber ? new Date(Date.now() + 6 * 3_600_000) : null,
-    source: 'badge',
-  });
 }
 
 async function onStreamStatus(payload: unknown): Promise<void> {

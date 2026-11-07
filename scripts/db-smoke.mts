@@ -239,12 +239,28 @@ check('an unverified account earns nothing', (await coins.balanceOf(bob.id)).bal
 const early = await presence.runTick();
 check('a second tick inside the interval is refused', early.ran === false && early.reason === 'too-soon');
 
-// Multipliers never stack: the highest single one applies.
+// Multipliers never stack: the highest single one applies. VIP needs no sub.
+const multiplierOf = async (userId: number) =>
+  accounts.multiplierFor(await accounts.subStateFor(userId)).value;
+
+await accounts.setSubState({ userId: alice.id, isVip: true, source: 'badge' });
+check('a VIP with no sub is 2.5x', (await multiplierOf(alice.id)) === 2.5);
+await accounts.applyChatBadges(alice.id, { badgesKnown: true, isSubscriber: false, isVip: false });
+check('a former VIP with no sub is back to 1x', (await multiplierOf(alice.id)) === 1);
 await accounts.setSubState({ userId: alice.id, subActiveUntil: new Date(Date.now() + 86_400_000), source: 'webhook' });
-check('a sub is 2x', accounts.multiplierFor(await accounts.subStateFor(alice.id)).value === 2);
+check('a sub is 2x', (await multiplierOf(alice.id)) === 2);
 await accounts.setSubState({ userId: alice.id, isVip: true, source: 'webhook' });
-check('VIP replaces sub rather than stacking with it',
-  accounts.multiplierFor(await accounts.subStateFor(alice.id)).value === 2.5);
+check('VIP replaces sub rather than stacking with it', (await multiplierOf(alice.id)) === 2.5);
+
+// The VIP flag follows the badge, including when the badge goes away.
+const noBadges = { badgesKnown: true, isSubscriber: false, isVip: false };
+await accounts.applyChatBadges(alice.id, { ...noBadges, badgesKnown: false });
+check('a payload with no badge list changes nothing', (await accounts.subStateFor(alice.id)).isVip === true);
+await accounts.applyChatBadges(alice.id, noBadges);
+check('chatting without the VIP badge ends VIP', (await accounts.subStateFor(alice.id)).isVip === false);
+check('losing the VIP badge leaves the sub running', (await multiplierOf(alice.id)) === 2);
+await accounts.applyChatBadges(alice.id, { badgesKnown: true, isSubscriber: true, isVip: true });
+check('the VIP badge sets VIP again', (await multiplierOf(alice.id)) === 2.5);
 await accounts.setSubState({ userId: alice.id, isVip: false, source: 'webhook' });
 
 await quiet();

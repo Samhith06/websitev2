@@ -335,8 +335,43 @@ export async function setSubState(input: {
 }
 
 /**
+ * What one chat message says about its sender.
+ *
+ * Kick's badges are the only thing that ever makes somebody a VIP, so they are
+ * also what has to end it: a message with no VIP badge clears the flag, or it
+ * would outlive the badge for good. `badgesKnown` is false when a payload carried
+ * no badge list at all, which says nothing about the sender and changes nothing.
+ */
+export async function applyChatBadges(
+  userId: number,
+  message: { badgesKnown: boolean; isSubscriber: boolean; isVip: boolean },
+): Promise<void> {
+  if (!message.badgesKnown) return;
+
+  if (!message.isSubscriber && !message.isVip) {
+    // An update rather than `setSubState`, so ordinary chatters get no row.
+    await write(
+      `UPDATE sub_state SET is_vip = false, source = 'badge', updated_at = now()
+        WHERE user_id = $1 AND is_vip`,
+      [userId],
+    );
+    return;
+  }
+
+  await setSubState({
+    userId,
+    isVip: message.isVip,
+    // A badge proves a sub right now but says nothing about when it lapses, so
+    // it is trusted for the length of one stream and no longer.
+    subActiveUntil: message.isSubscriber ? new Date(Date.now() + 6 * 3_600_000) : null,
+    source: 'badge',
+  });
+}
+
+/**
  * The earning multiplier (§3). Multipliers never stack: the highest single one
- * applies, so a VIP who also subs earns 2.5×, not 5×.
+ * applies, so a VIP who also subs earns 2.5×, not 5×. VIP needs no sub, only a
+ * current badge, which `applyChatBadges` keeps honest.
  */
 export function multiplierFor(sub: SubState): { label: string; value: number } {
   if (sub.isVip) return { label: 'VIP', value: 2.5 };

@@ -106,6 +106,8 @@ export type ChatMessage = {
   senderId: string;
   senderUsername: string;
   content: string;
+  /** False when the payload had no badge list, which is not the same as none. */
+  badgesKnown: boolean;
   isSubscriber: boolean;
   isVip: boolean;
 };
@@ -120,17 +122,18 @@ function readUser(node: unknown): { id: string; username: string } | null {
 }
 
 /** Badges are instant; the subscription webhooks are authoritative (§5). */
-function readBadges(node: unknown): { isSubscriber: boolean; isVip: boolean } {
+function readBadges(node: unknown): { badgesKnown: boolean; isSubscriber: boolean; isVip: boolean } {
   const sender = node as Record<string, unknown> | null;
   const identity = sender?.identity as Record<string, unknown> | undefined;
   const badges = (identity?.badges ?? sender?.badges) as Array<Record<string, unknown>> | undefined;
-  if (!Array.isArray(badges)) return { isSubscriber: false, isVip: false };
+  if (!Array.isArray(badges)) return { badgesKnown: false, isSubscriber: false, isVip: false };
 
   const types = badges
     .map((badge) => String(badge.type ?? badge.text ?? '').toLowerCase())
     .filter(Boolean);
 
   return {
+    badgesKnown: true,
     isSubscriber: types.some((t) => t.includes('subscriber') || t.includes('founder')),
     isVip: types.some((t) => t.includes('vip')),
   };
@@ -149,6 +152,7 @@ export function parseChatMessage(payload: unknown): ChatMessage | null {
     senderId: sender.id,
     senderUsername: sender.username,
     content,
+    badgesKnown: badges.badgesKnown,
     isSubscriber: badges.isSubscriber,
     isVip: badges.isVip,
   };
