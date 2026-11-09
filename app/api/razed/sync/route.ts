@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { timingSafeEqual } from 'node:crypto';
 import { hasDatabase } from '@/lib/db';
+import { announceLeaderboard } from '@/lib/store/leaderboard-announce';
 import {
   LAST_30_DAYS_PERIOD,
   LIFETIME_PERIOD,
@@ -95,6 +96,9 @@ export async function POST(request: Request) {
   const month = monthDue ? await syncMonth() : null;
   const badgeWindows = badgesDue ? await syncBadgeWindows() : [];
   const lifetime = lifetimeDue ? await syncLifetime() : null;
+
+  // Reads Razed itself, and a Discord problem must never fail the sync.
+  await announceLeaderboard().catch((error) => console.error('[leaderboard-announce]', error));
 
   const ran = Boolean(month?.ok || lifetime?.ok || badgeWindows.some((result) => result.ok));
   const failed = [month, ...badgeWindows, lifetime].find((result) => result && !result.ok);

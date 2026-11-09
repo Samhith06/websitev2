@@ -39,6 +39,7 @@ import {
   syncMonth,
 } from '../lib/store/razed-snapshots';
 import { evaluateBadges } from '../lib/store/badge-rules';
+import { announceLeaderboard, chunkLines, ordinal } from '../lib/store/leaderboard-announce';
 import { PeriodError, archivedPeriods, frozenPeriod, recordPastBoard } from '../lib/store/periods';
 import { periodLabel } from '../lib/format';
 import { wagerStateFor } from '../lib/store/wager';
@@ -430,6 +431,120 @@ await write(
 await evaluateBadges();
 check('the next board’s winner becomes Champion', await holds(champOld.id, 'champion'));
 check('and the last one keeps theirs', await holds(champNew.id, 'champion'));
+
+/* -------------------------------------------------------------------------- */
+section('Discord leaderboard updates');
+
+const WEBHOOK = 'https://discord.com/api/webhooks/1/abc';
+const noonBoard = new Date();
+noonBoard.setUTCHours(12, 0, 0, 0);
+const day = (offset: number, hour = 12) => {
+  const date = new Date(noonBoard.getTime() + offset * 86_400_000);
+  date.setUTCHours(hour);
+  return date;
+};
+
+await write(`UPDATE lb_periods SET status = 'archived' WHERE status = 'open'`);
+const openBoard = await rows<{ id: string }>(
+  `INSERT INTO lb_periods (type, starts_at, ends_at, status)
+   VALUES ('monthly', $1, $2, 'open') RETURNING id::text`,
+  [day(-10).toISOString(), day(10).toISOString()],
+);
+await write(`INSERT INTO prize_tiers (period_id, rank_from, rank_to, amount) VALUES ($1, 1, 1, 1000)`, [
+  openBoard[0].id,
+]);
+
+let boardNow: Array<[string, string]> = [];
+let razedAsked = 0;
+let razedFails = false;
+let webhookFails = false;
+const posts: Array<Record<string, unknown>> = [];
+globalThis.fetch = (async (input: string | URL, init?: RequestInit) => {
+  const target = String(input);
+  if (target.startsWith(WEBHOOK)) {
+    if (webhookFails) return new Response('no', { status: 500 });
+    posts.push(JSON.parse(String(init?.body)));
+    return new Response(null, { status: 204 });
+  }
+  razedAsked += 1;
+  if (razedFails) return new Response('no', { status: 400 });
+  const data = boardNow.map(([username, wagered]) => ({ username, wagered }));
+  return new Response(JSON.stringify({ data, total: data.length, last_page: 1 }), { status: 200 });
+}) as typeof fetch;
+
+const take = () => posts.splice(0).map((p) => p.content as string).filter(Boolean);
+const beforeDaily = day(0, 12);
+
+delete process.env.DISCORD_LEADERBOARD_WEBHOOK_URL;
+boardNow = [['alexander', '500'], ['benjamin', '400'], ['christopher', '300']];
+await announceLeaderboard(beforeDaily);
+check('with no webhook nothing is posted and Razed is not asked', posts.length === 0 && razedAsked === 0);
+
+process.env.DISCORD_LEADERBOARD_WEBHOOK_URL = 'https://example.com/steal';
+await announceLeaderboard(beforeDaily);
+check('a non-Discord address is ignored', posts.length === 0 && razedAsked === 0);
+
+process.env.DISCORD_LEADERBOARD_WEBHOOK_URL = WEBHOOK;
+process.env.LEADERBOARD_DAILY_HOUR_UTC = '18';
+
+const firstLook = await announceLeaderboard(beforeDaily);
+check('the first look only records the order', firstLook.climbs === 0 && posts.length === 0);
+
+await announceLeaderboard(beforeDaily);
+check('no change posts nothing', posts.length === 0);
+
+boardNow = [['alexander', '500'], ['christopher', '450'], ['benjamin', '400']];
+const climbed = await announceLeaderboard(beforeDaily);
+const climbText = take().join('\n');
+check('a climb is announced once', climbed.climbs === 1);
+check(
+  'saying who passed whom, and the new place',
+  climbText.includes('just passed **benj\\*\\*\\*\\***') && climbText.includes('**2nd**'),
+  climbText,
+);
+check('names are masked with the stars escaped', climbText.includes('chri\\*\\*\\*'), climbText);
+check('real names are not sent', !climbText.includes('christopher') && !climbText.includes('benjamin'));
+await announceLeaderboard(beforeDaily);
+check('and not repeated', posts.length === 0);
+
+boardNow = [['newcomer', '900'], ['alexander', '500'], ['christopher', '450'], ['benjamin', '400']];
+await announceLeaderboard(beforeDaily);
+const entered = take().join('\n');
+check('a newcomer straight into first passes everyone', entered.includes('**1st**') && entered.includes('alex'), entered);
+
+webhookFails = true;
+boardNow = [['alexander', '950'], ['newcomer', '900'], ['christopher', '450'], ['benjamin', '400']];
+const failedPost = await announceLeaderboard(beforeDaily);
+check('a failed post does not throw', failedPost.climbs === 0);
+webhookFails = false;
+const retried = await announceLeaderboard(beforeDaily);
+check('and is retried next run', retried.climbs === 1 && take().length === 1);
+
+razedFails = true;
+await announceLeaderboard(beforeDaily);
+razedFails = false;
+const afterOutage = await announceLeaderboard(beforeDaily);
+check('a Razed failure does not look like everyone dropped out', afterOutage.climbs === 0 && posts.length === 0);
+
+check('before the daily hour there is no card', !(await announceLeaderboard(day(0, 17))).standings);
+const daily = await announceLeaderboard(day(0, 18));
+check('after it the standings are posted', daily.standings === true);
+const card = posts.splice(0)[0] as { embeds: Array<Record<string, any>>; allowed_mentions: unknown };
+check('as a card with the top places', card.embeds[0].fields.length === 4);
+check('with a medal and the prize for first', /🥇/.test(card.embeds[0].fields[0].name) && /🏆 \$1,000/.test(card.embeds[0].fields[0].value), JSON.stringify(card.embeds[0].fields[0]));
+check('and mentions switched off', JSON.stringify(card.allowed_mentions) === '{"parse":[]}');
+check('only once a day', !(await announceLeaderboard(day(0, 20))).standings && posts.length === 0);
+check('and again the next day', (await announceLeaderboard(day(1, 19))).standings === true);
+posts.splice(0);
+
+check('a board that has ended posts nothing', (await announceLeaderboard(day(11))).standings === false && posts.length === 0);
+
+const manyLines = Array.from({ length: 60 }, (_, i) => `line ${i} `.padEnd(100, 'x'));
+const chunks = chunkLines('heading', manyLines);
+check('long updates are split within Discord’s limit', chunks.length > 1 && chunks.every((c) => c.length <= 2000));
+check('with nothing lost', chunks.join('\n').split('\n').length === 61);
+check('ordinals read correctly', ['1st', '2nd', '3rd', '4th', '11th', '12th', '13th', '21st', '22nd'].join() ===
+  [1, 2, 3, 4, 11, 12, 13, 21, 22].map(ordinal).join());
 
 console.log(`\n${failures === 0 ? 'ALL PASSED' : `${failures} FAILED`}\n`);
 process.exit(failures === 0 ? 0 : 1);
