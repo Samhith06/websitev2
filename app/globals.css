@@ -8612,3 +8612,40 @@ body:has(.ovl) {
   font-size: 13px;
   color: var(--soft);
 }
+
+/* Past winners: each month is a link to its full board rather than an accordion. */
+a.acc {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+.acc > span.ah {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 17px;
+}
+a.acc:hover > span.ah,
+a.acc:focus-visible > span.ah {
+  background: var(--panel-2);
+}
+a.acc:hover .chev {
+  color: var(--text);
+}
+@media (max-width: 560px) {
+  .acc > span.ah > div:last-child > .ap {
+    display: none;
+  }
+}
+
+.lb-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 14px;
+  text-decoration: none;
+}
+.lb-back:hover {
+  color: var(--text);
+}

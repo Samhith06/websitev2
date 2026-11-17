@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { ArrowRight, DollarSign, Percent, Repeat, Trophy, Users } from 'lucide-react';
 import { archivedPeriods, currentPeriod, potOf, prizeForRank } from '@/lib/store/periods';
 import { fetchRazedLeaderboard, healthFrom, toBoardRows } from '@/lib/razed';
@@ -275,47 +276,41 @@ export default async function LeaderboardPage() {
               <h2>Past winners</h2>
             </div>
           </div>
+          {/* Each month opens its own page with every position, not just the top ten. */}
           {archive.map((month) => {
             const label = periodLabel(month.startsAt, month.endsAt);
             const standings = month.frozenStandings ?? [];
             const winner = standings[0];
-            return (
-              <details className="acc" key={month.id}>
-                <summary>
-                  <div>
-                    <div className="am">{label}</div>
-                    <div className="ap">
-                      {winner
-                        ? // A month recorded after the fact has no prize figures, and
-                          // saying nothing is true where "$0" would not be.
-                          `Winner ${winner.maskedUsername}${winner.prize ? ` · ${money(winner.prize)}` : ''}`
-                        : 'Standings not frozen'}
-                    </div>
+            const body = (
+              <>
+                <div>
+                  <div className="am">{label}</div>
+                  <div className="ap">
+                    {winner
+                      ? // A month recorded after the fact has no prize figures, and
+                        // saying nothing is true where "$0" would not be.
+                        `Winner ${winner.maskedUsername}${winner.prize ? ` · ${money(winner.prize)}` : ''}`
+                      : 'Standings not frozen'}
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                    {month.pot ? <span className="tag gold">{money(month.pot)} pool</span> : null}
-                    <span className="chev">▾</span>
-                  </div>
-                </summary>
-                <div className="abody">
-                  {standings.length === 0 ? (
-                    <div className="small muted" style={{ padding: '10px 17px' }}>
-                      This period closed without frozen standings.
-                    </div>
-                  ) : (
-                    standings.slice(0, 10).map((row, j) => (
-                      <div className="mini-row" style={{ padding: '10px 17px' }} key={row.rank}>
-                        <div className={`rank ${j < 3 ? `r${j + 1}` : ''}`}>{row.rank}</div>
-                        <div className="nm">{row.maskedUsername}</div>
-                        <div className="nm" style={{ flex: 'none', color: 'var(--muted)' }}>
-                          {money(row.wagered)}
-                        </div>
-                        <div className="vl">{row.prize ? money(row.prize) : '—'}</div>
-                      </div>
-                    ))
-                  )}
                 </div>
-              </details>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                  {month.pot ? <span className="tag gold">{money(month.pot)} pool</span> : null}
+                  {standings.length ? (
+                    <span className="ap">{standings.length.toLocaleString('en-GB')} players</span>
+                  ) : null}
+                  {standings.length ? <ArrowRight size={16} className="chev" aria-hidden /> : null}
+                </div>
+              </>
+            );
+            // A month with nothing frozen has no page to open, so it stays a plain row.
+            return standings.length ? (
+              <Link className="acc" key={month.id} href={`/leaderboard/${month.id}`}>
+                <span className="ah">{body}</span>
+              </Link>
+            ) : (
+              <div className="acc" key={month.id}>
+                <span className="ah">{body}</span>
+              </div>
             );
           })}
         </div>
