@@ -112,10 +112,13 @@ export function PrizeEditor({
   periodId,
   tiers,
   editable,
+  hint,
 }: {
   periodId: number;
   tiers: PrizeTier[];
   editable: boolean;
+  /** Replaces the line under the heading, for boards other than the open one. */
+  hint?: string;
 }) {
   const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
   const [pending, start] = useTransition();
@@ -126,9 +129,10 @@ export function PrizeEditor({
     <div className="card" style={{ marginTop: 14 }}>
       <h2 style={{ fontSize: 15, marginBottom: 4 }}>Prize table</h2>
       <p className="small muted" style={{ marginBottom: 14 }}>
-        {editable
-          ? 'Editable until the month is frozen. Changes show on the public board immediately.'
-          : 'This board is frozen — the standings and prizes are now a record and cannot change.'}
+        {hint ??
+          (editable
+            ? 'Editable until the month is frozen. Changes show on the public board immediately.'
+            : 'This board is frozen — the standings and prizes are now a record and cannot change.')}
       </p>
 
       {tiers.length === 0 ? (

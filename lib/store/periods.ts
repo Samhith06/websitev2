@@ -406,6 +406,34 @@ export async function deleteTier(tierId: number): Promise<void> {
   await write('DELETE FROM prize_tiers WHERE id = $1', [tierId]);
 }
 
+/**
+ * Re-price a recorded month's stored rows from its prize tiers.
+ *
+ * A month recorded after the fact (`archived`) is stored with every prize at
+ * zero, because the site did not know what it paid. Once the owner enters that
+ * month's tiers, each row's prize is rewritten to match so the archive, the
+ * public page and the staff screen all show it.
+ *
+ * Only `archived` boards. A board frozen from the live race already carries the
+ * prizes it was paid against, and rewriting those would change a payout record.
+ */
+export async function syncRecordedPrizes(periodId: number): Promise<void> {
+  await write(
+    `UPDATE lb_periods p
+        SET frozen_standings = (
+          SELECT COALESCE(jsonb_agg(
+                   jsonb_set(e, '{prize}', to_jsonb(COALESCE((
+                     SELECT t.amount FROM prize_tiers t
+                      WHERE t.period_id = p.id
+                        AND (e->>'rank')::int BETWEEN t.rank_from AND t.rank_to
+                      LIMIT 1), 0)))
+                   ORDER BY (e->>'rank')::int), '[]'::jsonb)
+            FROM jsonb_array_elements(p.frozen_standings) AS e)
+      WHERE p.id = $1 AND p.status = 'archived' AND p.frozen_standings IS NOT NULL`,
+    [periodId],
+  );
+}
+
 /** What a rank is worth on a given period. */
 export function prizeForRank(tiers: PrizeTier[], rank: number): number {
   return tiers.find((t) => rank >= t.rankFrom && rank <= t.rankTo)?.amount ?? 0;
