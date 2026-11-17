@@ -1,5 +1,5 @@
 /**
- * The staff area's twenty screens, in four groups.
+ * The staff area's twenty-one screens, in four groups.
  *
  * Moderation first because it is the work: those are what a mod has open
  * during a stream. Stream games next — the hunt, bingo, king of the hill, boss
@@ -18,6 +18,9 @@ export const ADMIN_SECTIONS: AdminSection[] = [
   { href: '/admin', label: 'Approvals', group: 'work' },
   { href: '/admin/payouts', label: 'Payouts', group: 'work' },
   { href: '/admin/leaderboard', label: 'Leaderboard', group: 'work' },
+  // Not /admin/leaderboard/history: the nav lights by prefix, and that would
+  // light both entries at once.
+  { href: '/admin/history', label: 'Leaderboard history', group: 'work' },
   { href: '/admin/claims', label: 'Milestone claims', group: 'work' },
   { href: '/admin/milestones', label: 'Milestone tiers', group: 'work', ownerOnly: true },
   { href: '/admin/raffles', label: 'Raffles', group: 'work' },

@@ -417,6 +417,9 @@ export async function freezeMonth(): Promise<Outcome> {
   const feed = await fetchRazedLeaderboard({
     from: period.startsAt.slice(0, 10),
     to: period.endsAt.slice(0, 10),
+    // Everyone who wagered, not the first page of 100: the frozen rows are the
+    // permanent record, and the archive shows every position from them.
+    top: 10_000,
   });
   if (!feed.ok) {
     return {
@@ -493,7 +496,7 @@ export async function recordPastMonth(month: string): Promise<Outcome> {
   const feed = await fetchRazedLeaderboard({
     from: startsAt.toISOString().slice(0, 10),
     to: endsAt.toISOString().slice(0, 10),
-    top: 1000,
+    top: 10_000,
     revalidate: 0,
   });
   if (!feed.ok) {

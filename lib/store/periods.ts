@@ -165,6 +165,45 @@ export async function archivedPeriods(limit = 24): Promise<StoredPeriod[]> {
   );
 }
 
+/**
+ * Every board that has standings stored, newest first — frozen, paid, or
+ * recorded after the fact. The staff history screen; the public archive is the
+ * narrower `archivedPeriods`, which leaves out a board still awaiting payout.
+ */
+export async function boardsWithStandings(limit = 200): Promise<StoredPeriod[]> {
+  return hydrate(
+    await rows<PeriodRow>(
+      `SELECT ${PERIOD_COLUMNS} FROM lb_periods
+        WHERE frozen_standings IS NOT NULL
+        ORDER BY ends_at DESC LIMIT $1`,
+      [limit],
+    ),
+  );
+}
+
+/**
+ * One archived board for the public page, with the real usernames removed in
+ * the query itself.
+ *
+ * Frozen standings hold the real Razed names for payouts. Dropping them in SQL
+ * rather than in the page means they are never in the page's memory at all, so
+ * no serialisation path — a client component, React's dev-mode debug payload —
+ * can carry one into the HTML. Only boards the public archive lists are served.
+ */
+export async function publicArchivedBoard(id: number): Promise<StoredPeriod | null> {
+  const row = await one<PeriodRow>(
+    `SELECT id::text, type, starts_at, ends_at, status, locked_at, frozen_at,
+            (SELECT COALESCE(jsonb_agg(e - 'username' ORDER BY (e->>'rank')::int), '[]'::jsonb)
+               FROM jsonb_array_elements(frozen_standings) AS e) AS frozen_standings
+       FROM lb_periods
+      WHERE id = $1
+        AND status IN ('paid', 'archived')
+        AND frozen_standings IS NOT NULL`,
+    [id],
+  );
+  return row ? (await hydrate([row]))[0] : null;
+}
+
 /* -------------------------------------------------------------------------- */
 /* Writes                                                                     */
 /* -------------------------------------------------------------------------- */
