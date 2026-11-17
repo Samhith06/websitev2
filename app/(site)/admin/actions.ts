@@ -57,6 +57,7 @@ import {
   freezeStandings,
   prizeForRank,
   recordPastBoard,
+  syncRecordedPrizes,
   updatePeriodDates,
   upsertTier as upsertPrizeTier,
 } from '@/lib/store/periods';
@@ -533,12 +534,13 @@ export async function recordPastMonth(month: string): Promise<Outcome> {
   const { awarded } = await evaluateBadges();
 
   revalidatePath('/admin/leaderboard');
+  revalidatePath('/admin/history');
   revalidatePath('/admin/badges');
   revalidatePath('/leaderboard');
   const top3 = standings.slice(0, 3).map((row) => row.username).join(', ');
   return {
     ok: true,
-    message: `Recorded. Top 3: ${top3}. ${awarded} badge${awarded === 1 ? '' : 's'} awarded; a winner with no approved Razed link gets theirs once it is approved.`,
+    message: `Recorded. Top 3: ${top3}. ${awarded} badge${awarded === 1 ? '' : 's'} awarded; a winner with no approved Razed link gets theirs once it is approved. Set what it paid under Leaderboard history.`,
   };
 }
 
@@ -1561,6 +1563,7 @@ export async function savePrizeTier(formData: FormData): Promise<Outcome> {
 
   try {
     await upsertPrizeTier({ periodId, tierId, rankFrom, rankTo, amount, updatedBy: who.name });
+    await syncRecordedPrizes(periodId);
     await record_({
       actor: who.name,
       actorDiscordId: who.discordId,
@@ -1569,9 +1572,7 @@ export async function savePrizeTier(formData: FormData): Promise<Outcome> {
       detail: { rankFrom, rankTo, amount },
     });
 
-    revalidatePath('/admin/leaderboard');
-    revalidatePath('/leaderboard');
-    revalidatePath('/');
+    revalidatePrizePaths(periodId);
     return { ok: true, message: 'Prize saved.' };
   } catch (error) {
     return {
@@ -1586,6 +1587,7 @@ export async function removePrizeTier(tierId: number, periodId: number): Promise
   if (!who) return DENIED;
 
   await deleteTier(tierId);
+  await syncRecordedPrizes(periodId);
   await record_({
     actor: who.name,
     actorDiscordId: who.discordId,
@@ -1594,9 +1596,21 @@ export async function removePrizeTier(tierId: number, periodId: number): Promise
     detail: { tierId },
   });
 
-  revalidatePath('/admin/leaderboard');
-  revalidatePath('/leaderboard');
+  revalidatePrizePaths(periodId);
   return { ok: true, message: 'Prize removed.' };
+}
+
+/**
+ * Every page a prize shows on: the live board and home page, and — for a
+ * recorded month, whose prizes can be set after the fact — the archive pages.
+ */
+function revalidatePrizePaths(periodId: number): void {
+  revalidatePath('/admin/leaderboard');
+  revalidatePath('/admin/history');
+  revalidatePath(`/admin/history/${periodId}`);
+  revalidatePath('/leaderboard');
+  revalidatePath(`/leaderboard/${periodId}`);
+  revalidatePath('/');
 }
 
 /** Form-action wrappers: `<form action>` wants a handler returning void. */

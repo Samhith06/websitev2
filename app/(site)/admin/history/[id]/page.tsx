@@ -3,6 +3,9 @@ import { notFound } from 'next/navigation';
 import { periodById } from '@/lib/store/periods';
 import { money, periodLabel, relativeTime } from '@/lib/format';
 import { PastStandings } from '@/components/site/PastStandings';
+import { PrizeEditor } from '@/components/admin/PeriodEditor';
+import { devBypass, roleFor } from '@/lib/admin';
+import { auth } from '@/auth';
 
 export const metadata = { title: 'Leaderboard history' };
 export const dynamic = 'force-dynamic';
@@ -26,6 +29,13 @@ export default async function AdminHistoryBoardPage({
   const total = standings.reduce((sum, row) => sum + row.wagered, 0);
   const paid = standings.filter((row) => row.prize > 0).length;
 
+  // A month recorded after the fact was stored without prizes, so the owner can
+  // enter what it paid. A board frozen from the live race keeps the prizes it
+  // was paid against.
+  const session = devBypass() ? null : await auth();
+  const isOwner = devBypass() || roleFor(session?.user?.discordId ?? null) === 'owner';
+  const recorded = board.status === 'archived';
+
   return (
     <>
       <Link href="/admin/history" className="small muted lb-back">
@@ -39,7 +49,9 @@ export default async function AdminHistoryBoardPage({
           </span>
           <h1>{label}</h1>
           <div className="sh-sub">
-            Final standings as stored when the board locked. Read-only.
+            {recorded
+              ? 'Final standings from Razed, recorded after the month ended.'
+              : 'Final standings as stored when the board locked. Read-only.'}
           </div>
         </div>
         {board.status === 'paid' || board.status === 'archived' ? (
@@ -74,10 +86,21 @@ export default async function AdminHistoryBoardPage({
         </div>
       </div>
 
+      {recorded && isOwner ? (
+        <PrizeEditor
+          periodId={board.id}
+          tiers={board.tiers}
+          editable
+          hint="This month was recorded after it ended, so the site did not know what it paid. Enter its prizes here and every row, the archive and the public page update to match."
+        />
+      ) : null}
+
       {standings.length === 0 ? (
         <div className="emptyq">This board was frozen with no rows.</div>
       ) : (
-        <PastStandings rows={standings} reveal />
+        <div style={{ marginTop: 14 }}>
+          <PastStandings rows={standings} reveal />
+        </div>
       )}
     </>
   );
