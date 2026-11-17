@@ -3,6 +3,9 @@ import { archivedPeriods, frozenPeriod } from '@/lib/store/periods';
 import { dateTime, money, periodLabel } from '@/lib/format';
 import { ClaimRow } from '@/components/admin/QueueRows';
 import { CopyOne, CopyPayoutList } from '@/components/admin/PayoutList';
+import { MarkBoardPaidButton } from '@/components/admin/AdminButtons';
+import { devBypass, roleFor } from '@/lib/admin';
+import { auth } from '@/auth';
 
 export const metadata = { title: 'Payouts' };
 export const dynamic = 'force-dynamic';
@@ -17,11 +20,13 @@ export const dynamic = 'force-dynamic';
  * has been waiting, and turns a row red past 48 hours.
  */
 export default async function PayoutsPage() {
-  const [claims, frozen, archive] = await Promise.all([
+  const [claims, frozen, archive, session] = await Promise.all([
     pendingPayouts(),
     frozenPeriod(),
     archivedPeriods(3),
+    devBypass() ? null : auth(),
   ]);
+  const isOwner = devBypass() || roleFor(session?.user?.discordId ?? null) === 'owner';
 
   // A month recorded for its results alone has nothing to pay, so it is skipped.
   const board = frozen ?? archive.find((period) => period.pot > 0) ?? null;
@@ -95,10 +100,19 @@ export default async function PayoutsPage() {
                 immutable · {boardDue.length} winners
               </div>
             </div>
-            <CopyPayoutList
-              label="Copy winners as list"
-              rows={boardDue.map((r) => ({ username: r.username ?? r.maskedUsername, amount: r.prize }))}
-            />
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+              <CopyPayoutList
+                label="Copy winners as list"
+                rows={boardDue.map((r) => ({ username: r.username ?? r.maskedUsername, amount: r.prize }))}
+              />
+              {/* The last step of a month: off this screen, onto Past winners. */}
+              {board.status === 'frozen' && isOwner ? (
+                <MarkBoardPaidButton
+                  periodId={board.id}
+                  label={periodLabel(board.startsAt, board.endsAt)}
+                />
+              ) : null}
+            </div>
           </div>
 
           <div className="divider" />

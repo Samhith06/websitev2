@@ -294,13 +294,18 @@ export async function recordPastBoard(input: {
   createdBy: string;
 }): Promise<void> {
   await tx(async (client) => {
-    const { rows: overlapping } = await client.query(
-      `SELECT id FROM lb_periods
+    const { rows: overlapping } = await client.query<{ status: string }>(
+      `SELECT status FROM lb_periods
         WHERE type = 'monthly' AND starts_at < $2 AND ends_at > $1 LIMIT 1`,
       [input.startsAt, input.endsAt],
     );
     if (overlapping.length) {
-      throw new PeriodError('A monthly board already covers those dates.');
+      // Say what is in the way and where to finish it, rather than a dead end.
+      throw new PeriodError(
+        overlapping[0].status === 'frozen'
+          ? 'A monthly board already covers those dates and is frozen. Open it under Leaderboard history and mark it as paid to show it in Past winners.'
+          : `A monthly board already covers those dates (${overlapping[0].status}). See Leaderboard history.`,
+      );
     }
     await client.query(
       `INSERT INTO lb_periods
@@ -336,6 +341,26 @@ export async function updatePeriodDates(
     starts.toISOString(),
     ends.toISOString(),
   ]);
+}
+
+/**
+ * Mark a frozen board as paid, once its winners have been tipped on Razed.
+ *
+ * This is the last step of a month: it closes the board's claim page and puts
+ * it in the public Past winners archive, which only lists paid and recorded
+ * months. Only a frozen board with stored
+ * standings can be marked, so an open race can never be closed this way.
+ */
+export async function markBoardPaid(id: number): Promise<void> {
+  const row = await one<{ id: string }>(
+    `UPDATE lb_periods SET status = 'paid'
+      WHERE id = $1 AND status = 'frozen' AND frozen_standings IS NOT NULL
+      RETURNING id::text`,
+    [id],
+  );
+  if (!row) {
+    throw new PeriodError('Only a frozen board with stored standings can be marked as paid.');
+  }
 }
 
 /**
