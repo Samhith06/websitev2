@@ -4,6 +4,7 @@ import { periodById } from '@/lib/store/periods';
 import { money, periodLabel, relativeTime } from '@/lib/format';
 import { PastStandings } from '@/components/site/PastStandings';
 import { PrizeEditor } from '@/components/admin/PeriodEditor';
+import { MarkBoardPaidButton } from '@/components/admin/AdminButtons';
 import { devBypass, roleFor } from '@/lib/admin';
 import { auth } from '@/auth';
 
@@ -58,6 +59,9 @@ export default async function AdminHistoryBoardPage({
           <Link className="btn sm" href={`/leaderboard/${board.id}`} target="_blank">
             Public page
           </Link>
+        ) : board.status === 'frozen' && isOwner ? (
+          // A frozen month stays off the public archive until it is marked paid.
+          <MarkBoardPaidButton periodId={board.id} label={label} />
         ) : null}
       </div>
 

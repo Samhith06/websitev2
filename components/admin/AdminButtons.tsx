@@ -5,6 +5,7 @@ import {
   closeRaffle,
   draw,
   freezeMonth,
+  markLeaderboardPaid,
   recheckBadges,
   recordPastMonth,
   sweepBadges,
@@ -107,6 +108,30 @@ export function FreezeMonthButton() {
         go: 'Freeze and queue payouts',
       }}
       run={freezeMonth}
+    />
+  );
+}
+
+/** Closes out a frozen month once its winners have been tipped on Razed. */
+export function MarkBoardPaidButton({ periodId, label }: { periodId: number; label: string }) {
+  return (
+    <ActionButton
+      label="Mark as paid"
+      running="Saving…"
+      confirm={{
+        title: `Mark ${label} as paid?`,
+        body: (
+          <>
+            <p style={{ margin: '0 0 10px' }}>
+              Do this once every winner has been tipped on Razed. Its claim page closes and it
+              appears under Past winners on the public leaderboard.
+            </p>
+            <p style={{ margin: 0 }}>The standings and prizes do not change.</p>
+          </>
+        ),
+        go: 'Mark as paid',
+      }}
+      run={() => markLeaderboardPaid(periodId)}
     />
   );
 }

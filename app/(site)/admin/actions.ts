@@ -55,6 +55,7 @@ import {
   deleteTier,
   discardPeriod,
   freezeStandings,
+  markBoardPaid,
   prizeForRank,
   recordPastBoard,
   syncRecordedPrizes,
@@ -542,6 +543,38 @@ export async function recordPastMonth(month: string): Promise<Outcome> {
     ok: true,
     message: `Recorded. Top 3: ${top3}. ${awarded} badge${awarded === 1 ? '' : 's'} awarded; a winner with no approved Razed link gets theirs once it is approved. Set what it paid under Leaderboard history.`,
   };
+}
+
+/**
+ * Close out a frozen month once its winners have been tipped: its claim page
+ * closes and it joins the public archive.
+ */
+export async function markLeaderboardPaid(periodId: number): Promise<Outcome> {
+  const who = await staff('owner');
+  if (!who) return DENIED;
+  if (!Number.isInteger(periodId)) return { ok: false, error: 'Unknown board.' };
+
+  try {
+    await markBoardPaid(periodId);
+  } catch (error) {
+    if (error instanceof PeriodError) return { ok: false, error: error.message };
+    throw error;
+  }
+
+  await record_({
+    actor: who.name,
+    actorDiscordId: who.discordId,
+    action: 'leaderboard.paid',
+    target: String(periodId),
+  });
+
+  revalidatePath('/admin/payouts');
+  revalidatePath('/admin/history');
+  revalidatePath(`/admin/history/${periodId}`);
+  revalidatePath('/leaderboard');
+  revalidatePath(`/leaderboard/${periodId}`);
+  revalidatePath('/leaderboard/claim');
+  return { ok: true, message: 'Marked as paid. It now shows under Past winners.' };
 }
 
 /* -------------------------------------------------------------------------- */

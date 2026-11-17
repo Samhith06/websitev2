@@ -91,6 +91,10 @@ export default async function AdminHistoryPage() {
       )}
 
       <p className="small muted" style={{ marginTop: 14, maxWidth: '72ch' }}>
+        A <b>frozen</b> month is not on the public leaderboard yet: once its winners are tipped,
+        open it and press <b>Mark as paid</b> to add it to Past winners.
+      </p>
+      <p className="small muted" style={{ marginTop: 8, maxWidth: '72ch' }}>
         Months are listed once their standings are stored: frozen from the live board, or recorded
         after the fact. Boards frozen before this screen existed hold the first 100 players Razed
         returned; boards frozen from now on hold everyone.
