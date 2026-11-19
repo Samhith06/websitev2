@@ -8649,3 +8649,144 @@ a.acc:hover .chev {
 .lb-back:hover {
   color: var(--text);
 }
+
+/* Promo loop overlay ---------------------------------------------------------
+   /overlay/promo. Five messages share one card and take turns: each owns a
+   fifth of the cycle (--promo-cycle), offset by --promo-delay. The keyframe
+   percentages assume five slots — change them together with the slide count. */
+.ovl-promo {
+  width: 740px;
+  max-width: 100%;
+}
+
+.promo-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 20px 24px 26px;
+  overflow: hidden;
+  border-color: rgba(31, 139, 255, 0.4);
+  border-left: 4px solid var(--blue);
+}
+
+.promo-coin {
+  width: 76px;
+  height: 76px;
+  flex: none;
+  animation: promo-coin 6s ease-in-out infinite;
+  filter: drop-shadow(0 4px 14px rgba(255, 209, 102, 0.35));
+}
+
+.promo-stage {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: 150px;
+}
+
+.promo-slide {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  opacity: 0;
+  animation: promo-slide var(--promo-cycle) linear infinite both;
+  animation-delay: var(--promo-delay);
+}
+
+.promo-slide .ovl-label {
+  font-size: 13px;
+  color: var(--blue-2, #4aa3ff);
+}
+
+.promo-title {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 44px;
+  line-height: 1.02;
+  letter-spacing: -0.01em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.ovl .promo-sub {
+  font-size: 16px;
+}
+
+.ovl .discord { color: #7983f5; }
+
+.promo-discord {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.promo-discord > div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.promo-qr {
+  width: 140px;
+  height: 140px;
+  flex: none;
+  background: #fff;
+  image-rendering: pixelated;
+  box-shadow: 0 0 0 3px #5865f2;
+}
+
+.promo-bar {
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  bottom: 12px;
+  display: flex;
+  gap: 6px;
+}
+
+.promo-bar i {
+  flex: 1;
+  height: 3px;
+  background: rgba(244, 246, 250, 0.14);
+  overflow: hidden;
+}
+
+.promo-bar i::after {
+  content: '';
+  display: block;
+  height: 100%;
+  background: var(--blue);
+  transform: scaleX(0);
+  transform-origin: left;
+  animation: promo-fill var(--promo-cycle) linear infinite both;
+  animation-delay: var(--promo-delay);
+}
+
+/* Five slots: in over the first 3%, hold, out by the end of its 20%. */
+@keyframes promo-slide {
+  0% { opacity: 0; transform: translateY(14px); filter: blur(4px); }
+  3% { opacity: 1; transform: none; filter: none; }
+  17% { opacity: 1; transform: none; filter: none; }
+  20% { opacity: 0; transform: translateY(-14px); filter: blur(4px); }
+  100% { opacity: 0; transform: translateY(-14px); filter: blur(4px); }
+}
+
+@keyframes promo-fill {
+  0% { transform: scaleX(0); }
+  20% { transform: scaleX(1); }
+  20.01%, 100% { transform: scaleX(0); }
+}
+
+@keyframes promo-coin {
+  0%, 100% { transform: translateY(0) rotate(-6deg); }
+  50% { transform: translateY(-6px) rotate(6deg); }
+}
+
+/* The QR takes a third of the stage, so the Discord headline steps down. */
+.promo-discord .promo-title { font-size: 38px; }
