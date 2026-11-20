@@ -1,5 +1,6 @@
 import 'server-only';
-import { one, write } from '@/lib/db';
+import { one, rows, write } from '@/lib/db';
+import { TICK_MINUTES } from '@/lib/store/presence';
 
 /**
  * Per-account settings.
@@ -121,4 +122,51 @@ export async function pokerHandleFor(userId: number): Promise<string | null> {
     [userId],
   );
   return row?.handle ?? null;
+}
+
+export type PokerPlayer = {
+  userId: number;
+  discordUsername: string;
+  handle: string;
+  kickUsername: string | null;
+  /** Watch time since Monday 00:00 UK time, from paid watch ticks. */
+  weekMinutes: number;
+  updatedAt: Date;
+};
+
+/**
+ * Everyone who has given a PokerNow username, for seating poker night, with
+ * what the entry rules ask about: a verified Kick account and this week's
+ * watch time (the week starts Monday, UK time).
+ */
+export async function pokerPlayers(): Promise<PokerPlayer[]> {
+  const found = await rows<{
+    user_id: string;
+    discord_username: string;
+    handle: string;
+    kick_username: string | null;
+    ticks: number | null;
+    updated_at: Date;
+  }>(
+    `SELECT p.user_id::text, u.discord_username, p.handle, k.kick_username, w.ticks, p.updated_at
+       FROM poker_links p
+       JOIN users u ON u.id = p.user_id
+       LEFT JOIN kick_links k ON k.user_id = p.user_id
+       LEFT JOIN (
+         SELECT user_id, COUNT(*)::int AS ticks
+           FROM coin_ledger
+          WHERE kind = 'watch'
+            AND created_at >= (date_trunc('week', now() AT TIME ZONE 'Europe/London') AT TIME ZONE 'Europe/London')
+          GROUP BY user_id
+       ) w ON w.user_id = p.user_id
+      ORDER BY COALESCE(w.ticks, 0) DESC, p.updated_at DESC`,
+  );
+  return found.map((r) => ({
+    userId: Number(r.user_id),
+    discordUsername: r.discord_username,
+    handle: r.handle,
+    kickUsername: r.kick_username,
+    weekMinutes: (r.ticks ?? 0) * TICK_MINUTES,
+    updatedAt: r.updated_at,
+  }));
 }

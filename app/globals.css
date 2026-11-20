@@ -8949,3 +8949,17 @@ a.acc:hover .chev {
 }
 
 .tip-rules p b { color: var(--gold); }
+
+.poker-handle { margin-top: 14px; }
+.poker-handle label {
+  display: block;
+  font-family: var(--display);
+  font-size: 16px;
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+.poker-handle-row { display: flex; gap: 8px; }
+.poker-handle-row .inp { flex: 1; min-width: 0; }
+.poker-kick { margin: 12px 0 0; }
+.poker-signin { margin-top: 12px; display: grid; gap: 12px; justify-items: start; }
+.poker-signin p { margin: 0; }

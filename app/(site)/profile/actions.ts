@@ -68,6 +68,7 @@ export async function savePokerHandle(formData: FormData): Promise<Outcome> {
 
   await setPokerHandle(gate.user.id, handle);
   revalidatePath('/profile');
+  revalidatePath('/poker');
   return { ok: true, message: handle ? 'Saved.' : 'Removed.' };
 }
 

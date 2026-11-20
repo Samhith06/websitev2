@@ -1,6 +1,10 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { discordInvite } from '@/lib/mock';
+import { currentUser } from '@/lib/player';
+import { pokerHandleFor } from '@/lib/store/profile';
+import { kickLinkFor } from '@/lib/store/accounts';
+import { PokerHandleForm } from '@/components/site/PokerHandleForm';
 
 export const metadata: Metadata = {
   title: 'Poker',
@@ -26,8 +30,12 @@ const EVENT = {
 
 export const dynamic = 'force-dynamic';
 
-export default function PokerPage() {
+export default async function PokerPage() {
   const over = Date.now() >= EVENT.endsAt;
+  const user = over ? null : await currentUser().catch(() => null);
+  const [handle, kick] = user
+    ? await Promise.all([pokerHandleFor(user.id).catch(() => null), kickLinkFor(user.id).catch(() => null)])
+    : [null, null];
 
   return (
     <div className="poker">
@@ -72,10 +80,39 @@ export default function PokerPage() {
                 <b>Kick account linked and verified</b>
                 <span>On mattyspins.com, before {EVENT.date.split(' ')[0]}.</span>
               </li>
+              <li>
+                <b>Your PokerNow username entered</b>
+                <span>Below, so you can be seated at the table.</span>
+              </li>
             </ul>
-            <Link className="btn pri" href="/profile">
-              Link your Kick account
-            </Link>
+            {user && !kick ? (
+              <Link className="btn pri" href="/profile">
+                Link your Kick account
+              </Link>
+            ) : null}
+          </div>
+
+          <div className="card poker-card" id="pokernow">
+            <span className="tag green">Your seat</span>
+            {user ? (
+              <>
+                {kick ? (
+                  <p className="small muted poker-kick">
+                    Kick: <b style={{ color: 'var(--green)' }}>{kick.kickUsername}</b> · verified
+                  </p>
+                ) : null}
+                <PokerHandleForm handle={handle ?? ''} />
+              </>
+            ) : (
+              <div className="poker-signin">
+                <p className="small muted">
+                  Sign in to enter your PokerNow username and check your Kick account is linked.
+                </p>
+                <Link className="btn pri" href="/api/auth/signin?callbackUrl=/poker%23pokernow">
+                  Sign in with Discord
+                </Link>
+              </div>
+            )}
           </div>
 
           <div className="card poker-card">

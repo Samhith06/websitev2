@@ -1,5 +1,5 @@
 /**
- * The staff area's twenty-one screens, in four groups.
+ * The staff area's twenty-two screens, in four groups.
  *
  * Moderation first because it is the work: those are what a mod has open
  * during a stream. Stream games next — the hunt, bingo, king of the hill, boss
@@ -32,6 +32,7 @@ export const ADMIN_SECTIONS: AdminSection[] = [
   { href: '/admin/raid', label: 'Boss raid', group: 'games' },
   { href: '/admin/battle', label: 'Team battle', group: 'games' },
   { href: '/admin/tournament', label: 'Slot tournament', group: 'games' },
+  { href: '/admin/poker', label: 'Poker night', group: 'games' },
   { href: '/admin/users', label: 'Users', group: 'data' },
   { href: '/admin/razed', label: 'Razed wagerers', group: 'data' },
   { href: '/admin/badges', label: 'Badges', group: 'data' },
