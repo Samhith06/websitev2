@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { pokerPlayers } from '@/lib/store/profile';
 import { relativeTime } from '@/lib/format';
+import { staffRole } from '@/lib/admin-gate';
 
 export const metadata = { title: 'Poker night' };
 export const dynamic = 'force-dynamic';
@@ -17,6 +18,8 @@ const WATCH_HOURS = 5;
  * who is close.
  */
 export default async function AdminPokerPage() {
+  // The layout shows outsiders a sign-in screen; this keeps the list out of the response.
+  if (!(await staffRole())) return null;
   const players = await pokerPlayers();
   const ready = (p: (typeof players)[number]) => Boolean(p.kickUsername) && p.weekMinutes >= WATCH_HOURS * 60;
   const sorted = [...players].sort((a, b) => Number(ready(b)) - Number(ready(a)));
