@@ -240,6 +240,69 @@ kbd {
   pointer-events: none;
 }
 
+/* Aurora: three soft glows under the coin and grid canvas, moved by the
+   compositor on long, out-of-step loops so the light never repeats in an
+   obvious way. Blue carries it; the gold is a trace, as gold means money. */
+.bg-aurora {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.bg-aurora i {
+  position: absolute;
+  border-radius: 50%;
+  will-change: transform;
+}
+
+.bg-aurora i:nth-child(1) {
+  width: 70vmax;
+  height: 70vmax;
+  left: -18vmax;
+  top: -26vmax;
+  background: radial-gradient(closest-side, rgba(31, 139, 255, 0.16), rgba(31, 139, 255, 0));
+  animation: aurora-a 38s ease-in-out infinite alternate;
+}
+
+.bg-aurora i:nth-child(2) {
+  width: 64vmax;
+  height: 64vmax;
+  right: -22vmax;
+  top: 18vh;
+  background: radial-gradient(closest-side, rgba(10, 61, 145, 0.32), rgba(10, 61, 145, 0));
+  animation: aurora-b 46s ease-in-out infinite alternate;
+}
+
+.bg-aurora i:nth-child(3) {
+  width: 46vmax;
+  height: 46vmax;
+  left: 24vw;
+  bottom: -24vmax;
+  background: radial-gradient(closest-side, rgba(255, 209, 102, 0.07), rgba(255, 209, 102, 0));
+  animation: aurora-c 54s ease-in-out infinite alternate;
+}
+
+@keyframes aurora-a {
+  0% { transform: translate(0, 0) scale(1); }
+  100% { transform: translate(22vw, 14vh) scale(1.15); }
+}
+
+@keyframes aurora-b {
+  0% { transform: translate(0, 0) scale(1.1); }
+  100% { transform: translate(-26vw, -10vh) scale(0.92); }
+}
+
+@keyframes aurora-c {
+  0% { transform: translate(0, 0) scale(0.95); }
+  100% { transform: translate(-14vw, -18vh) scale(1.12); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bg-aurora i { animation: none; }
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    Layout
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -8651,9 +8714,10 @@ a.acc:hover .chev {
 }
 
 /* Promo loop overlay ---------------------------------------------------------
-   /overlay/promo. Five messages share one card and take turns: each owns a
-   fifth of the cycle (--promo-cycle), offset by --promo-delay. The keyframe
-   percentages assume five slots — change them together with the slide count. */
+   /overlay/promo. The cards share one frame and take turns: each owns an
+   equal slot of the cycle (--promo-cycle), offset by --promo-delay. The page
+   writes the keyframes itself, since the card count changes as stream games
+   open and close; only the timing lives here. */
 .ovl-promo {
   width: 740px;
   max-width: 100%;
@@ -8675,7 +8739,7 @@ a.acc:hover .chev {
   height: 76px;
   flex: none;
   animation: promo-coin 6s ease-in-out infinite;
-  filter: drop-shadow(0 4px 14px rgba(255, 209, 102, 0.35));
+  filter: drop-shadow(0 4px 16px rgba(31, 139, 255, 0.45));
 }
 
 .promo-stage {
@@ -8693,8 +8757,14 @@ a.acc:hover .chev {
   justify-content: center;
   gap: 6px;
   opacity: 0;
-  animation: promo-slide var(--promo-cycle) linear infinite both;
-  animation-delay: var(--promo-delay);
+  animation: var(--promo-cycle) linear var(--promo-delay) infinite both;
+}
+
+.promo-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
 }
 
 .promo-slide .ovl-label {
@@ -8710,6 +8780,8 @@ a.acc:hover .chev {
   letter-spacing: -0.01em;
   text-transform: uppercase;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .ovl .promo-sub {
@@ -8725,20 +8797,13 @@ a.acc:hover .chev {
   gap: 18px;
 }
 
-.promo-discord > div {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-}
 
 .promo-qr {
-  width: 140px;
-  height: 140px;
+  width: 148px;
+  height: 148px;
   flex: none;
-  background: #fff;
-  image-rendering: pixelated;
-  box-shadow: 0 0 0 3px #5865f2;
+  box-shadow: 0 0 0 2px rgba(88, 101, 242, 0.7), 0 6px 22px rgba(10, 61, 145, 0.45);
+  border-radius: 7px;
 }
 
 .promo-bar {
@@ -8764,23 +8829,36 @@ a.acc:hover .chev {
   background: var(--blue);
   transform: scaleX(0);
   transform-origin: left;
-  animation: promo-fill var(--promo-cycle) linear infinite both;
-  animation-delay: var(--promo-delay);
+  animation: var(--promo-cycle) linear var(--promo-delay) infinite both;
 }
 
-/* Five slots: in over the first 3%, hold, out by the end of its 20%. */
-@keyframes promo-slide {
-  0% { opacity: 0; transform: translateY(14px); filter: blur(4px); }
-  3% { opacity: 1; transform: none; filter: none; }
-  17% { opacity: 1; transform: none; filter: none; }
-  20% { opacity: 0; transform: translateY(-14px); filter: blur(4px); }
-  100% { opacity: 0; transform: translateY(-14px); filter: blur(4px); }
+.promo-bar i.live::after { background: var(--green); }
+
+/* Join cards: a game is taking entries right now. */
+.promo-live .ovl-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--green);
 }
 
-@keyframes promo-fill {
-  0% { transform: scaleX(0); }
-  20% { transform: scaleX(1); }
-  20.01%, 100% { transform: scaleX(0); }
+.promo-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--green);
+  animation: promo-pulse 1.4s ease-out infinite;
+}
+
+.ovl .promo-sub code {
+  font-size: 15px;
+  font-weight: 700;
+  padding: 2px 8px;
+}
+
+@keyframes promo-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(61, 220, 151, 0.6); }
+  100% { box-shadow: 0 0 0 10px rgba(61, 220, 151, 0); }
 }
 
 @keyframes promo-coin {
@@ -8790,3 +8868,84 @@ a.acc:hover .chev {
 
 /* The QR takes a third of the stage, so the Discord headline steps down. */
 .promo-discord .promo-title { font-size: 38px; }
+
+/* Poker -----------------------------------------------------------------------
+   Kept to the left so the suit constellation behind it has the right side. */
+.poker {
+  max-width: 620px;
+}
+
+.poker .sec-head h1 .gold { color: var(--gold); }
+
+.poker-card {
+  margin-bottom: 14px;
+  background: rgba(23, 26, 34, 0.86);
+  backdrop-filter: blur(6px);
+}
+
+.poker-list {
+  list-style: none;
+  margin: 14px 0 18px;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.poker-list li {
+  display: grid;
+  gap: 2px;
+  padding-left: 22px;
+  position: relative;
+}
+
+.poker-list li::before {
+  content: '♠';
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: var(--blue);
+}
+
+.poker-list b { font-family: var(--display); font-size: 16px; }
+.poker-list span { color: var(--soft); font-size: 14px; }
+
+.poker-pay {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.poker-pay > div {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+}
+
+.poker-pay b {
+  font-family: var(--display);
+  font-size: 28px;
+  min-width: 78px;
+}
+
+.poker-pay span { color: var(--soft); font-size: 14px; }
+
+.poker-foot { margin-top: 6px; }
+
+@media (max-width: 1000px) {
+  .poker { max-width: none; }
+}
+
+/* Store: the conditions for claiming a Razed tip, above the tips shelf. */
+.tip-rules {
+  margin: 0 0 16px;
+  border-color: rgba(255, 209, 102, 0.45);
+  background: linear-gradient(100deg, rgba(255, 209, 102, 0.07), var(--panel) 60%);
+}
+
+.tip-rules p {
+  margin: 10px 0 0;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.tip-rules p b { color: var(--gold); }

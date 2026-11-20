@@ -96,6 +96,17 @@ export default async function StorePage({
             ))}
           </div>
 
+          {active?.key === 'tips' ? (
+            <div className="card tip-rules" role="note">
+              <span className="tag gold">Before you claim a tip</span>
+              <p>
+                To claim a tip you need <b>deposits of at least 2× the tip</b> on Razed under code{' '}
+                <code>MATTYSPINS</code>, <b>or</b> a <b>top 5 spot</b> on the monthly leaderboard.
+              </p>
+              <p className="small muted">Tips you have received do not count as deposits.</p>
+            </div>
+          ) : null}
+
           <div className="sgrid">
             {shown.map((item) => {
               const outOfStock = item.stock === 0;
@@ -175,8 +186,9 @@ export default async function StorePage({
       <p className="small muted" style={{ marginTop: 22, maxWidth: '72ch' }}>
         Merch is fulfilled by hand by Matty and the mod team — you&rsquo;ll be asked for a shipping
         address after it is approved, and you can track the order from your profile. Razed tips are
-        sent to your linked casino account. Shipping details are kept only until an order is
-        fulfilled.
+        sent to your linked casino account, and need deposits of at least 2× the tip under
+        MATTYSPINS or a top 5 leaderboard spot; tips received do not count as deposits. Shipping
+        details are kept only until an order is fulfilled.
       </p>
     </>
   );

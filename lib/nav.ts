@@ -1,5 +1,5 @@
 /**
- * The primary destinations: six that are always there, plus a stream game —
+ * The primary destinations: seven that are always there, plus a stream game —
  * Bonus Hunt, Slot Bingo, King of the Hill, Boss Raid, Team Battle, Slot
  * Tournament — only while one is running. They sit beside Games because on
  * stream nights that is where chat is sent, and between games a link to a
@@ -21,7 +21,8 @@ export type NavIconName =
   | 'crown'
   | 'sword'
   | 'banner'
-  | 'bracket';
+  | 'bracket'
+  | 'spade';
 
 export type NavItem = {
   href: string;
@@ -34,6 +35,7 @@ const HOME: NavItem = { href: '/', label: 'Home', short: 'Home', icon: 'home' };
 const LEADERBOARD: NavItem = { href: '/leaderboard', label: 'Leaderboard', short: 'Board', icon: 'trophy' };
 const MILESTONES: NavItem = { href: '/milestones', label: 'Milestones', short: 'Milestones', icon: 'flag' };
 const GAMES: NavItem = { href: '/games', label: 'Games', short: 'Games', icon: 'games' };
+const POKER: NavItem = { href: '/poker', label: 'Poker', short: 'Poker', icon: 'spade' };
 const RAFFLES: NavItem = { href: '/raffles', label: 'Raffles', short: 'Raffles', icon: 'ticket' };
 const STORE: NavItem = { href: '/store', label: 'Store', short: 'Store', icon: 'bag' };
 
@@ -47,7 +49,7 @@ const TOURNEY: NavItem = { href: '/tournament', label: 'Tournament', short: 'Cup
 /**
  * Which stream games are running right now. Bingo, king of the hill, the boss
  * raid, the team battle and the tournament all take !sr, so at most one of
- * them runs: the row never holds more than eight.
+ * them runs: the row never holds more than nine.
  */
 export type LiveGames = {
   hunt: boolean;
@@ -70,6 +72,7 @@ export function navFor(live: LiveGames): NavItem[] {
     ...(live.battle ? [BATTLE] : []),
     ...(live.tourney ? [TOURNEY] : []),
     GAMES,
+    POKER,
     RAFFLES,
     STORE,
   ];
