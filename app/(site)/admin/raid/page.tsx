@@ -14,11 +14,14 @@ import {
   RaidSwitches,
   StartRaidForm,
 } from '@/components/admin/RaidControls';
+import { staffRole } from '@/lib/admin-gate';
 
 export const metadata = { title: 'Boss raid' };
 export const dynamic = 'force-dynamic';
 
 export default async function AdminRaidPage() {
+  // The layout's sign-in screen hides this page but would not stop its data being sent.
+  if (!(await staffRole())) return null;
   const origin = await siteOrigin();
   const raid = await featuredRaid();
   const [turns, waiting] = raid

@@ -5,6 +5,7 @@ import { dateShort, maybe, money } from '@/lib/format';
 import { saveTierForm } from '@/app/(site)/admin/actions';
 import { LifetimeAddForm, LifetimeToggle } from '@/components/admin/LifetimeControls';
 import { TierControls } from '@/components/admin/TierControls';
+import { staffRole } from '@/lib/admin-gate';
 
 export const metadata = { title: 'Milestone tiers' };
 export const dynamic = 'force-dynamic';
@@ -20,6 +21,8 @@ export const dynamic = 'force-dynamic';
  * only decides which figure and which claims it is measured against.
  */
 export default async function AdminMilestonesPage() {
+  // The layout's sign-in screen hides this page but would not stop its data being sent.
+  if ((await staffRole()) !== 'owner') return null;
   const [tiers, counts, lifetimeMembers] = await Promise.all([
     listTiers(true),
     rows<{ tier_id: string; n: string }>(

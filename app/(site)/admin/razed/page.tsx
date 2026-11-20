@@ -2,6 +2,7 @@ import { rows } from '@/lib/db';
 import { LIFETIME_PERIOD, feedHealth, latestWagerRows } from '@/lib/store/razed-snapshots';
 import { money, relativeTime } from '@/lib/format';
 import { SyncRazedButton } from '@/components/admin/AdminButtons';
+import { staffRole } from '@/lib/admin-gate';
 
 export const metadata = { title: 'Razed wagerers' };
 export const dynamic = 'force-dynamic';
@@ -13,6 +14,8 @@ export const dynamic = 'force-dynamic';
  * them to send tips by hand. Everywhere a member can see is masked.
  */
 export default async function AdminRazedPage() {
+  // The layout's sign-in screen hides this page but would not stop its data being sent.
+  if (!(await staffRole())) return null;
   const [wagerers, health, links, snapshots] = await Promise.all([
     latestWagerRows(),
     feedHealth(),

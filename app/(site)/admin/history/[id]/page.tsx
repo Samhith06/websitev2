@@ -7,6 +7,7 @@ import { PrizeEditor } from '@/components/admin/PeriodEditor';
 import { MarkBoardPaidButton } from '@/components/admin/AdminButtons';
 import { devBypass, roleFor } from '@/lib/admin';
 import { auth } from '@/auth';
+import { staffRole } from '@/lib/admin-gate';
 
 export const metadata = { title: 'Leaderboard history' };
 export const dynamic = 'force-dynamic';
@@ -20,6 +21,8 @@ export default async function AdminHistoryBoardPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  // The layout's sign-in screen hides this page but would not stop its data being sent.
+  if (!(await staffRole())) return null;
   const { id } = await params;
   if (!/^\d{1,15}$/.test(id)) notFound();
   const board = await periodById(Number(id));

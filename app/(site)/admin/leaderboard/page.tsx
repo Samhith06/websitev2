@@ -5,6 +5,7 @@ import { auth } from '@/auth';
 import { money, periodLabel } from '@/lib/format';
 import { FreezeMonthButton, RecordPastMonth } from '@/components/admin/AdminButtons';
 import { OpenPeriod, PeriodControls, PrizeEditor } from '@/components/admin/PeriodEditor';
+import { staffRole } from '@/lib/admin-gate';
 
 export const metadata = { title: 'Leaderboard' };
 export const dynamic = 'force-dynamic';
@@ -23,6 +24,8 @@ function lastMonth(): string {
  * which is the arrangement Matty asked for.
  */
 export default async function AdminLeaderboardPage() {
+  // The layout's sign-in screen hides this page but would not stop its data being sent.
+  if (!(await staffRole())) return null;
   const session = devBypass() ? null : await auth();
   const isOwner = devBypass() || roleFor(session?.user?.discordId ?? null) === 'owner';
 

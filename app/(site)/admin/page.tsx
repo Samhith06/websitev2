@@ -5,12 +5,15 @@ import { coinFlow } from '@/lib/store/coins';
 import { userCount } from '@/lib/store/accounts';
 import { coins, money } from '@/lib/format';
 import { ClaimRow, RazedLinkRow, RedemptionRow } from '@/components/admin/QueueRows';
+import { staffRole } from '@/lib/admin-gate';
 
 export const metadata = { title: 'Approvals' };
 export const dynamic = 'force-dynamic';
 
 /** The only screen a mod needs open during a stream. */
 export default async function ApprovalsPage() {
+  // The layout's sign-in screen hides this page but would not stop its data being sent.
+  if (!(await staffRole())) return null;
   const [links, claims, orders, flow, members] = await Promise.all([
     reviewQueue(),
     pendingPayouts(),

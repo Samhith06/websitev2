@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { claimCycles, claimsInCycle } from '@/lib/store/milestones';
 import { monthKey } from '@/lib/store/razed-snapshots';
 import { cycleLabel, dateShort, money } from '@/lib/format';
+import { staffRole } from '@/lib/admin-gate';
 
 export const metadata = { title: 'Milestone claims' };
 export const dynamic = 'force-dynamic';
@@ -23,6 +24,8 @@ export default async function AdminClaimsPage({
 }: {
   searchParams: Promise<{ month?: string }>;
 }) {
+  // The layout's sign-in screen hides this page but would not stop its data being sent.
+  if (!(await staffRole())) return null;
   const params = await searchParams;
   const current = monthKey();
   const cycles = await claimCycles();

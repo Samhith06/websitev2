@@ -14,11 +14,14 @@ import {
   KothSwitches,
   StartKothForm,
 } from '@/components/admin/KothControls';
+import { staffRole } from '@/lib/admin-gate';
 
 export const metadata = { title: 'King of the hill' };
 export const dynamic = 'force-dynamic';
 
 export default async function AdminKothPage() {
+  // The layout's sign-in screen hides this page but would not stop its data being sent.
+  if (!(await staffRole())) return null;
   const origin = await siteOrigin();
   const game = await featuredGame();
   const [turns, waiting] = game

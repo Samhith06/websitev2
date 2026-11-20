@@ -14,11 +14,14 @@ import {
   DismissBattleEntryButton,
   StartBattleForm,
 } from '@/components/admin/BattleControls';
+import { staffRole } from '@/lib/admin-gate';
 
 export const metadata = { title: 'Team battle' };
 export const dynamic = 'force-dynamic';
 
 export default async function AdminBattlePage() {
+  // The layout's sign-in screen hides this page but would not stop its data being sent.
+  if (!(await staffRole())) return null;
   const origin = await siteOrigin();
   const battle = await featuredBattle();
   const [turns, entries] = battle

@@ -3,6 +3,7 @@ import { SlotArt } from '@/components/site/SlotArt';
 import { catalogStats, searchSlots } from '@/lib/store/slots';
 import { coins, dateShort, relativeTime } from '@/lib/format';
 import { AddSlotForm, RemoveSlotButton, SyncSlotsButton } from '@/components/admin/SlotControls';
+import { staffRole } from '@/lib/admin-gate';
 
 export const metadata = { title: 'Slot catalog' };
 export const dynamic = 'force-dynamic';
@@ -14,6 +15,8 @@ export default async function AdminSlotsPage({
 }: {
   searchParams: Promise<{ q?: string; page?: string }>;
 }) {
+  // The layout's sign-in screen hides this page but would not stop its data being sent.
+  if (!(await staffRole())) return null;
   const params = await searchParams;
   const q = params.q?.trim() ?? '';
   const page = Math.max(1, Number(params.page) || 1);

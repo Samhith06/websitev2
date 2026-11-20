@@ -13,6 +13,7 @@ import {
   StartBingoForm,
   TurnResultForm,
 } from '@/components/admin/BingoControls';
+import { staffRole } from '@/lib/admin-gate';
 
 export const metadata = { title: 'Slot bingo' };
 export const dynamic = 'force-dynamic';
@@ -20,6 +21,8 @@ export const dynamic = 'force-dynamic';
 const TURN_LABEL = { playing: 'In play', won: 'Green', lost: 'No profit', skipped: 'Skipped' } as const;
 
 export default async function AdminBingoPage() {
+  // The layout's sign-in screen hides this page but would not stop its data being sent.
+  if (!(await staffRole())) return null;
   const origin = await siteOrigin();
   const card = await featuredCard();
   const [turns, waiting] = card ? await Promise.all([turnsFor(card.id), entriesFor(card.id, 'waiting')]) : [[], []];

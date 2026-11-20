@@ -21,6 +21,7 @@ import {
   RequestActions,
   StartHuntForm,
 } from '@/components/admin/HuntControls';
+import { staffRole } from '@/lib/admin-gate';
 
 export const metadata = { title: 'Bonus hunt' };
 export const dynamic = 'force-dynamic';
@@ -34,6 +35,8 @@ const GTB_LABEL = {
 } as const;
 
 export default async function AdminHuntPage() {
+  // The layout's sign-in screen hides this page but would not stop its data being sent.
+  if (!(await staffRole())) return null;
   const origin = await siteOrigin();
   const hunt = await featuredHunt();
   const [bonuses, requests, guesses] = hunt

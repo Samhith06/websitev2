@@ -9,6 +9,7 @@ import {
   type ClipShow,
   type ClipSourceFilter,
 } from '@/components/admin/ClipFilters';
+import { staffRole } from '@/lib/admin-gate';
 
 export const metadata = { title: 'Clips' };
 export const dynamic = 'force-dynamic';
@@ -39,6 +40,8 @@ export default async function AdminClipsPage({
 }: {
   searchParams: Promise<{ q?: string; show?: string; source?: string; sort?: string }>;
 }) {
+  // The layout's sign-in screen hides this page but would not stop its data being sent.
+  if (!(await staffRole())) return null;
   const params = await searchParams;
   const q = params.q ?? '';
   const show = pick(params.show, SHOWS, 'all');

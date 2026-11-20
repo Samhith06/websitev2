@@ -21,11 +21,14 @@ import {
   TourneyResultForm,
   TourneySwitches,
 } from '@/components/admin/TourneyControls';
+import { staffRole } from '@/lib/admin-gate';
 
 export const metadata = { title: 'Slot tournament' };
 export const dynamic = 'force-dynamic';
 
 export default async function AdminTourneyPage() {
+  // The layout's sign-in screen hides this page but would not stop its data being sent.
+  if (!(await staffRole())) return null;
   const origin = await siteOrigin();
   const t = await featuredTourney();
   const [entries, matches, turns] = t

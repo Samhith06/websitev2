@@ -2,6 +2,7 @@ import { rows } from '@/lib/db';
 import { badgesFor } from '@/lib/store/badges';
 import { evaluateBadges, type RuleReport } from '@/lib/store/badge-rules';
 import { SweepBadgesButton } from '@/components/admin/AdminButtons';
+import { staffRole } from '@/lib/admin-gate';
 
 export const metadata = { title: 'Badges' };
 export const dynamic = 'force-dynamic';
@@ -20,6 +21,8 @@ export const dynamic = 'force-dynamic';
  * like a rule nobody qualifies for.
  */
 export default async function AdminBadgesPage() {
+  // The layout's sign-in screen hides this page but would not stop its data being sent.
+  if (!(await staffRole())) return null;
   const [badges, holders] = await Promise.all([
     badgesFor(null),
     rows<{ badge_id: string; n: string }>(

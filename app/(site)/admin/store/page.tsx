@@ -5,11 +5,14 @@ import { auth } from '@/auth';
 import { devBypass, roleFor } from '@/lib/admin';
 import { ShopItemForm } from '@/components/admin/ShopItemForm';
 import { ShopItemDelete } from '@/components/admin/ShopItemDelete';
+import { staffRole } from '@/lib/admin-gate';
 
 export const metadata = { title: 'Store' };
 export const dynamic = 'force-dynamic';
 
 export default async function AdminStorePage() {
+  // The layout's sign-in screen hides this page but would not stop its data being sent.
+  if (!(await staffRole())) return null;
   const session = devBypass() ? null : await auth();
   const isOwner = devBypass() || roleFor(session?.user?.discordId ?? null) === 'owner';
 

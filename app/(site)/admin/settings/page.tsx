@@ -4,6 +4,7 @@ import { LIMITS } from '@/lib/games';
 import { gameConfigs } from '@/lib/mock';
 import { coins } from '@/lib/format';
 import { GameSwitch, KillSwitch } from '@/components/admin/GameSwitches';
+import { staffRole } from '@/lib/admin-gate';
 
 export const metadata = { title: 'Coin settings' };
 export const dynamic = 'force-dynamic';
@@ -18,6 +19,8 @@ export const dynamic = 'force-dynamic';
  * answer "where did my coins go".
  */
 export default async function AdminSettingsPage() {
+  // The layout's sign-in screen hides this page but would not stop its data being sent.
+  if ((await staffRole()) !== 'owner') return null;
   const live = gameConfigs.filter((g) => !g.comingSoon);
   const defaultsFor = (slug: string) => {
     const config = gameConfigs.find((g) => g.slug === slug);

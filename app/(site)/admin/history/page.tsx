@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { boardsWithStandings } from '@/lib/store/periods';
 import { money, periodLabel } from '@/lib/format';
+import { staffRole } from '@/lib/admin-gate';
 
 export const metadata = { title: 'Leaderboard history' };
 export const dynamic = 'force-dynamic';
@@ -19,6 +20,8 @@ const STATUS_TAG: Record<string, string> = {
  * which the public archive leaves out until it is settled.
  */
 export default async function AdminHistoryPage() {
+  // The layout's sign-in screen hides this page but would not stop its data being sent.
+  if (!(await staffRole())) return null;
   const boards = await boardsWithStandings();
 
   return (

@@ -4,11 +4,14 @@ import { CloseRaffleButton, DrawRaffleButton } from '@/components/admin/AdminBut
 import { AddRaffleForm } from '@/components/admin/RaffleForm';
 import { auth } from '@/auth';
 import { devBypass, roleFor } from '@/lib/admin';
+import { staffRole } from '@/lib/admin-gate';
 
 export const metadata = { title: 'Raffles' };
 export const dynamic = 'force-dynamic';
 
 export default async function AdminRafflesPage() {
+  // The layout's sign-in screen hides this page but would not stop its data being sent.
+  if (!(await staffRole())) return null;
   const session = devBypass() ? null : await auth();
   const isOwner = devBypass() || roleFor(session?.user?.discordId ?? null) === 'owner';
 

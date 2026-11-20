@@ -1,11 +1,14 @@
 import { recent } from '@/lib/store/audit';
 import { dateTime, relativeTime } from '@/lib/format';
+import { staffRole } from '@/lib/admin-gate';
 
 export const metadata = { title: 'Audit log' };
 export const dynamic = 'force-dynamic';
 
 /** Append-only. Nothing in the codebase deletes or updates a row here. */
 export default async function AdminAuditPage() {
+  // The layout's sign-in screen hides this page but would not stop its data being sent.
+  if (!(await staffRole())) return null;
   const entries = await recent(200);
 
   return (

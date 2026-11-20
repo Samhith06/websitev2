@@ -12,6 +12,7 @@ import { auth } from '@/auth';
 import { devBypass } from '@/lib/admin';
 import { AdjustBalance } from '@/components/admin/AdjustBalance';
 import { UserFilters } from '@/components/admin/UserFilters';
+import { staffRole } from '@/lib/admin-gate';
 
 export const metadata = { title: 'Users' };
 export const dynamic = 'force-dynamic';
@@ -49,6 +50,8 @@ export default async function AdminUsersPage({
     sort?: string;
   }>;
 }) {
+  // The layout's sign-in screen hides this page but would not stop its data being sent.
+  if (!(await staffRole())) return null;
   const params = await searchParams;
   const { q } = params;
   const pageNum = Math.max(1, Number(params.page) || 1);

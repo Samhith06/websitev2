@@ -6,6 +6,7 @@ import { CopyOne, CopyPayoutList } from '@/components/admin/PayoutList';
 import { MarkBoardPaidButton } from '@/components/admin/AdminButtons';
 import { devBypass, roleFor } from '@/lib/admin';
 import { auth } from '@/auth';
+import { staffRole } from '@/lib/admin-gate';
 
 export const metadata = { title: 'Payouts' };
 export const dynamic = 'force-dynamic';
@@ -20,6 +21,8 @@ export const dynamic = 'force-dynamic';
  * has been waiting, and turns a row red past 48 hours.
  */
 export default async function PayoutsPage() {
+  // The layout's sign-in screen hides this page but would not stop its data being sent.
+  if (!(await staffRole())) return null;
   const [claims, frozen, archive, session] = await Promise.all([
     pendingPayouts(),
     frozenPeriod(),

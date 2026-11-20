@@ -31,6 +31,7 @@ import {
 import { AdjustBalance } from '@/components/admin/AdjustBalance';
 import { RecheckBadgesButton } from '@/components/admin/AdminButtons';
 import { LifetimeToggle } from '@/components/admin/LifetimeControls';
+import { staffRole as viewerStaffRole } from '@/lib/admin-gate';
 
 export const metadata = { title: 'Member' };
 export const dynamic = 'force-dynamic';
@@ -57,6 +58,8 @@ export default async function AdminMemberPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  // The layout's sign-in screen hides this page but would not stop its data being sent.
+  if (!(await viewerStaffRole())) return null;
   const { id } = await params;
   const userId = Number(id);
   if (!Number.isInteger(userId) || userId <= 0) notFound();
