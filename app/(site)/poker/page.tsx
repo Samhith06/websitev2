@@ -5,6 +5,7 @@ import { currentUser } from '@/lib/player';
 import { pokerHandleFor } from '@/lib/store/profile';
 import { kickLinkFor } from '@/lib/store/accounts';
 import { PokerHandleForm } from '@/components/site/PokerHandleForm';
+import { Countdown } from '@/components/ui/Countdown';
 
 export const metadata: Metadata = {
   title: 'Poker',
@@ -21,8 +22,11 @@ export const metadata: Metadata = {
  * right of the screen to itself.
  */
 const EVENT = {
-  date: 'Saturday 21 November',
-  endsAt: Date.parse('2026-11-22T00:00:00Z'),
+  date: 'Sunday 22 November',
+  /** 5:00 PM IST, which is 11:30 AM in the UK. */
+  startsAt: '2026-11-22T11:30:00Z',
+  startLabel: '11:30 AM UK · 5:00 PM IST',
+  endsAt: Date.parse('2026-11-23T00:00:00Z'),
   pool: '$50',
   watchHours: 5,
   fullPayoutWager: '$200',
@@ -32,6 +36,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function PokerPage() {
   const over = Date.now() >= EVENT.endsAt;
+  const started = Date.now() >= Date.parse(EVENT.startsAt);
   const user = over ? null : await currentUser().catch(() => null);
   const [handle, kick] = user
     ? await Promise.all([pokerHandleFor(user.id).catch(() => null), kickLinkFor(user.id).catch(() => null)])
@@ -65,6 +70,18 @@ export default async function PokerPage() {
         </a>
       ) : (
         <>
+          <div className="card poker-card poker-start">
+            <span className="tag gold">{started ? 'Live now' : 'Starts in'}</span>
+            {started ? (
+              <p>The tournament is under way. Table details are on stream and in Discord.</p>
+            ) : (
+              <Countdown to={EVENT.startsAt} />
+            )}
+            <p className="small muted">
+              {EVENT.date} · {EVENT.startLabel}
+            </p>
+          </div>
+
           <div className="card poker-card">
             <span className="tag blue">To enter</span>
             <ul className="poker-list">
@@ -133,7 +150,7 @@ export default async function PokerPage() {
           </div>
 
           <p className="small muted poker-foot">
-            Table details and the start time go out on stream and in{' '}
+            Table details go out on stream and in{' '}
             <a href={discordInvite} target="_blank" rel="noreferrer">
               Discord
             </a>

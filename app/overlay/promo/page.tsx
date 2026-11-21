@@ -41,13 +41,13 @@ const CODE: Slide = {
 };
 
 /**
- * Poker night, Saturday 21 November 2026. The card drops out of the loop by
+ * Poker night, Sunday 22 November 2026. The card drops out of the loop by
  * itself once the day is over in the UK, so nothing needs undoing afterwards.
  */
-const POKER_ENDS = Date.parse('2026-11-22T00:00:00Z');
+const POKER_ENDS = Date.parse('2026-11-23T00:00:00Z');
 const POKER: Slide = {
   key: 'poker',
-  kicker: '♠ Poker is back · Saturday 21 November',
+  kicker: '♠ Poker is back · Sunday 22 November · 11:30 AM UK',
   title: (
     <>
       <span className="gold">$50</span> poker tournament

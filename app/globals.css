@@ -8931,6 +8931,28 @@ a.acc:hover .chev {
 
 .poker-foot { margin-top: 6px; }
 
+.poker-start .cd-mini {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 14px 0 10px;
+}
+
+.poker-start .cd-mini .u {
+  min-width: 0;
+  padding: 10px 4px;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.poker-start .cd-mini b {
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1.15;
+  color: var(--gold);
+}
+
+.poker-start > p { margin: 12px 0 0; }
+
 @media (max-width: 1000px) {
   .poker { max-width: none; }
 }
