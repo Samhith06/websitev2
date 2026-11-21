@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { currentUser } from '@/lib/player';
 import { listItems } from '@/lib/store/shop';
 import { balanceOf } from '@/lib/store/coins';
+import { TIP_WAGER_MIN, tipLockFor } from '@/lib/store/tip-lock';
 import { coins } from '@/lib/format';
 import { RedeemButton } from '@/components/site/RedeemButton';
 import type { ShopCategory } from '@/lib/types';
@@ -51,6 +52,10 @@ export default async function StorePage({
   const active = stocked.find((t) => t.key === tab) ?? stocked[0] ?? null;
   const shown = active ? items.filter((i) => active.categories.includes(i.category)) : [];
 
+  // Only asked when the tips shelf is open: it reads Razed, and no other shelf
+  // needs it.
+  const tipLock = user && active?.key === 'tips' ? await tipLockFor(user.id) : null;
+
   return (
     <>
       <div className="sec-head">
@@ -98,12 +103,20 @@ export default async function StorePage({
 
           {active?.key === 'tips' ? (
             <div className="card tip-rules" role="note">
-              <span className="tag gold">Before you claim a tip</span>
+              <span className="tag gold">Wager lock</span>
               <p>
-                To claim a tip you need <b>deposits of at least 2× the tip</b> on Razed under code{' '}
-                <code>MATTYSPINS</code>, <b>or</b> a <b>top 5 spot</b> on the monthly leaderboard.
+                Tips unlock once you have <b>${TIP_WAGER_MIN} wagered</b> on Razed under code{' '}
+                <code>MATTYSPINS</code> during the <Link href="/leaderboard">current leaderboard
+                period</Link>.
               </p>
-              <p className="small muted">Tips you have received do not count as deposits.</p>
+              {tipLock ? (
+                <p className="small" style={{ color: tipLock.unlocked ? 'var(--green)' : undefined }}>
+                  {tipLock.unlocked
+                    ? `Unlocked — $${tipLock.wagered.toFixed(2)} wagered this period.`
+                    : tipLock.message}
+                </p>
+              ) : null}
+              <p className="small muted">Wager figures update about every 10 minutes.</p>
             </div>
           ) : null}
 
@@ -112,7 +125,9 @@ export default async function StorePage({
               const outOfStock = item.stock === 0;
               const onCooldown = (item.cooldownDaysRemaining ?? 0) > 0;
               const short = user ? Math.max(0, item.cost - balance.balance) : 0;
-              const cant = Boolean(user) && (short > 0 || outOfStock || onCooldown);
+              const wagerLocked =
+                item.category === 'tips' && tipLock !== null && !tipLock.unlocked;
+              const cant = Boolean(user) && (short > 0 || outOfStock || onCooldown || wagerLocked);
 
               return (
                 <div className={`item ${cant ? 'cant' : ''}`} key={item.id}>
@@ -162,6 +177,10 @@ export default async function StorePage({
                       <button className="btn sm wide" disabled>
                         Again in {item.cooldownDaysRemaining}d
                       </button>
+                    ) : wagerLocked ? (
+                      <button className="btn sm wide" disabled>
+                        Wager ${TIP_WAGER_MIN} to unlock
+                      </button>
                     ) : short > 0 ? (
                       <button className="btn sm wide" disabled>
                         Need {coins(short)} more
@@ -186,9 +205,9 @@ export default async function StorePage({
       <p className="small muted" style={{ marginTop: 22, maxWidth: '72ch' }}>
         Merch is fulfilled by hand by Matty and the mod team — you&rsquo;ll be asked for a shipping
         address after it is approved, and you can track the order from your profile. Razed tips are
-        sent to your linked casino account, and need deposits of at least 2× the tip under
-        MATTYSPINS or a top 5 leaderboard spot; tips received do not count as deposits. Shipping
-        details are kept only until an order is fulfilled.
+        sent to your linked casino account, and unlock once you have ${TIP_WAGER_MIN} wagered under
+        MATTYSPINS during the current leaderboard period. Shipping details are kept only until an
+        order is fulfilled.
       </p>
     </>
   );

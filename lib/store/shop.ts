@@ -1,6 +1,7 @@
 import 'server-only';
 import { one, rows, tx, write } from '@/lib/db';
 import { InsufficientCoins, apply } from './coins';
+import { tipLockFor } from './tip-lock';
 import type { Redemption, ShopItem, ShopCategory } from '@/lib/types';
 
 /**
@@ -102,6 +103,17 @@ export type RedeemResult =
  * between the check and the debit.
  */
 export async function redeem(userId: number, itemId: number): Promise<RedeemResult> {
+  // The tips wager lock asks Razed over the network, so it runs before the
+  // transaction rather than while it holds the item's row lock. Wagering only
+  // goes up within a period, so a pass here cannot go stale before the debit.
+  const kind = await one<{ category: string }>(`SELECT category FROM shop_items WHERE id = $1`, [
+    itemId,
+  ]);
+  if (kind?.category === 'tips') {
+    const lock = await tipLockFor(userId);
+    if (!lock.unlocked) return { ok: false, error: lock.message };
+  }
+
   try {
     return await tx<RedeemResult>(async (client) => {
       const { rows: found } = await client.query<{
