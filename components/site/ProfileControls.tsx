@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { excludeSelf, pinBadge, savePokerHandle, saveRazedUsername, toggleSetting } from '@/app/(site)/profile/actions';
+import { excludeSelf, pinBadge, saveRazedUsername, toggleSetting } from '@/app/(site)/profile/actions';
 import type { Badge } from '@/lib/store/badges';
 import { badgeArt } from '@/lib/badge-art';
 
@@ -161,14 +161,11 @@ export function SelfExclude({ excludedUntil }: { excludedUntil: string | null })
 export function AccountForms({
   razedUsername,
   razedStatus,
-  pokerHandle,
 }: {
   razedUsername: string;
   razedStatus: 'none' | 'pending' | 'approved' | 'rejected';
-  pokerHandle: string;
 }) {
   const [razedNote, setRazedNote] = useState<{ ok: boolean; text: string } | null>(null);
-  const [pokerNote, setPokerNote] = useState<{ ok: boolean; text: string } | null>(null);
   const [pending, startTransition] = useTransition();
 
   const statusTag =
@@ -184,7 +181,7 @@ export function AccountForms({
 
   return (
     <div className="card">
-      <h3 style={{ fontSize: 15, marginBottom: 4 }}>Casino &amp; poker accounts</h3>
+      <h3 style={{ fontSize: 15, marginBottom: 4 }}>Casino account</h3>
       <p className="small muted" style={{ marginBottom: 14 }}>
         Your Razed username is checked against wagering under the code, then approved by a mod
         before milestones unlock.
@@ -226,40 +223,6 @@ export function AccountForms({
           </button>
         </form>
 
-        <form
-          className="field"
-          style={{ margin: 0 }}
-          action={(formData) =>
-            startTransition(async () => {
-              const result = await savePokerHandle(formData);
-              setPokerNote(
-                result.ok ? { ok: true, text: result.message } : { ok: false, text: result.error },
-              );
-            })
-          }
-        >
-          <label htmlFor="poker-handle">PokerNow username</label>
-          <input
-            id="poker-handle"
-            name="handle"
-            className="inp"
-            defaultValue={pokerHandle}
-            placeholder="for community poker nights"
-            autoComplete="off"
-          />
-          <div className="small muted" style={{ marginTop: 7 }}>
-            {pokerNote ? (
-              <span style={{ color: pokerNote.ok ? 'var(--green)' : 'var(--red)' }}>
-                {pokerNote.text}
-              </span>
-            ) : (
-              "Used to seat you in Matty's poker nights."
-            )}
-          </div>
-          <button className="btn sm" style={{ marginTop: 10 }} disabled={pending}>
-            Save handle
-          </button>
-        </form>
       </div>
     </div>
   );

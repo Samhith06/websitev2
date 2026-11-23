@@ -5,20 +5,30 @@ import type { LiveGames } from '@/lib/nav';
 /**
  * Which stream games are running, for the primary nav. One small query, since
  * it runs under every page: a hunt counts until it is finished, a bingo, a
- * king of the hill, a boss raid or a team battle while it is running, and a
- * tournament from sign-ups until it is finished.
+ * king of the hill, a boss raid or a team battle while it is running, a
+ * tournament from sign-ups until it is finished, and a Split or Steal from
+ * entries opening until its last pair is revealed.
  *
  * The nav is not worth a broken page, so a failed read means "nothing live".
  */
 export async function liveGames(): Promise<LiveGames> {
   try {
-    const row = await one<{ hunt: boolean; bingo: boolean; koth: boolean; raid: boolean; battle: boolean; tourney: boolean }>(
+    const row = await one<{
+      hunt: boolean;
+      bingo: boolean;
+      koth: boolean;
+      raid: boolean;
+      battle: boolean;
+      tourney: boolean;
+      split_steal: boolean;
+    }>(
       `SELECT EXISTS (SELECT 1 FROM bonus_hunts WHERE status <> 'finished') AS hunt,
               EXISTS (SELECT 1 FROM bingo_cards WHERE status = 'running') AS bingo,
               EXISTS (SELECT 1 FROM koth_games WHERE status = 'running') AS koth,
               EXISTS (SELECT 1 FROM raid_games WHERE status = 'running') AS raid,
               EXISTS (SELECT 1 FROM battle_games WHERE status = 'running') AS battle,
-              EXISTS (SELECT 1 FROM tourney_games WHERE status <> 'finished') AS tourney`,
+              EXISTS (SELECT 1 FROM tourney_games WHERE status <> 'finished') AS tourney,
+              EXISTS (SELECT 1 FROM split_steal_events WHERE status IN ('open', 'choosing')) AS split_steal`,
     );
     return {
       hunt: row?.hunt ?? false,
@@ -27,10 +37,11 @@ export async function liveGames(): Promise<LiveGames> {
       raid: row?.raid ?? false,
       battle: row?.battle ?? false,
       tourney: row?.tourney ?? false,
+      splitSteal: row?.split_steal ?? false,
     };
   } catch (error) {
     console.error('[nav] could not read live stream games', error);
-    return { hunt: false, bingo: false, koth: false, raid: false, battle: false, tourney: false };
+    return { hunt: false, bingo: false, koth: false, raid: false, battle: false, tourney: false, splitSteal: false };
   }
 }
 

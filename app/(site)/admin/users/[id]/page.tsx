@@ -14,7 +14,7 @@ import { recentRounds } from '@/lib/store/play';
 import { redemptionsFor } from '@/lib/store/shop';
 import { badgesFor } from '@/lib/store/badges';
 import { claimsFor, listTiers } from '@/lib/store/milestones';
-import { pokerHandleFor, settingsFor } from '@/lib/store/profile';
+import { settingsFor } from '@/lib/store/profile';
 import { wagerStateFor } from '@/lib/store/wager';
 import {
   coins,
@@ -79,7 +79,6 @@ export default async function AdminMemberPage({
     claims,
     tiers,
     settings,
-    poker,
     wager,
     sub,
     verification,
@@ -92,7 +91,6 @@ export default async function AdminMemberPage({
     claimsFor(userId),
     listTiers(true),
     settingsFor(userId),
-    pokerHandleFor(userId),
     wagerStateFor(userId),
     subStateFor(userId),
     verificationStateFor(userId),
@@ -209,7 +207,6 @@ export default async function AdminMemberPage({
                 }
               />
               <Row label="Razed status" value={wager.link?.status ?? '—'} />
-              <Row label="PokerNow" value={poker ?? '—'} />
               <Row label="Tier" value={`${multiplier.label} · ${multiplier.value}×`} tone="blue" />
               <Row
                 label="Sub until"

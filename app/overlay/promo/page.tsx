@@ -40,22 +40,6 @@ const CODE: Slide = {
   sub: 'Every bet counts toward the leaderboard and milestones',
 };
 
-/**
- * Poker night, Sunday 22 November 2026. The card drops out of the loop by
- * itself once the day is over in the UK, so nothing needs undoing afterwards.
- */
-const POKER_ENDS = Date.parse('2026-11-23T00:00:00Z');
-const POKER: Slide = {
-  key: 'poker',
-  kicker: '♠ Poker is back · Sunday 22 November · 11:30 AM UK',
-  title: (
-    <>
-      <span className="gold">$50</span> poker tournament
-    </>
-  ),
-  sub: 'Free entry · 5h Kick watch time this week · Kick verified on mattyspins.com',
-};
-
 const STANDING: Slide[] = [
   {
     key: 'leaderboard',
@@ -180,8 +164,7 @@ export default async function PromoOverlay({ searchParams }: { searchParams: Pro
     );
   }
 
-  const poker = Date.now() < POKER_ENDS ? [POKER] : [];
-  const slides = [CODE, ...live.slides, ...poker, ...STANDING];
+  const slides = [CODE, ...live.slides, ...STANDING];
   const count = slides.length;
   // A new set of cards restarts the loop from the top instead of jumping mid-fade.
   const signature = slides.map((s) => s.key).join('.');

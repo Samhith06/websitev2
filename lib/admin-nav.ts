@@ -32,7 +32,7 @@ export const ADMIN_SECTIONS: AdminSection[] = [
   { href: '/admin/raid', label: 'Boss raid', group: 'games' },
   { href: '/admin/battle', label: 'Team battle', group: 'games' },
   { href: '/admin/tournament', label: 'Slot tournament', group: 'games' },
-  { href: '/admin/poker', label: 'Poker night', group: 'games' },
+  { href: '/admin/split-steal', label: 'Split or Steal', group: 'games' },
   { href: '/admin/users', label: 'Users', group: 'data' },
   { href: '/admin/razed', label: 'Razed wagerers', group: 'data' },
   { href: '/admin/badges', label: 'Badges', group: 'data' },

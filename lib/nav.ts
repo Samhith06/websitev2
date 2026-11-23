@@ -1,7 +1,7 @@
 /**
- * The primary destinations: seven that are always there, plus a stream game —
+ * The primary destinations: six that are always there, plus a stream game —
  * Bonus Hunt, Slot Bingo, King of the Hill, Boss Raid, Team Battle, Slot
- * Tournament — only while one is running. They sit beside Games because on
+ * Tournament — or a Split or Steal event, only while one is running. They sit beside Games because on
  * stream nights that is where chat is sent, and between games a link to a
  * finished hunt is not a destination anyone needs.
  *
@@ -22,7 +22,7 @@ export type NavIconName =
   | 'sword'
   | 'banner'
   | 'bracket'
-  | 'spade';
+  | 'split';
 
 export type NavItem = {
   href: string;
@@ -35,7 +35,6 @@ const HOME: NavItem = { href: '/', label: 'Home', short: 'Home', icon: 'home' };
 const LEADERBOARD: NavItem = { href: '/leaderboard', label: 'Leaderboard', short: 'Board', icon: 'trophy' };
 const MILESTONES: NavItem = { href: '/milestones', label: 'Milestones', short: 'Milestones', icon: 'flag' };
 const GAMES: NavItem = { href: '/games', label: 'Games', short: 'Games', icon: 'games' };
-const POKER: NavItem = { href: '/poker', label: 'Poker', short: 'Poker', icon: 'spade' };
 const RAFFLES: NavItem = { href: '/raffles', label: 'Raffles', short: 'Raffles', icon: 'ticket' };
 const STORE: NavItem = { href: '/store', label: 'Store', short: 'Store', icon: 'bag' };
 
@@ -45,11 +44,13 @@ const KOTH: NavItem = { href: '/koth', label: 'King of the Hill', short: 'KOTH',
 const RAID: NavItem = { href: '/raid', label: 'Boss Raid', short: 'Raid', icon: 'sword' };
 const BATTLE: NavItem = { href: '/battle', label: 'Team Battle', short: 'Battle', icon: 'banner' };
 const TOURNEY: NavItem = { href: '/tournament', label: 'Tournament', short: 'Cup', icon: 'bracket' };
+const SPLIT: NavItem = { href: '/split-or-steal', label: 'Split or Steal', short: 'Split', icon: 'split' };
 
 /**
  * Which stream games are running right now. Bingo, king of the hill, the boss
  * raid, the team battle and the tournament all take !sr, so at most one of
- * them runs: the row never holds more than nine.
+ * them runs: with the hunt and a Split or Steal, the row never holds more
+ * than nine.
  */
 export type LiveGames = {
   hunt: boolean;
@@ -58,6 +59,8 @@ export type LiveGames = {
   raid: boolean;
   battle: boolean;
   tourney: boolean;
+  /** A Split or Steal event, from entries opening until the last pair is revealed. */
+  splitSteal: boolean;
 };
 
 export function navFor(live: LiveGames): NavItem[] {
@@ -71,8 +74,8 @@ export function navFor(live: LiveGames): NavItem[] {
     ...(live.raid ? [RAID] : []),
     ...(live.battle ? [BATTLE] : []),
     ...(live.tourney ? [TOURNEY] : []),
+    ...(live.splitSteal ? [SPLIT] : []),
     GAMES,
-    POKER,
     RAFFLES,
     STORE,
   ];

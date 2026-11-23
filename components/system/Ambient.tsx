@@ -1,23 +1,13 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { usePathname } from 'next/navigation';
-import { constellationScene } from './scenes/constellation';
 import { rouletteScene } from './scenes/roulette';
 import type { Scene } from './scenes/types';
 
-type Kind = 'roulette' | 'constellation';
-
-/** The poker page gets the suit constellation; everywhere else, the wheel. */
-function kindFor(pathname: string): Kind {
-  return pathname.startsWith('/poker') ? 'constellation' : 'roulette';
-}
-
 /**
  * The fixed layer behind the site: slow aurora glows (CSS, so the compositor
- * moves them) under a canvas scene. Most pages show a real roulette wheel
- * turning in the bottom-right corner; the poker page shows a constellation
- * drawing the four suits. Both lean a little with the cursor.
+ * moves them) under a canvas scene: a real roulette wheel turning in the
+ * bottom-right corner, leaning a little with the cursor.
  *
  * Asked to stop moving, the scene is drawn once and stays still and the glows
  * hold; nothing loops. The loop also stops in a hidden tab rather than burning
@@ -25,7 +15,6 @@ function kindFor(pathname: string): Kind {
  */
 export function Ambient() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const kind = kindFor(usePathname() ?? '/');
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -34,7 +23,7 @@ export function Ambient() {
 
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const font = getComputedStyle(document.body).fontFamily || 'system-ui, sans-serif';
-    const scene: Scene = kind === 'constellation' ? constellationScene() : rouletteScene(font);
+    const scene: Scene = rouletteScene(font);
 
     let width = 0;
     let height = 0;
@@ -94,7 +83,7 @@ export function Ambient() {
     window.addEventListener('resize', onResize);
 
     if (reduced) {
-      // A moment into the scene, so the still frame has its ball and stars placed.
+      // A moment into the scene, so the still frame has its ball placed.
       clock = 3;
       paint(0);
       return () => window.removeEventListener('resize', onResize);
@@ -110,7 +99,7 @@ export function Ambient() {
       window.removeEventListener('pointermove', onMove);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [kind]);
+  }, []);
 
   return (
     <>

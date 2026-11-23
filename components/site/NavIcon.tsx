@@ -59,7 +59,8 @@ const PATHS: Record<NavIconName, ReactNode> = {
   sword: <path d="M14 3h7v7L10 21l-7-7zM6 11l7 7" />,
   banner: <path d="M5 22V3h14v10H5" />,
   bracket: <path d="M3 5h5v6h5M3 19h5v-8M21 11h-8" />,
-  spade: <path d="M12 3C9 7 4 9.5 4 13.5a3.8 3.8 0 0 0 7 2l-1 5.5h4l-1-5.5a3.8 3.8 0 0 0 7-2C20 9.5 15 7 12 3z" />,
+  // Two paths leaving one point: the choice at the heart of Split or Steal.
+  split: <path d="M12 21v-8M12 13 5 6M12 13l7-7M5 11V6h5M19 11V6h-5" />,
 };
 
 export function NavIcon({ name }: { name: NavIconName }) {

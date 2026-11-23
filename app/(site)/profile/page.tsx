@@ -6,7 +6,7 @@ import { verificationStateFor } from '@/lib/store/accounts';
 import { ledgerFor } from '@/lib/store/coins';
 import { redemptionsFor } from '@/lib/store/shop';
 import { badgesFor } from '@/lib/store/badges';
-import { pokerHandleFor, settingsFor } from '@/lib/store/profile';
+import { settingsFor } from '@/lib/store/profile';
 import { claimsFor } from '@/lib/store/milestones';
 import { wagerStateFor } from '@/lib/store/wager';
 import { feedHealth } from '@/lib/store/razed-snapshots';
@@ -37,14 +37,13 @@ export default async function ProfilePage() {
   const viewer = await currentViewer();
   if (!viewer) return <SignedOut />;
 
-  const [verification, ledger, redemptions, badges, settings, poker, claims, wager, feed] =
+  const [verification, ledger, redemptions, badges, settings, claims, wager, feed] =
     await Promise.all([
       verificationStateFor(user.id),
       ledgerFor(user.id, 40),
       redemptionsFor(user.id, 20),
       badgesFor(user.id),
       settingsFor(user.id),
-      pokerHandleFor(user.id),
       claimsFor(user.id),
       wagerStateFor(user.id),
       feedHealth(),
@@ -154,10 +153,6 @@ export default async function ProfilePage() {
                     : 'Not linked'}
                 </span>
               </div>
-              <div className="linkrow">
-                <span className="lk">PokerNow</span>
-                <span className="lv">{poker ?? '—'}</span>
-              </div>
             </div>
           </div>
 
@@ -222,7 +217,6 @@ export default async function ProfilePage() {
           <AccountForms
             razedUsername={wager.link?.username ?? ''}
             razedStatus={razedStatus}
-            pokerHandle={poker ?? ''}
           />
 
           <KickVerify state={verification} />

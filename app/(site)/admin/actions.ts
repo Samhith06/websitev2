@@ -151,6 +151,14 @@ import {
   undoLastTourneyTurn,
 } from '@/lib/store/tourney';
 import { TOURNEY_SIZES, x as tx100 } from '@/lib/tourney';
+import {
+  SplitStealError,
+  cancelEvent,
+  createEvent,
+  drawPairs,
+  markPairPaid,
+  revealPairs,
+} from '@/lib/store/split-steal';
 
 export type Outcome = { ok: true; message: string } | { ok: false; error: string };
 
@@ -2711,4 +2719,91 @@ export async function endTourney(gameId: number): Promise<Outcome> {
     if (error instanceof TourneyError) return { ok: false, error: error.message };
     throw error;
   }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Split or Steal                                                             */
+/* -------------------------------------------------------------------------- */
+
+function revalidateSplitSteal(): void {
+  revalidatePath('/admin/split-steal');
+  revalidatePath('/split-or-steal');
+}
+
+/**
+ * Staff check, one store call, audit, revalidate. Opening and cancelling an
+ * event are owner-only, since they set or call off a cash prize; running one
+ * (drawing, revealing, marking paid) is open to mods.
+ */
+async function splitStealAction(
+  required: AdminRole | 'any',
+  action: string,
+  target: string,
+  detail: Record<string, unknown>,
+  run: (who: Staff) => Promise<string>,
+): Promise<Outcome> {
+  const who = await staff(required);
+  if (!who) return DENIED;
+  try {
+    const message = await run(who);
+    await record_({ actor: who.name, actorDiscordId: who.discordId, action, target, detail });
+    revalidateSplitSteal();
+    return { ok: true, message };
+  } catch (error) {
+    if (error instanceof SplitStealError) return { ok: false, error: error.message };
+    throw error;
+  }
+}
+
+/** Largest prize per pair the form takes, in dollars: a typo guard, not a policy. */
+const MAX_SPLIT_STEAL_PRIZE = 10_000;
+
+export async function openSplitSteal(formData: FormData): Promise<Outcome> {
+  const title = String(formData.get('title') ?? '').trim() || 'Split or Steal';
+  const prizeText = String(formData.get('prize') ?? '').replace(/[$,\s]/g, '');
+  const prize = /^\d+(\.\d{1,2})?$/.test(prizeText) ? Number(prizeText) : NaN;
+  const pairs = Number(formData.get('pairs'));
+  if (title.length > 80) return { ok: false, error: 'Keep the name under 80 characters.' };
+  if (!(prize > 0) || prize > MAX_SPLIT_STEAL_PRIZE) {
+    return { ok: false, error: `Enter the prize per pair in dollars, e.g. 50 (up to ${money(MAX_SPLIT_STEAL_PRIZE)}).` };
+  }
+  if (!Number.isInteger(pairs) || pairs < 1 || pairs > 100) return { ok: false, error: 'Pairs is a whole number from 1 to 100.' };
+  return splitStealAction('owner', 'splitsteal.opened', title, { prize, pairs }, async (who) => {
+    await createEvent({ title, prize, pairs, by: who.name });
+    return `"${title}" is open for entries: up to ${pairs} pair${pairs === 1 ? '' : 's'}, ${money(prize)} each.`;
+  });
+}
+
+export async function drawSplitStealPairs(eventId: number): Promise<Outcome> {
+  const detail: Record<string, unknown> = {};
+  return splitStealAction('any', 'splitsteal.drawn', String(eventId), detail, async () => {
+    const r = await drawPairs(eventId);
+    Object.assign(detail, r);
+    const left = r.left ? ` ${r.left} entrant${r.left === 1 ? '' : 's'} missed out.` : '';
+    return `Drew ${r.pairs} pair${r.pairs === 1 ? '' : 's'} from ${r.entrants} entrants.${left} Players can now lock in their choice.`;
+  });
+}
+
+export async function revealSplitSteal(eventId: number, pairId: number | 'all'): Promise<Outcome> {
+  const detail: Record<string, unknown> = { pairId };
+  return splitStealAction('any', 'splitsteal.revealed', String(eventId), detail, async () => {
+    const r = await revealPairs(eventId, pairId);
+    Object.assign(detail, r);
+    if (r.finished) return 'Revealed. Every pair is out, so the event is finished.';
+    return r.revealed === 1 ? 'Pair revealed.' : `${r.revealed} pairs revealed.`;
+  });
+}
+
+export async function markSplitStealPaid(pairId: number, paid: boolean): Promise<Outcome> {
+  return splitStealAction('any', 'splitsteal.paid', String(pairId), { paid }, async () => {
+    await markPairPaid(pairId, paid);
+    return paid ? 'Marked paid.' : 'Marked unpaid.';
+  });
+}
+
+export async function cancelSplitSteal(eventId: number): Promise<Outcome> {
+  return splitStealAction('owner', 'splitsteal.cancelled', String(eventId), {}, async () => {
+    await cancelEvent(eventId);
+    return 'Event cancelled. Nobody is paid.';
+  });
 }

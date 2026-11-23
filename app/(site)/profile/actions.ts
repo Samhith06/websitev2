@@ -5,7 +5,7 @@ import { requireUser } from '@/lib/player';
 import { issueVerificationCode } from '@/lib/store/accounts';
 import { submitLink } from '@/lib/store/razed-links';
 import { wageredForUsername } from '@/lib/store/razed-snapshots';
-import { selfExclude, setPokerHandle, updateSettings } from '@/lib/store/profile';
+import { selfExclude, updateSettings } from '@/lib/store/profile';
 import { setPinned } from '@/lib/store/badges';
 import { write } from '@/lib/db';
 
@@ -57,19 +57,6 @@ export async function saveRazedUsername(formData: FormData): Promise<Outcome> {
   revalidatePath('/profile');
   revalidatePath('/milestones');
   return { ok: true, message: 'Submitted — a mod reviews it before milestones unlock.' };
-}
-
-export async function savePokerHandle(formData: FormData): Promise<Outcome> {
-  const gate = await requireUser();
-  if (!gate.ok) return { ok: false, error: gate.refusal.detail };
-
-  const handle = String(formData.get('handle') ?? '').trim();
-  if (handle.length > 64) return { ok: false, error: 'That handle is too long.' };
-
-  await setPokerHandle(gate.user.id, handle);
-  revalidatePath('/profile');
-  revalidatePath('/poker');
-  return { ok: true, message: handle ? 'Saved.' : 'Removed.' };
 }
 
 /* -------------------------------------------------------------------------- */
