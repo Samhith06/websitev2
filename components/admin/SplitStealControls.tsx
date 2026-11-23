@@ -40,7 +40,7 @@ export function OpenSplitStealForm() {
     <form className="card" style={{ marginBottom: 18 }} action={(data: FormData) => run(() => openSplitSteal(data))}>
       <h3 style={{ fontSize: 15, marginBottom: 4 }}>Open a Split or Steal</h3>
       <p className="small muted" style={{ marginBottom: 14 }}>
-        Members enter on <b>/split-or-steal</b> with $200 wagered this leaderboard period. When you draw, entrants are
+        Members enter on <b>/split-or-steal</b> with $1,000 wagered this leaderboard period. When you draw, entrants are
         shuffled into pairs; each player then locks in Split or Steal on the site, and you reveal the pairs on stream.
       </p>
       <div style={row}>

@@ -18,7 +18,7 @@ import { shortBy, type WagerGate } from './wager-gate';
  */
 
 /** Dollars wagered under the code this leaderboard period, to enter. */
-export const SPLIT_STEAL_WAGER_MIN = 200;
+export const SPLIT_STEAL_WAGER_MIN = 1000;
 
 /** Why someone cannot enter, in words for them. */
 export function entryRefusal(gate: Extract<WagerGate, { ok: false }>): string {
