@@ -40,6 +40,7 @@ export function SiteFooter() {
             <h4>Site</h4>
             <div className="flinks">
               <Link href="/leaderboard">Leaderboard</Link>
+              <Link href="/leaderboard/chat">Chat leaderboard</Link>
               <Link href="/milestones">Milestones</Link>
               <Link href="/games">Games</Link>
               <Link href="/raffles">Raffles</Link>

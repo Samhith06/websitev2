@@ -7,6 +7,7 @@ import { money, periodLabel, relativeTime } from '@/lib/format';
 import { razed } from '@/lib/mock';
 import { Countdown } from '@/components/ui/Countdown';
 import { RacePodium } from '@/components/site/RacePodium';
+import { LeaderboardTabs } from '@/components/site/LeaderboardTabs';
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -88,6 +89,7 @@ export default async function LeaderboardPage() {
 
   return (
     <div className="lbx">
+      <LeaderboardTabs on="wager" />
       <section className="lb-hero">
         <div className="lb-copy">
           {/* eslint-disable-next-line @next/next/no-img-element */}

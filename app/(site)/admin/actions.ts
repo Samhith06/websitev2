@@ -7,6 +7,7 @@ import { record as record_ } from '@/lib/store/audit';
 import { InsufficientCoins, balanceOf, record } from '@/lib/store/coins';
 import { coins, isWholeCalendarMonth, money, mult } from '@/lib/format';
 import { approveLink, rejectLink } from '@/lib/store/razed-links';
+import { settleFinishedChatWeeks } from '@/lib/store/chat-board';
 import {
   TierInUse,
   deleteTier as deleteMilestoneTier,
@@ -2806,4 +2807,36 @@ export async function cancelSplitSteal(eventId: number): Promise<Outcome> {
     await cancelEvent(eventId);
     return 'Event cancelled. Nobody is paid.';
   });
+}
+
+/* -------------------------------------------------------------------------- */
+/* Chat leaderboard                                                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Pays every finished chat week that has not been paid. The scheduled tick
+ * does this on its own after Monday 00:00; this is the button for when the
+ * scheduler has been quiet. A week already paid is skipped, never paid twice.
+ */
+export async function settleChatWeeks(): Promise<Outcome> {
+  const who = await staff();
+  if (!who) return DENIED;
+  const settled = await settleFinishedChatWeeks(who.name);
+  if (settled.length === 0) return { ok: true, message: 'Nothing to pay: every finished week is already settled.' };
+  for (const week of settled) {
+    await record_({
+      actor: who.name,
+      actorDiscordId: who.discordId,
+      action: 'chatboard.settled',
+      target: week.weekStart,
+      detail: { winners: week.winners, paid: week.paid },
+    });
+  }
+  revalidatePath('/admin/chat');
+  revalidatePath('/leaderboard/chat');
+  const total = settled.reduce((sum, w) => sum + w.paid, 0);
+  return {
+    ok: true,
+    message: `Paid ${settled.length} week${settled.length === 1 ? '' : 's'}: ${coins(total)} MC to ${settled.reduce((n, w) => n + w.winners, 0)} winners.`,
+  };
 }

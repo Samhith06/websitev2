@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { timingSafeEqual } from 'node:crypto';
 import { hasDatabase } from '@/lib/db';
 import { pruneOldEvents, runTick } from '@/lib/store/presence';
+import { settleFinishedChatWeeks } from '@/lib/store/chat-board';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -43,7 +44,15 @@ export async function POST(request: Request) {
   // Cheap, and this is the only thing that runs on a schedule.
   if (result.ran) await pruneOldEvents().catch(() => {});
 
-  return NextResponse.json(result);
+  // The chat leaderboard pays a finished week on the first tick after Monday
+  // 00:00. Usually a single read that finds nothing to do; a failure here must
+  // not stop the coin tick being reported.
+  const chatWeeks = await settleFinishedChatWeeks().catch((error) => {
+    console.error('[tick] chat leaderboard payout failed', error);
+    return [];
+  });
+
+  return NextResponse.json(chatWeeks.length ? { ...result, chatWeeks } : result);
 }
 
 /** GET is allowed too: most schedulers only send one. */

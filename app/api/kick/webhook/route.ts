@@ -16,6 +16,7 @@ import { liveGame, submitKothRequest } from '@/lib/store/koth';
 import { liveRaid, submitRaidRequest } from '@/lib/store/raid';
 import { liveBattle, submitBattleRequest } from '@/lib/store/battle';
 import { liveTourney, submitTourneyRequest } from '@/lib/store/tourney';
+import { countChatMessage } from '@/lib/store/chat-board';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -145,6 +146,19 @@ async function onChatMessage(payload: unknown): Promise<void> {
   await refreshKickUsername(message.senderId, message.senderUsername);
   await applyChatBadges(userId, message);
   await openWindow(userId, 'chat');
+  await onChatPoint(userId, message);
+}
+
+/**
+ * The weekly chat leaderboard. Like the hunt commands, a failure is logged
+ * and swallowed: a retried delivery would reopen the window for nothing.
+ */
+async function onChatPoint(userId: number, message: { senderUsername: string; content: string }) {
+  try {
+    await countChatMessage(userId, message.content);
+  } catch (error) {
+    console.error(`[kick] chat point for ${message.senderUsername} failed`, error);
+  }
 }
 
 /**
